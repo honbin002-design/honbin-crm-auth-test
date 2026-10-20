@@ -33,6 +33,6 @@ assert.throws(()=>mergeTestTaskAndNicknameRules(original,
  /TASK_FRAGMENT_MUST_APPEAR_EXACTLY_ONCE/);
 const helper=readFileSync('firestore-task-nickname-merge-review.html','utf8');
 assert.match(helper,/不會發布、不會讀寫 Firestore/);
-assert.match(helper,/mergeTestTaskAndNicknameRules/);
+assert.match(helper,/prepareTestPushCandidate/);
 assert.doesNotMatch(helper,/firebasejs|signInWithPopup|fetch\(['"]https?:/);
 console.log('EXACT_TWO_RULE_MATCHES_OFFLINE_MERGE_PASS');
