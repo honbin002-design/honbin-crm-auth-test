@@ -127,7 +127,7 @@ async function loadGroups(){
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
-$('mode').onchange=()=>run(async()=>{await reload();say('已切換記事範圍。')});
+$('mode').onchange=()=>run(async()=>{$('groupWrap').hidden=$('mode').value!=='SHARED';await reload();say('已切換記事範圍。')});
 $('group').onchange=()=>run(async()=>{selected=groupItems.find(x=>x.id===$('group').value)||null;await reload();say('已切換共用記事簿。')});
 $('search').oninput=renderNotes;
 $('newNote').onclick=()=>openEditor();
