@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>V4D｜永久刪除後索引唯讀驗收</title>
+<style>
+*{box-sizing:border-box}
+body{max-width:730px;margin:auto;padding:18px 14px 80px;background:#f4f7fb;color:#20344e;font:17px/1.7 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+section{background:white;border:1px solid #d8e1ed;border-radius:14px;padding:18px;margin:15px 0}
+h1{font-size:1.4rem}h2{font-size:1.16rem}
+button{font:inherit;background:#215c9d;color:#fff;border:0;border-radius:10px;padding:11px 16px;min-height:46px;margin:4px 5px 4px 0}
+button:disabled{opacity:.42}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.note{padding:12px;border-left:4px solid #b27b24;background:#fff5e7}
+code{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<h1>V4D｜永久刪除後唯讀驗收</h1>
+<p class="note">此頁是「主文件已在 Firebase Console 手動刪除、本人索引也已刪除」之後專用。只讀取原擁有者自己的指定索引，不會寫入、建立、恢復或刪除任何資料，也不會讀取其他記事簿。</p>
+<section>
+<h2>Google 擁有者驗證</h2>
+<p id="identity">尚未登入</p>
+<button id="login" disabled type="button">以 Google 登入</button><button id="logout" disabled type="button">登出</button>
+<p id="status" role="status" aria-live="polite">等待驗證。</p>
+</section>
+<section>
+<h2>指定虛構測試記事簿</h2>
+<p>名稱：<strong>V4D_永久刪除測試_023fd069</strong></p>
+<p>固定 ID：<code>v4d_test_efbbf2dced534cb5a6f1d117023fd069</code></p>
+<button id="verify" disabled type="button">兩次伺服器唯讀核對本人索引</button>
+<pre id="result" aria-live="polite">尚未執行。</pre>
+</section>
+<section>
+<h2>驗收範圍與限制</h2>
+<p>安全規則要求「已刪除的記事簿，必須仍有本人索引」才可從一般用戶端讀取主文件不存在的結果。本人索引刪除後，再讀取原記事簿會收到 <code>permission-denied</code>；這是預期的權限限制，<strong>不能</strong>當作主文件不存在的證明。</p>
+<p>本頁僅能從伺服器驗證本人索引不存在。主文件與子集合是否已清除，必須另外依據先前的第一階段清理回執及 Firebase Console 管理畫面確認。任何權限錯誤都顯示為<strong>未能驗證</strong>，不會顯示 PASS。</p>
+<p>本頁不會變更 Firestore Rules，也不會影響正式 CRM 或其他記事簿。</p>
+</section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,collection,doc,getDocsFromServer,getDocFromServer} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const TARGET='v4d_test_efbbf2dced534cb5a6f1d117023fd069';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,ownerUid=null,busy=false;
+const status=message=>{$('status').textContent=message};
+function buttons(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('verify').disabled=!ownerUid||busy;
+}
+function guard(){if(!ownerUid||auth.currentUser?.uid!==ownerUid)throw Error('OWNER_SESSION_CHANGED')}
+async function identify(user){
+ ownerUid=null;buttons();$('result').textContent='尚未執行。';
+ if(!user){$('identity').textContent='尚未登入';status('請以原 Google 擁有者帳號登入。');return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com')
+  throw Error('VERIFIED_GOOGLE_REQUIRED');
+ // The published V4D rules reserve approvedAccounts list for the fixed owner.
+ await getDocsFromServer(collection(db,'approvedAccounts'));
+ if(auth.currentUser?.uid!==user.uid)throw Error('OWNER_CHANGED');
+ ownerUid=user.uid;
+ $('identity').textContent='唯一擁有者驗證通過：'+user.email;
+ status('請按「兩次伺服器唯讀核對本人索引」。');buttons();
+}
+async function verify(){
+ if(busy||!ownerUid)return;
+ busy=true;buttons();status('正在執行兩次獨立伺服器讀取；沒有寫入或刪除。');
+ try{
+  guard();
+  const pointer=doc(db,'users',ownerUid,'groupIndex',TARGET);
+  const first=await getDocFromServer(pointer);guard();
+  if(first.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  if(first.exists())throw Error('OWNER_INDEX_STILL_EXISTS');
+  const second=await getDocFromServer(pointer);guard();
+  if(second.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  if(second.exists())throw Error('OWNER_INDEX_REAPPEARED');
+  $('result').textContent=
+   '本人索引伺服器驗收：PASS\n'+
+   '固定測試 ID：'+TARGET+'\n'+
+   '第一次讀取：不存在（伺服器）\n'+
+   '第二次讀取：不存在（伺服器）\n'+
+   '寫入或刪除：0\n'+
+   '主文件：此頁未讀取；須以 Firebase Console 截圖確認\n'+
+   '子集合：此頁未讀取；依第一階段清理驗收回執確認\n'+
+   '整體結論：索引已清除；不是全自動主文件驗收。';
+  status('INDEX_ABSENT_SERVER_READBACK_PASS；主文件與子集合仍依管理畫面及先前證據驗收。');
+ }catch(e){
+  const code=String(e.code||e.message||'UNKNOWN_ERROR');
+  $('result').textContent='本人索引驗收：未通過／無法判定\n原因：'+code+
+   '\n未證明資料不存在。請勿修改安全規則或再次刪除其他資料。';
+  status('停止：無法完成索引伺服器驗收。');
+ }finally{busy=false;buttons()}
+}
+$('verify').addEventListener('click',verify);
+$('login').addEventListener('click',async()=>{
+ try{await setPersistence(auth,browserSessionPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}
+ catch(e){status('登入未完成：'+String(e.code||e.message))}
+});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>status(String(e.code||e.message))));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  ownerUid=null;buttons();
+  try{await identify(user)}
+  catch(e){ownerUid=null;buttons();status('擁有者驗證失敗：'+String(e.code||e.message))}
+ });
+ buttons();
+}
+start().catch(e=>status('初始化失敗：'+String(e.code||e.message)));
+</script>
+</body></html>
