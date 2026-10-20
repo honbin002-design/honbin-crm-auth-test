@@ -104,7 +104,8 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <p id="nicknameHint" class="warning">不再使用「僅本機暱稱」。須完成 Firestore 共用個人檔案規則驗收後，才可讓所有成員跨裝置看到你的暱稱。</p>
   </div>
   <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿與工程驗收保留在進階頁；日常邀請、接受邀請和成員權限管理都在本設定頁完成。</p>
-   <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a></div>
+   <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a>
+   <p id="rulesOwnerLink" hidden><a href="./firestore-task-nickname-merge-review.html">共用暱稱／指定任務：TEST 規則安全核對工具</a></p></div>
  </section>
 </main>
 <script type="module">
@@ -561,7 +562,7 @@ async function start(){
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
   $('receivedInvites').replaceChildren();$('sentInvites').replaceChildren();
   $('inviteEmail').value='';$('inviteRole').value='VIEWER';$('inviteForm').hidden=true;
-  $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();
+  $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();$('rulesOwnerLink').hidden=true;
   items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
   if(!user){
@@ -586,7 +587,7 @@ async function start(){
    if(isRootOwnerIdentity(rootIdentity)){
     ownerMembers=ownerMemberService({db,sdk,identity:rootIdentity,
       currentUid:()=>auth.currentUser?.uid});
-    $('ownerManagement').hidden=false;
+    $('ownerManagement').hidden=false;$('rulesOwnerLink').hidden=false;
    }
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
