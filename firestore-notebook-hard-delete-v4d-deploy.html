@@ -8,7 +8,7 @@
 <section><h2>步驟二｜複製 V4D 安全規則（暫勿發布）</h2><button id="copy" type="button" disabled>一鍵複製完整 V4D 安全規則</button><p id="result" role="status" aria-live="polite">請先登入並確認擁有者帳號。</p>
 <details><summary>展開規則原文（發布時將自動代入擁有者 UID）</summary><textarea id="preview" readonly spellcheck="false"></textarea></details></section>
 <section><h2>步驟三｜先由 ChatGPT 協助核對，再考慮發布</h2><ol><li>先確認頁面顯示「已通過擁有者即時權限驗證」，其他已核准的一般 Google 帳號不能取得管理員部署規則。</li><li>勾選確認後，按「一鍵複製完整 V4D 安全規則」，只複製到 iPhone 剪貼簿。</li><li>開啟 Firebase Console，確認專案為 <b>honbin-crm-notes-spark</b>。</li><li>暫時不要到 Firestore 規則頁貼上或按「發布」。先告訴 ChatGPT「V4D 已複製」，由我帶你核對並明確確認是否要在 TEST 專案發布。</li><li>這份規則仍禁止前端直接刪除記事簿根文件。真正永久清理必須先在獨立 TEST 驗證，最後另在 Firebase Console 精確刪除指定根文件，並由雲端回讀驗證。</li></ol>
-<a class="action" href="https://console.firebase.google.com/project/honbin-crm-notes-spark/firestore/rules" target="_blank" rel="noopener">開啟 Firebase 規則設定</a>
+<p class="muted">目前只複製規則。待隔離 TEST 完成核對並取得你的明確確認後，再前往 Firebase Console 發布。</p>
 <p class="muted">若看到 Blaze 升級、計費要求或規則錯誤，請停止並回報。此頁只有登入驗證及規則複製，不會寫入 Firestore、不會自行發布規則、不會更動正式 CRM，也不會刪除「共用測試01」。</p></section>
 <section><h2>發布後管理帳號</h2><p>你的 Google 帳號白名單管理會繼續保留；每本共用記事簿仍維持原本的獨立邀請權限。</p><a class="action" href="./approved-accounts.html">開啟 Google 帳號核准管理</a></section>
 <textarea id="template" hidden readonly>rules_version = '2';
