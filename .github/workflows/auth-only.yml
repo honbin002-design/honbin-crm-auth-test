@@ -20,3 +20,5 @@ jobs:
         run: node notes-preview-preflight.mjs
       - name: Verify global owner Google approval UI
         run: node approved-accounts-preflight.mjs
+      - name: Verify archive V3 rule copy helper honors current owner whitelist
+        run: node firestore-notebook-archive-preflight.mjs
