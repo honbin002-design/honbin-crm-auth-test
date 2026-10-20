@@ -38,3 +38,5 @@ jobs:
         run: node notebook-v4d-final-index-readback-preflight.mjs
       - name: Verify owner-only notebook pre-delete inventory stays read-only
         run: node notebook-owner-readonly-inventory-preflight.mjs
+      - name: Verify cross-account notebook access checker is read-only
+        run: node notebook-cross-account-readonly-preflight.mjs
