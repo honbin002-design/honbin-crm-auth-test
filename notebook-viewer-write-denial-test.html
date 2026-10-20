@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>HONBIN TEST｜VIEWER 伺服器拒絕寫入驗收</title>
+<style>
+*{box-sizing:border-box}body{max-width:730px;margin:auto;padding:16px;background:#f4f7fb;color:#22364d;font:17px/1.7 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}section{background:white;border:1px solid #d9e2ed;border-radius:14px;padding:18px;margin:14px 0}button{font:inherit;border:0;border-radius:10px;background:#215a99;color:white;padding:11px 15px;min-height:46px;margin:5px 5px 5px 0}button:disabled{opacity:.4}pre,#status{white-space:pre-wrap;overflow-wrap:anywhere}h1{font-size:1.35rem}h2{font-size:1.1rem}.warn{padding:12px;border-left:4px solid #b18127;background:#fff4de}
+</style></head><body>
+<h1>共用記事｜VIEWER 伺服器禁止寫入驗收</h1>
+<p class="warn">僅限獨立 Firebase TEST 的「測試共用記事」，以及 <strong>wind99vic@gmail.com</strong>。第一個按鈕只查詢資料。第二個按鈕須親自點擊，才會嘗試建立一筆沒有客戶資料的測試記事。<strong>正確安全規則應拒絕該寫入。</strong>若安全規則異常允許，可能留下<strong>一筆全新的純測試記事</strong>；本頁不會自動刪除，也絕不修改任何既有記事、權限或正式 CRM。</p>
+<section><h2>Google 帳號</h2><p id="identity">尚未登入</p>
+<button id="login" disabled>Google 登入</button><button id="logout" disabled>登出／切換帳號</button>
+<p id="status" role="status" aria-live="polite">正在初始化……</p></section>
+<section><h2>限定驗收範圍</h2>
+<p>記事簿：<strong>測試共用記事</strong></p>
+<p>角色：<strong>VIEWER（唯讀）</strong></p>
+<button id="scan" disabled>第一步：唯讀核對伺服器身分</button>
+<button id="probe" disabled>第二步：嘗試一筆測試寫入（應被拒絕）</button>
+<pre id="result" aria-live="polite">尚未核對；未嘗試寫入。</pre></section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,doc,getDocFromServer,setDoc,Timestamp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const GROUP='D0iiTJNmLt5tIs64sTL6',NAME='測試共用記事',RECIPIENT='wind99vic@gmail.com';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,actor=null,ready=false,busy=false,epoch=0,attempted=false;
+function controls(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('scan').disabled=!actor||busy;
+ $('probe').disabled=!ready||busy||attempted;
+}
+function reset(){epoch++;actor=null;ready=false;attempted=false;$('result').textContent='尚未核對；未嘗試寫入。';controls()}
+function guard(uid,e){if(e!==epoch||actor?.uid!==uid||auth.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')}
+async function identify(user){
+ reset();
+ if(!user){$('identity').textContent='尚未登入';$('status').textContent='請以指定的第二 Google 帳號登入。';return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com'||String(user.email||'').toLowerCase()!==RECIPIENT)throw Error('EXACT_VERIFIED_RECIPIENT_REQUIRED');
+ if(auth.currentUser?.uid!==user.uid)throw Error('ACCOUNT_CHANGED');
+ actor={uid:user.uid};
+ $('identity').textContent='已驗證：'+user.email;
+ $('status').textContent='請先執行第一步唯讀核對。';
+ controls();
+}
+async function preflight(uid,e){
+ guard(uid,e);
+ const root=await getDocFromServer(doc(db,'groups',GROUP));guard(uid,e);
+ if(root.metadata.fromCache||!root.exists()||root.data().name!==NAME||
+   root.data().deleteState||root.data().ownerUid===uid)throw Error('EXACT_ACTIVE_GROUP_REQUIRED');
+ const membership=await getDocFromServer(doc(db,'groups',GROUP,'members',uid));guard(uid,e);
+ if(membership.metadata.fromCache||!membership.exists()||
+   membership.data().uid!==uid||membership.data().status!=='ACTIVE'||
+   membership.data().role!=='VIEWER')throw Error('ACTIVE_VIEWER_REQUIRED');
+ return true;
+}
+async function scan(){
+ if(!actor||busy)return;
+ const uid=actor.uid,e=epoch;busy=true;ready=false;controls();
+ $('status').textContent='正在從 Firestore 伺服器唯讀核對……';
+ try{
+  await preflight(uid,e);guard(uid,e);ready=true;
+  $('result').textContent='伺服器前置權限核對：PASS\n目前身分：VIEWER\n記事簿：'+NAME+
+    '\n沒有執行寫入或刪除。\n如確認進行受控拒絕寫入驗收，可按第二個按鈕。';
+  $('status').textContent='唯讀核對 PASS；尚未測試伺服器拒絕寫入。';
+ }catch(error){if(e===epoch){$('result').textContent='HOLD：'+String(error.code||error.message)+'\n寫入／刪除：0';$('status').textContent='驗收停止：不符合限定身份。'}}
+ finally{if(e===epoch){busy=false;controls()}}
+}
+async function probe(){
+ if(!actor||!ready||busy||attempted)return;
+ const uid=actor.uid,e=epoch;busy=true;ready=false;attempted=true;controls();
+ $('status').textContent='重新核對 VIEWER 資格，然後執行一次測試寫入……';
+ let ref=null,writeRejected=false;
+ try{
+  await preflight(uid,e);guard(uid,e);
+  const id='viewer_deny_probe_'+crypto.randomUUID().replaceAll('-','');
+  ref=doc(db,'groups',GROUP,'notes',id);
+  const before=await getDocFromServer(ref);guard(uid,e);
+  if(before.metadata.fromCache||before.exists())throw Error('PROBE_PATH_NOT_EMPTY');
+  const at=Timestamp.now();
+  try{
+   await setDoc(ref,{ownerUid:uid,groupId:GROUP,title:'VIEWER 禁止寫入驗收',content:'純 TEST 資料；只用於驗證伺服器權限拒絕。',
+     createdAt:at,updatedAt:at,version:1,deleted:false});
+  }catch(error){
+   if(error?.code!=='permission-denied')throw error;
+   writeRejected=true;
+  }
+  guard(uid,e);
+  const after=await getDocFromServer(ref);guard(uid,e);
+  if(after.metadata.fromCache)throw Error('SERVER_READBACK_REQUIRED');
+  if(!writeRejected||after.exists()){
+   $('result').textContent='FAIL：伺服器沒有拒絕這次 VIEWER 寫入，或測試記事已存在。\n測試文件 ID：'+id+
+     '\n請立即停止。不得自行刪除；需管理者核對並處理。';
+   $('status').textContent='安全驗收未通過；請傳此畫面。';
+  }else{
+   $('result').textContent='VIEWER_WRITE_DENIED_SERVER_PASS\nFirestore 回覆：permission-denied'+
+     '\n伺服器複核測試文件：不存在\n群組：'+NAME+'\n角色：VIEWER\n新增／修改／刪除成功筆數：0';
+   $('status').textContent='伺服器禁止 VIEWER 建立記事：PASS。';
+  }
+ }catch(error){if(e===epoch){$('result').textContent='HOLD：'+String(error.code||error.message)+
+   '\n是否發生寫入尚未完整確認，請勿重按。';$('status').textContent='驗收停止；請傳畫面。'}}
+ finally{if(e===epoch){busy=false;controls()}}
+}
+$('scan').addEventListener('click',scan);
+$('probe').addEventListener('click',probe);
+$('login').addEventListener('click',()=>{signInWithPopup(auth,new GoogleAuthProvider()).catch(e=>$('status').textContent='登入失敗：'+String(e.code||e.message))});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>$('status').textContent=String(e.code||e.message)));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{try{await identify(user)}catch(error){reset();$('identity').textContent='尚未取得指定身分';$('status').textContent='身份驗證停止：'+String(error.code||error.message)}});controls();
+}
+start().catch(error=>$('status').textContent='初始化停止：'+String(error.code||error.message));
+</script></body></html>

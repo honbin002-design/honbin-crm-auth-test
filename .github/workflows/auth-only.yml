@@ -44,3 +44,5 @@ jobs:
         run: node notebook-invite-exact-test-preflight.mjs
       - name: Verify scoped V4D invitation test safety
         run: node notebook-v4d-invite-accept-preflight.mjs
+      - name: Verify scoped VIEWER denial test requires explicit tap and checks no writes
+        run: node notebook-viewer-write-denial-preflight.mjs
