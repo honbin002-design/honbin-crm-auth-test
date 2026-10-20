@@ -40,3 +40,5 @@ jobs:
         run: node notebook-owner-readonly-inventory-preflight.mjs
       - name: Verify cross-account notebook access checker is read-only
         run: node notebook-cross-account-readonly-preflight.mjs
+      - name: Verify scoped V4D invitation test safety
+        run: node notebook-v4d-invite-accept-preflight.mjs
