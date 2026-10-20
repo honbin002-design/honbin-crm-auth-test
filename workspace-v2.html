@@ -154,13 +154,13 @@ async function showNick(){
  const name=await nicknameFor(uid);
  $('nickname').value=name;$('who').textContent=name||'未設定暱稱';
 }
-function tab(name){
+function tab(name,{skipTaskLoad=false}={}){
  if(!authenticated&&name!=='Settings'){say('請先到設定頁使用核准的 Google 帳號登入。');name='Settings'}
  for(const n of ['Notes','Tasks','Settings']){
   $('tab'+n).classList.toggle('active',n===name);
   $(n.toLowerCase()+'Panel').hidden=n!==name;
  }
- if(name==='Tasks'&&authenticated)void run(async()=>{await loadGroups();await loadTasks()});
+ if(name==='Tasks'&&authenticated&&!skipTaskLoad)void run(async()=>{await loadGroups();await loadTasks()});
  if(name==='Settings'&&authenticated){
   if(ownerMembers&&!ownerLoadDone)void run(loadOwnerManagement);
   // Invitation controls have their own, independent refresh flow.
@@ -204,7 +204,7 @@ function renderNotes(){
  const visible=items.filter(x=>(x.title+' '+x.content).toLowerCase().includes(term));
  if(!visible.length){root.append(mk('p','目前沒有記事。'));return}
  for(const item of visible){
-  const line=mk('div');line.className='line';line.append(mk('strong',item.title));
+  const line=mk('div');line.className='line';line.dataset.noteId=item.id;line.append(mk('strong',item.title));
   if(PROFILE_RULES_ENABLED&&item.ownerUid){
    const author=sharedNickCache.get(item.ownerUid);
    line.append(mk('small','建立者：'+(author||'未設定暱稱')));
@@ -215,6 +215,40 @@ function renderNotes(){
    else {const p=mk('p',item.content);p.className='note-content';p.style.marginTop='8px';line.append(p);btn.disabled=true}
   });line.append(btn);root.append(line);
  }
+}
+// Push links are only hints; group and note/task reads remain server-authorized.
+async function openPushDeepLink(){
+ const params=new URLSearchParams(location.search);
+ const target=params.get('tab'),groupId=params.get('groupId');
+ const itemId=target==='Tasks'?params.get('taskId'):params.get('noteId');
+ const id=/^[A-Za-z0-9_-]{1,150}$/;
+ if(!['Tasks','Notes'].includes(target)||!id.test(groupId||'')||
+   !id.test(itemId||''))return false;
+ const s=session();
+ await loadGroups();check(s);
+ const group=groupItems.find(x=>x.id===groupId);
+ if(!group){say('通知所屬群組已無法存取，請檢查成員權限。');return false}
+ if(target==='Tasks'){
+  taskSelected=group;$('taskGroup').value=group.id;
+  tab('Tasks',{skipTaskLoad:true});await loadTasks();check(s);
+  const row=[...$('tasksList').querySelectorAll('[data-task-id]')]
+    .find(e=>e.dataset.taskId===itemId);
+  if(row){row.scrollIntoView({block:'start'});say('已開啟通知指定的任務。')}
+  else say('任務已不存在或目前無法讀取。');
+ }else{
+  selected=group;$('mode').value='SHARED';$('groupWrap').hidden=false;
+  $('privateNotes').classList.remove('active');$('sharedNotes').classList.add('active');
+  $('group').value=group.id;$('role').textContent='目前身分：'+notebookRoleLabel(group.role);
+  tab('Notes');await loadNotes();check(s);
+  const row=[...$('notesList').querySelectorAll('[data-note-id]')]
+    .find(e=>e.dataset.noteId===itemId);
+  if(row){
+   const note=items.find(x=>x.id===itemId);
+   if(note){const preview=mk('p',note.content);preview.className='note-content';row.append(preview)}
+   row.scrollIntoView({block:'start'});say('已開啟通知指定的共用記事。');
+  }else say('記事已不存在或目前無法讀取。');
+ }
+ return true;
 }
 async function loadGroups(){
  const s=session(),all=await groups.listGroups();check(s);groupItems=all;
@@ -257,7 +291,7 @@ async function loadTasks(){
   return (await nicknameFor(id).catch(()=>''))||'未設定暱稱';
  }
  for(const item of entries){
-  const box=mk('div');box.className='line';
+  const box=mk('div');box.className='line';box.dataset.taskId=item.id;
   box.append(mk('strong',item.title));
   if(item.description)box.append(mk('p',item.description));
   box.append(mk('p','指派給：'+await displayName(item.assignedUid)));
@@ -642,6 +676,7 @@ async function start(){
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
    tab('Notes');say('已通過 TEST 帳號核准。共用任務與暱稱功能仍需伺服器規則驗收。');
+   try{await openPushDeepLink()}catch(error){say('通知連結開啟失敗：'+String(error?.code||error?.message||error))}
   }catch(e){
    if(generation!==epoch)return;uid='';authenticated=false;$('app').hidden=false;tab('Settings');
    say('登入驗證未通過：'+String(e?.code||e?.message||e));
