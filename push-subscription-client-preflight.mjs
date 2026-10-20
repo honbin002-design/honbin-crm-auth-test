@@ -10,7 +10,7 @@ const fakeSdk={
  async deleteDoc(path){calls.push('delete:'+path);storage.delete(path)},
  serverTimestamp:()=>({server:true})
 };
-const fakeSubscription={toJSON:()=>({endpoint:'https://push.example.test/subscription',
+const fakeSubscription={toJSON:()=>({endpoint:'https://web.push.apple.com/subscription',
  keys:{p256dh:'a'.repeat(60),auth:'b'.repeat(24)}})};
 let subscribed=false,asked=false;
 const registration={pushManager:{
