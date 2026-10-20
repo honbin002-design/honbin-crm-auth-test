@@ -1,0 +1,21 @@
+name: TEST Push sender safe-hold review
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax-check sender without Firebase access
+        run: node --check notification-free-sender-REVIEW-ONLY.mjs
+      - name: Verify explicit fail-closed hold (no secrets, no delivery)
+        run: node notification-free-sender-REVIEW-ONLY.mjs
+# Intentionally NO schedule, NO secrets, NO push subscription activation.
+# An actual free schedule requires owner approval, live TEST Rules, private
+# GitHub Actions secrets and iPhone cross-account delivery validation.
