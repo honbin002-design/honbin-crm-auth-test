@@ -73,6 +73,16 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱（待權限驗收）</button></div>
    <p id="nicknameHint" class="warning">不再使用「僅本機暱稱」。須完成 Firestore 共用個人檔案規則驗收後，才可讓所有成員跨裝置看到你的暱稱。</p>
   </div>
+  <div class="panel" id="ownerManagement" hidden>
+   <h2>最高權限｜成員權限管理</h2>
+   <p class="hint">僅供 honbin002 最高權限帳號使用。每本共用記事簿的成員權限獨立，不會跨群組改動。</p>
+   <label for="ownerGroup">管理哪一本共用記事簿</label>
+   <select id="ownerGroup"></select>
+   <div class="row" style="margin-top:10px"><button id="ownerRefresh" class="alt" type="button">重新讀取成員</button></div>
+   <p id="ownerStatus" class="hint" role="status" aria-live="polite">尚未讀取成員。</p>
+   <div id="ownerMembers"></div>
+   <p class="hint">權限：VIEWER 檢視者（記事唯讀）、EDITOR 編輯者、ADMIN 該記事簿管理員。最高擁有者帳號本身不可被降權。此處不提供停用帳號或不可逆的撤銷操作。</p>
+  </div>
   <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿、邀請成員及技術驗收放在進階頁，不占用日常畫面。</p>
    <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a></div>
  </section>
@@ -84,13 +94,14 @@ import {groupService} from './firebase-group-service.mjs';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs';
+import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=false;
 const PROFILE_RULES_ENABLED=false; // Shared nickname only; never fake a local-only save.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
-let authenticated=false;
+let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
 const scope=()=>$('mode').value==='PRIVATE'?{mode:'PRIVATE'}:{mode:'SHARED',groupId:selected?.id};
 const context=()=>uid?{uid,mode:$('mode').value,groupId:$('mode').value==='SHARED'?selected?.id:null}:null;
 const mayWrite=()=>$('mode').value==='PRIVATE'||['ADMIN','EDITOR'].includes(selected?.role);
@@ -108,6 +119,8 @@ function tab(name){
   $(n.toLowerCase()+'Panel').hidden=n!==name;
  }
  if(name==='Tasks'&&authenticated)void run(async()=>{await loadGroups();await loadTasks()});
+ if(name==='Settings'&&authenticated&&ownerMembers&&!ownerLoadDone)
+   void run(loadOwnerManagement);
 }
 function clearEditor(){$('noteEditor').hidden=true;current=null;pendingId=null;$('noteTitle').value='';$('noteContent').value=''}
 function draftSnap(){return {title:$('noteTitle').value,content:$('noteContent').value,active:current?{...current}:null,pendingCreateId:pendingId}}
@@ -215,6 +228,87 @@ async function loadTasks(){
   root.append(box);
  }
 }
+async function loadOwnerManagement(){
+ if(!authenticated||!ownerMembers)return;
+ const s=session();
+ $('ownerStatus').textContent='正在核對擁有者身分及共用記事簿……';
+ const known=await groups.listGroups();check(s);
+ ownerGroups=await ownerMembers.ownedGroups(known);check(s);
+ $('ownerGroup').replaceChildren();
+ for(const g of ownerGroups){
+  const opt=mk('option',g.name);opt.value=g.id;$('ownerGroup').append(opt);
+ }
+ const current=ownerGroups.find(g=>g.id===ownerGroupId)||ownerGroups[0];
+ ownerGroupId=current?.id||'';
+ if(!current){
+  $('ownerMembers').replaceChildren();
+  $('ownerStatus').textContent='這個最高權限帳號目前沒有自己建立的共用記事簿。';
+  ownerLoadDone=true;return;
+ }
+ $('ownerGroup').value=current.id;
+ await loadOwnerRoster();check(s);ownerLoadDone=true;
+}
+async function loadOwnerRoster(){
+ if(!authenticated||!ownerMembers||!ownerGroupId)return;
+ const s=session(),gid=ownerGroupId;
+ $('ownerStatus').textContent='正在向伺服器核對群組擁有者及成員角色……';
+ const result=await ownerMembers.roster(gid);check(s);
+ if(gid!==ownerGroupId)return;
+ const root=$('ownerMembers');root.replaceChildren();
+ if(!result.members.length)root.append(mk('p','此記事簿目前沒有其他成員。'));
+ for(const member of result.members){
+  const card=mk('div');card.className='line';
+  const display=member.email||'帳號識別待核對（'+member.uid.slice(0,8)+'…）';
+  card.append(mk('strong',display));
+  if(member.status!=='ACTIVE'){
+   card.append(mk('p','狀態：'+member.status+'（不可變更）'));
+   root.append(card);continue;
+  }
+  if(!member.editable){
+   card.append(mk('p','此成員的邀請與帳號關聯尚未確認，停止角色修改。'));
+   root.append(card);continue;
+  }
+  const label=mk('label','群組權限');
+  const select=mk('select');
+  for(const role of ['VIEWER','EDITOR','ADMIN']){
+   const option=mk('option',({VIEWER:'檢視者 VIEWER',EDITOR:'編輯者 EDITOR',ADMIN:'管理員 ADMIN'})[role]);
+   option.value=role;select.append(option);
+  }
+  select.value=member.role;
+  const action=mk('button','儲存角色變更');
+  action.className='alt';
+  action.onclick=()=>run(async()=>{
+   const nextRole=select.value;
+   if(nextRole===member.role){$('ownerStatus').textContent='沒有權限變更，不需儲存。';return}
+   if(!confirm('確定變更 '+display+' 在「'+result.group.name+'」的權限：'+member.role+' → '+nextRole+'？\n只影響這本記事簿。'))return;
+   action.disabled=true;select.disabled=true;
+   $('ownerStatus').textContent='正在核對伺服器版本並提交唯一一次角色更新……';
+   try{
+    const resultChange=await ownerMembers.changeRole({
+     groupId:gid,memberUid:member.uid,invitationId:member.invitationId,
+     recipientEmail:member.email,expectedRole:member.role,nextRole
+    });
+    check(s);
+    // Keep confirmation visible only after successful independent server readback.
+    await loadOwnerRoster();check(s);
+    $('ownerStatus').textContent='權限更新 PASS：'+resultChange.email+'｜'+
+       resultChange.previousRole+' → '+resultChange.role+'，伺服器已重新複核。';
+    say('成員權限修改已由伺服器確認。');
+   }catch(error){
+    $('ownerStatus').textContent='權限修改未確認：'+String(error?.code||error?.message||error)+
+      '。不要重複提交，請先按「重新讀取成員」。';
+    throw error;
+   }finally{action.disabled=false;select.disabled=false}
+  });
+  card.append(label,select,action);root.append(card);
+ }
+ $('ownerStatus').textContent='已從伺服器核對「'+result.group.name+'」：'+result.members.length+
+    ' 位其他成員。未執行任何寫入。';
+}
+$('ownerGroup').onchange=()=>run(async()=>{
+ ownerGroupId=$('ownerGroup').value;await loadOwnerRoster();
+});
+$('ownerRefresh').onclick=()=>run(loadOwnerManagement);
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
@@ -307,7 +401,9 @@ async function start(){
  try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
-  const generation=++epoch;uid='';authenticated=false;items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
+  const generation=++epoch;uid='';authenticated=false;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;
+  $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();
+  items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
   if(!user){
    $('identity').textContent='請使用已核准的 Google 帳號登入';
@@ -326,6 +422,13 @@ async function start(){
    await loadNotes();if(generation!==epoch)return;
    await restoreDraft();if(generation!==epoch)return;
    authenticated=true;$('app').hidden=false;$('identity').textContent='Google 帳號：'+user.email;
+   const rootIdentity={uid:user.uid,email:user.email,emailVerified:user.emailVerified,
+       providerId:token.claims.firebase?.sign_in_provider};
+   if(isRootOwnerIdentity(rootIdentity)){
+    ownerMembers=ownerMemberService({db,sdk,identity:rootIdentity,
+      currentUid:()=>auth.currentUser?.uid});
+    $('ownerManagement').hidden=false;
+   }
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
    tab('Notes');say('已通過 TEST 帳號核准。共用任務與暱稱功能仍需伺服器規則驗收。');
