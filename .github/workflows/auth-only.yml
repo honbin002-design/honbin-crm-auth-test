@@ -32,3 +32,5 @@ jobs:
         run: node notebook-v4d-target-readback-preflight.mjs
       - name: Verify exact-scope V4D synthetic phase-one cleanup and locked root
         run: node notebook-v4d-target-cleanup-phase1-preflight.mjs
+      - name: Verify V4D independent locked-root post-cleanup readback
+        run: node notebook-v4d-target-postcleanup-readback-preflight.mjs
