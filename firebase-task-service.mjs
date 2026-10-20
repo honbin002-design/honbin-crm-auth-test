@@ -9,8 +9,8 @@ export function taskCanComplete(task,uid){
 }
 export function taskService({db,sdk,currentUid}){
  if(!db||!sdk||typeof currentUid!=='function')throw Error('TASK_CONTEXT_REQUIRED');
- const {collection,doc,getDocs,runTransaction,serverTimestamp,getDoc,setDoc}=sdk;
- if(![collection,doc,getDocs,runTransaction,serverTimestamp,getDoc,setDoc].every(f=>typeof f==='function'))
+ const {collection,doc,getDocs,runTransaction,serverTimestamp,getDoc,getDocFromServer,setDoc}=sdk;
+ if(![collection,doc,getDocs,runTransaction,serverTimestamp,getDoc,getDocFromServer,setDoc].every(f=>typeof f==='function'))
   throw Error('TASK_SDK_REQUIRED');
  const actor=()=>valid(currentUid(),'UID');
  const taskRef=groupId=>collection(db,'groups',valid(groupId,'GROUP_ID'),'tasks');
@@ -51,13 +51,21 @@ export function taskService({db,sdk,currentUid}){
  }
  async function profile(uid){
   const key=valid(uid,'PROFILE_UID');
-  const snap=await getDoc(doc(db,'profiles',key));
-  actor();return snap.exists()?snap.data().nickname||'': '';
+  const originalUid=actor();
+  const snap=await getDocFromServer(doc(db,'profiles',key));
+  if(actor()!==originalUid)throw Error('ACCOUNT_CHANGED');
+  return snap.exists()?snap.data().nickname||'': '';
  }
  async function saveNickname(nickname){
   const uid=actor(),name=text(nickname,24,'NICKNAME');
-  await setDoc(doc(db,'profiles',uid),{nickname:name,updatedAt:serverTimestamp()});
-  actor();return name;
+  const ref=doc(db,'profiles',uid);
+  await setDoc(ref,{nickname:name,updatedAt:serverTimestamp()});
+  if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
+  const verified=await getDocFromServer(ref);
+  if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
+  if(!verified.exists()||verified.data().nickname!==name)
+    throw Error('NICKNAME_SERVER_READBACK_MISMATCH');
+  return name;
  }
  return Object.freeze({list,create,complete,profile,saveNickname});
 }
