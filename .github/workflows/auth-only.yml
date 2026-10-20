@@ -28,3 +28,5 @@ jobs:
         run: node firestore-notebook-hard-delete-v4d-preflight.mjs
       - name: Verify V4D create-only synthetic notebook page
         run: node notebook-v4d-fixture-preflight.mjs
+      - name: Verify dedicated V4D notebook readback remains read-only
+        run: node notebook-v4d-target-readback-preflight.mjs
