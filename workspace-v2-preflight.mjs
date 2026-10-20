@@ -32,6 +32,28 @@ assert.match(rules,/request\.resource\.data\.executeDate/);
 assert.match(rules,/request\.auth\.uid == profileUid/);
 assert.match(service,/serverTimestamp\(\)/);
 assert.match(service,/taskCanComplete\(before,uid\)/);
+
+// Guard review-only rule fragments against corruption/truncation and
+// accidentally publishing a noncompiling or duplicated match block.
+const codeOnly=rules.split('\n').map(line=>line.split('//')[0]).join('\n');
+assert.equal((codeOnly.match(/match \/profiles\/\{profileUid\}/g)||[]).length,1);
+assert.equal((codeOnly.match(/match \/tasks\/\{taskId\}/g)||[]).length,1);
+assert.equal((codeOnly.match(/allow create:/g)||[]).length,2);
+assert.equal((codeOnly.match(/allow update:/g)||[]).length,2);
+assert.equal((codeOnly.match(/allow delete: if false;/g)||[]).length,2);
+assert.ok(!codeOnly.includes('rules_version ='),'review fragment must not be full rules');
+let depth=0, inString=false, quote='', escape=false;
+for(const c of codeOnly){
+ if(inString){if(escape){escape=false;continue}if(c==='\\'){escape=true;continue}if(c===quote){inString=false;quote=''}continue}
+ if(c==='\''||c==='"'){inString=true;quote=c;continue}
+ if(c==='{')depth++;
+ if(c==='}') {depth--;assert.ok(depth>=0,'too many closing braces')}
+}
+assert.equal(inString,false,'unterminated quoted rule literal');
+assert.equal(depth,0,'unbalanced Firestore rule fragment');
+assert.match(codeOnly,/request\.resource\.data\.executeDate\.matches\('/);
+assert.match(codeOnly,/request\.resource\.data\.dueDate\.matches\('/);
+
 assert.match(rules,/NOT DEPLOYED/);
 assert.match(rules,/completedBy == request\.auth\.uid/);
 assert.match(rules,/completedAt == request\.time/);
