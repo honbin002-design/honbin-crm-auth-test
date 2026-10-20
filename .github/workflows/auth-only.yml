@@ -30,3 +30,5 @@ jobs:
         run: node notebook-v4d-fixture-preflight.mjs
       - name: Verify dedicated V4D notebook readback remains read-only
         run: node notebook-v4d-target-readback-preflight.mjs
+      - name: Verify exact-scope V4D synthetic phase-one cleanup and locked root
+        run: node notebook-v4d-target-cleanup-phase1-preflight.mjs
