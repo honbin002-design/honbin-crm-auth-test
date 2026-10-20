@@ -216,8 +216,28 @@ async function loadTasks(){
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
-$('mode').onchange=()=>run(async()=>{$('groupWrap').hidden=$('mode').value!=='SHARED';await reload();say('已切換記事範圍。')});
-$('group').onchange=()=>run(async()=>{selected=groupItems.find(x=>x.id===$('group').value)||null;await reload();say('已切換共用記事簿。')});
+async function changeNoteMode(mode){
+ if(!authenticated)return;
+ if($('mode').value===mode)return;
+ if(!$('noteEditor').hidden&&($('noteTitle').value||$('noteContent').value)&&
+   !confirm('要切換記事範圍嗎？本機草稿會保留在原本記事範圍。'))return;
+ $('mode').value=mode;
+ $('privateNotes').classList.toggle('active',mode==='PRIVATE');
+ $('sharedNotes').classList.toggle('active',mode==='SHARED');
+ $('groupWrap').hidden=mode!=='SHARED';
+ await run(async()=>{await reload();say(mode==='PRIVATE'?'已切換私人記事。':'已切換共用記事。')});
+}
+$('privateNotes').onclick=()=>changeNoteMode('PRIVATE');
+$('sharedNotes').onclick=()=>changeNoteMode('SHARED');
+$('group').onchange=()=>run(async()=>{
+ selected=groupItems.find(x=>x.id===$('group').value)||null;
+ await reload();say('已切換共用記事簿。');
+});
+$('taskGroup').onchange=()=>run(async()=>{
+ taskSelected=groupItems.find(g=>g.id===$('taskGroup').value)||null;
+ await loadTasks();
+ say(taskSelected?'已切換任務群組：'+taskSelected.name:'尚未選擇任務群組。');
+});
 $('search').oninput=renderNotes;
 $('newNote').onclick=()=>openEditor();
 $('noteTitle').oninput=saveDraft;$('noteContent').oninput=saveDraft;
@@ -239,15 +259,24 @@ $('saveNote').onclick=()=>run(async()=>{
   $('noteTiming').textContent='本機 '+(local/1000).toFixed(1)+' 秒｜雲端 '+(cloud/1000).toFixed(1)+' 秒｜總計 '+((Date.now()-t)/1000).toFixed(1)+' 秒';
  }finally{$('saveNote').disabled=false}
 });
-$('saveNick').onclick=()=>{if(!uid)return;const nick=$('nickname').value.trim();if(!nick||nick.length>24){say('請輸入 1～24 字的暱稱。');return}localStorage.setItem(nickKey(),nick);showNick();say('此手機的顯示暱稱已更新。跨手機同步尚未啟用。')};
+$('saveNick').onclick=()=>{
+ if(!PROFILE_RULES_ENABLED){say('共用暱稱尚未啟用。需先通過 TEST Firestore 權限驗收。');return}
+ void run(async()=>{
+  const s=session(),nick=$('nickname').value.trim();
+  if(!nick||nick.length>24)throw Error('暱稱必須為 1～24 字');
+  const saved=await tasks.saveNickname(nick);
+  check(s);$('who').textContent=saved;
+  say('共用暱稱已由伺服器確認：'+saved+'。所有有權讀取暱稱的成員可看到。');
+ });
+};
 $('taskForm').onsubmit=e=>{e.preventDefault();
  if(!TASK_RULES_ENABLED){say('任務發布尚未開放：需要先完成 TEST Firestore 權限部署與驗收。');return}
  void run(async()=>{
-  if(!selected||!['ADMIN','EDITOR'].includes(selected.role))throw Error('沒有發布任務的權限');
+  if(!taskSelected||!['ADMIN','EDITOR'].includes(taskSelected.role))throw Error('沒有發布任務的權限');
   const s=session();
-  await tasks.create({groupId:selected.id,title:$('taskTitle').value,
+  await tasks.create({groupId:taskSelected.id,title:$('taskTitle').value,
    description:$('taskDetail').value,assignedUid:$('taskAssignee').value||null,
-   dueDate:$('taskDue').value});
+   executeDate:$('taskExecuteDate').value,dueDate:$('taskDue').value});
   check(s);$('taskForm').reset();await loadTasks();say('任務已發布，伺服器確認成功。');
  });
 };
@@ -263,9 +292,12 @@ async function start(){
  try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
-  const generation=++epoch;uid='';items=[];selected=null;groupItems=[];clearEditor();$('app').hidden=true;
+  const generation=++epoch;uid='';authenticated=false;items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
-  if(!user){$('identity').textContent='請使用已核准的 Google 帳號登入';$('who').textContent='未登入';say('尚未登入');return}
+  if(!user){
+   $('identity').textContent='請使用已核准的 Google 帳號登入';
+   $('who').textContent='未登入';$('app').hidden=false;tab('Settings');say('尚未登入，請在設定頁登入。');return
+  }
   try{
    const token=await user.getIdTokenResult();
    if(generation!==epoch||auth.currentUser?.uid!==user.uid)return;
@@ -274,13 +306,16 @@ async function start(){
    notes=noteService({db,sdk,identity:{uid,emailVerified:true,providerId:'google.com'},currentUid:()=>auth.currentUser?.uid});
    groups=groupService({db,sdk,identity:user});tasks=taskService({db,sdk,currentUid:()=>auth.currentUser?.uid});
    $('mode').value='PRIVATE';$('groupWrap').hidden=true;
+   $('privateNotes').classList.add('active');$('sharedNotes').classList.remove('active');
    // Verify server authorization before revealing any saved local identity or content.
    await loadNotes();if(generation!==epoch)return;
    await restoreDraft();if(generation!==epoch)return;
-   $('app').hidden=false;$('identity').textContent='Google 帳號：'+user.email;
-   showNick();say('已通過 TEST 帳號核准。記事可使用；任務與跨手機暱稱等待規則驗收。');
+   authenticated=true;$('app').hidden=false;$('identity').textContent='Google 帳號：'+user.email;
+   $('saveNick').disabled=!PROFILE_RULES_ENABLED;
+   await showNick();if(generation!==epoch)return;
+   tab('Notes');say('已通過 TEST 帳號核准。共用任務與暱稱功能仍需伺服器規則驗收。');
   }catch(e){
-   if(generation!==epoch)return;uid='';$('app').hidden=true;
+   if(generation!==epoch)return;uid='';authenticated=false;$('app').hidden=false;tab('Settings');
    say('登入驗證未通過：'+String(e?.code||e?.message||e));
   }
  });
