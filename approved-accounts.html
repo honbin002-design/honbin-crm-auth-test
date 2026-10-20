@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HONBIN CRM｜Google 帳號核准管理</title>
+<style>body{font:16px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;max-width:740px;margin:0 auto;padding:18px;color:#1b2838;background:#f7f9fc}h1{font-size:1.4rem}section{border:1px solid #d8e0ea;background:white;border-radius:14px;padding:17px;margin:14px 0}button{background:#165fbb;color:white;border:0;border-radius:10px;padding:11px 14px;font-size:1rem;margin:5px 5px 5px 0}button:disabled{background:#a2a8b2}button.danger{background:#9d3440}input{width:100%;box-sizing:border-box;padding:12px;font-size:1rem;border:1px solid #b8c6d6;border-radius:9px}li{margin:8px 0}small,.muted{color:#5c6879}#status{font-weight:600;overflow-wrap:anywhere}#list>div{padding:12px;border-top:1px solid #e3e8ef;overflow-wrap:anywhere}</style></head><body>
+<h1>HONBIN CRM｜Google 帳號核准管理</h1>
+<p>僅由 Firestore 規則中指定的<strong>唯一擁有者 Google UID</strong>管理。一般 Google 帳號即使成功驗證身分，未獲核准也不能使用記事資料。</p>
+<section><p id="identity">尚未登入。</p><button id="login" type="button">以 Google 登入</button><button id="logout" type="button" disabled>登出</button><p id="status" role="status" aria-live="polite">請先使用部署規則時的擁有者帳號登入。</p></section>
+<section id="manage" hidden><h2>核准 Google 帳號</h2><p class="muted">請輸入對方的 Google Email。此處核准的是整個 CRM 記事使用權；每本共用記事簿仍需另外邀請。沒有核准前，對方不能讀寫雲端記事。</p>
+<form id="approveForm"><label for="email">Google Email</label><input id="email" type="email" autocomplete="off" required maxlength="254" placeholder="example@gmail.com"><button id="approve" type="submit">核准此帳號</button></form>
+<h2>目前白名單</h2><button id="refresh" type="button">重新讀取</button><div id="list" aria-live="polite"></div></section>
+<section><h2>權限說明</h2><p>只有已核准且 Google Email 經驗證的帳號才能使用記事。撤銷後將拒絕後續雲端存取；已被對方看過或儲存在裝置中的內容，無法遠端收回。</p><p class="muted">此頁不會自動新增任何帳號。沒有管理權限時，資料庫會拒絕所有核准／撤銷操作。</p></section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,collection,doc,getDocs,setDoc,updateDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const $=id=>document.getElementById(id);
+if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+const provider=new GoogleAuthProvider();
+let ownerReady=false,account=null;
+const say=s=>$('status').textContent=s;
+const fail=e=>{say('操作失敗：'+(e?.code||e?.message||'未知錯誤')+'。請確認使用正確擁有者帳號，且白名單規則已發布。')};
+const verified=async user=>{
+ if(!user||user.emailVerified!==true||!user.email)return false;
+ const token=await getIdTokenResult(user);
+ return token.claims.firebase?.sign_in_provider==='google.com';
+};
+function reset(){ownerReady=false;account=null;$('manage').hidden=true;$('logout').disabled=true;$('identity').textContent='尚未登入';$('list').replaceChildren()}
+async function refresh(){
+ if(!account||!ownerReady)return;
+ const docs=await getDocs(collection(db,'approvedAccounts'));
+ if(!account||!ownerReady)return;
+ const root=$('list');root.replaceChildren();
+ if(docs.empty){const p=document.createElement('p');p.textContent='目前尚未核准其他帳號。';root.append(p)}
+ for(const item of docs.docs){
+  const value=item.data(),row=document.createElement('div');
+  const title=document.createElement('strong');title.textContent=item.id+'｜'+(value.status==='ACTIVE'?'已核准':'已撤銷');
+  row.append(title);
+  const button=document.createElement('button'),active=value.status==='ACTIVE';
+  button.type='button';button.className=active?'danger':'';
+  button.textContent=active?'撤銷此帳號':'重新核准';
+  button.addEventListener('click',async()=>{
+   if(!account||!ownerReady)return;
+   if(!window.confirm((active?'確定撤銷 ':'確定重新核准 ')+item.id+' 嗎？'))return;
+   button.disabled=true;
+   try{await updateDoc(doc(db,'approvedAccounts',item.id),{status:active?'REVOKED':'ACTIVE'});say('權限已更新。');await refresh()}catch(e){fail(e)}finally{button.disabled=false}
+  });
+  row.append(button);root.append(row);
+ }
+}
+onAuthStateChanged(auth,async user=>{
+ reset();if(!user){say('請使用部署規則時的擁有者 Google 帳號登入。');return}
+ try{
+  if(!await verified(user)){await signOut(auth);say('Google Email 未驗證或非 Google 登入，已登出。');return}
+  account=user.uid;$('identity').textContent='Google：'+user.email+'（已驗證）';$('logout').disabled=false;
+  await getDocs(collection(db,'approvedAccounts'));
+  if(account!==user.uid)return;
+  ownerReady=true;$('manage').hidden=false;say('擁有者授權驗證成功。');await refresh();
+ }catch(e){fail(e)}
+});
+$('login').addEventListener('click',()=>{
+ setPersistence(auth,browserSessionPersistence).then(()=>signInWithPopup(auth,provider)).catch(fail);
+});
+$('logout').addEventListener('click',()=>signOut(auth).catch(fail));
+$('refresh').addEventListener('click',()=>refresh().catch(fail));
+$('approveForm').addEventListener('submit',async event=>{
+ event.preventDefault();if(!ownerReady||!account)return;
+ const email=$('email').value.trim().toLowerCase();
+ if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){say('Email 格式不正確。');return}
+ if(email===auth.currentUser?.email?.toLowerCase()){say('擁有者帳號不需另外核准。');return}
+ const button=$('approve');button.disabled=true;
+ try{
+  const existing=await getDocs(collection(db,'approvedAccounts'));
+  const found=existing.docs.find(x=>x.id===email);
+  if(found){await updateDoc(doc(db,'approvedAccounts',email),{status:'ACTIVE'})}
+  else await setDoc(doc(db,'approvedAccounts',email),{email,status:'ACTIVE',createdAt:serverTimestamp()});
+  $('approveForm').reset();say('已核准 '+email+'。請再依需要邀請進入個別記事簿。');await refresh();
+ }catch(e){fail(e)}finally{button.disabled=false}
+});
+</script></body></html>
