@@ -32,9 +32,27 @@ export function mergeTestPushRules(current,fragment){
  }
  if(end<0)throw Error('SUBSCRIPTION_BRACES_INVALID');
  const block=fragment.slice(start,end+1);
- const trimmed=current.trimEnd();
- if(!trimmed.endsWith('}'))throw Error('BASELINE_ROOT_NOT_LAST');
- const rootClose=current.lastIndexOf('}');
+ const rootMatch=current.match(/match\\s+\\/databases\\/\\{database\\}\\/documents\\s*\\{/);
+ if(!rootMatch)throw Error('DATABASE_ROOT_MISSING');
+ const rootOpen=current.indexOf(rootMatch[0])+rootMatch[0].lastIndexOf('{');
+ let rootDepth=0,rootClose=-1,rootState='CODE',rootQuote='',rootEscape=false;
+ for(let i=rootOpen;i<current.length;i++){
+  const c=current[i],next=current[i+1];
+  if(rootState==='LINE'){if(c==='\\n')rootState='CODE';continue}
+  if(rootState==='BLOCK'){if(c==='*'&&next==='/'){rootState='CODE';i++}continue}
+  if(rootState==='STRING'){
+   if(rootEscape){rootEscape=false;continue}
+   if(c==='\\\\'){rootEscape=true;continue}
+   if(c===rootQuote)rootState='CODE';
+   continue;
+  }
+  if(c==='/'&&next==='/'){rootState='LINE';i++;continue}
+  if(c==='/'&&next==='*'){rootState='BLOCK';i++;continue}
+  if(c==='"'||c==="'"){rootState='STRING';rootQuote=c;continue}
+  if(c==='{')rootDepth++;
+  if(c==='}'&&--rootDepth===0){rootClose=i;break}
+ }
+ if(rootClose<0)throw Error('DATABASE_ROOT_UNBALANCED');
  const inserted='\n    // BEGIN TEST PUSH SUBSCRIPTION ACL EXTENSION\n'+
   block.split('\n').map(line=>line?'    '+line:line).join('\n')+
   '\n    // END TEST PUSH SUBSCRIPTION ACL EXTENSION\n  ';
