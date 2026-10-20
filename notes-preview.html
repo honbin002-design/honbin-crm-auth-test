@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>鴻繽 CRM｜私人與共用記事測試候選</title>
+<style>
+:root{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#23364d;background:#f5f7fa}
+*{box-sizing:border-box}body{max-width:680px;margin:0 auto;padding:16px 14px 72px}
+h1{font-size:1.3rem;margin:4px 0 9px}h2{font-size:1.1rem;margin:0 0 10px}
+section{background:#fff;padding:16px;margin:13px 0;border:1px solid #d3ddec;border-radius:13px}
+label{font-weight:600;display:block;margin:11px 0 5px}
+input,textarea,select{font:inherit;width:100%;border:1px solid #a1b1c4;border-radius:8px;min-height:44px;padding:10px;background:white}
+textarea{min-height:145px;resize:vertical}button{font:600 15px/1.4 inherit;min-height:44px;border:0;border-radius:9px;background:#205a9a;color:white;padding:9px 15px}
+button.secondary{color:#205a9a;background:#e5edf7}button.danger{background:#963b47}
+button:disabled{opacity:.45}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #d49b38}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.muted{color:#5a687c;font-size:14px}.notice{background:#fff7e6;border-left:4px solid #cc8c29;padding:10px}
+#status{white-space:pre-wrap;overflow-wrap:anywhere;background:#e8f0fa;border-radius:9px;padding:10px}
+.entry{border-bottom:1px solid #dce3ee;padding:12px 0}.entry:last-child{border-bottom:0}
+.entry strong{overflow-wrap:anywhere}.tiny{color:#596677;font-size:13px}
+.remote-preview{white-space:pre-wrap;overflow-wrap:anywhere;max-height:190px;overflow:auto;background:#f3f5f9;border:1px solid #dbe3ef;padding:10px;border-radius:8px;font-size:14px}
+[hidden]{display:none!important}
+</style></head>
+<body>
+<h1>鴻繽科技 CRM｜同步記事候選</h1>
+<p class="muted">獨立 HTTPS 介面預覽版（僅看排版，不連接真實記事），與原 CRM 隨手記分離。</p>
+<p id="gate" class="notice">安全 HOLD：Firestore 雲端讀寫尚未核准啟用。</p>
+<section>
+<h2>Google 身分驗證</h2>
+<p id="identity">尚未登入</p>
+<div class="actions"><button id="login" disabled>以 Google 帳號登入</button><button id="logout" class="secondary" disabled>登出／切換帳號</button></div>
+<p id="status" role="status" aria-live="polite">正在核對安全條件……</p>
+</section>
+<main id="workspace" hidden>
+<section>
+<h2>記事模式</h2>
+<div class="actions"><button id="privateMode" type="button">私人記事</button><button id="sharedMode" type="button" class="secondary">共用記事</button></div>
+<div id="groupsBox" hidden>
+<label for="groupSelect">選擇已授權群組</label><select id="groupSelect"></select>
+<p class="muted" id="groupRole">請先選擇共用群組。</p>
+</div>
+<div class="actions"><button id="refresh" class="secondary">重新讀取記事</button></div>
+<label for="search">搜尋標題或內容</label><input id="search" type="search" autocomplete="off" placeholder="輸入關鍵字">
+</section>
+<section>
+<h2>記事列表</h2>
+<div id="list" aria-live="polite"></div>
+</section>
+<section>
+<h2 id="editTitle">新增記事</h2>
+<p id="editorHint" class="muted">草稿先留在這支手機，按下儲存才嘗試送至雲端；不會自動上傳。</p>
+<p id="draftStatus" class="muted" role="status">未儲存的內容尚未寫入本機。</p>
+<label for="title">標題</label><input id="title" maxlength="120" autocomplete="off">
+<label for="content">內容</label><textarea id="content" maxlength="30000" placeholder="輸入記事內容"></textarea>
+<div class="actions">
+<button id="save">儲存</button>
+<button id="cancel" type="button" class="secondary">放棄本機草稿</button>
+<button id="delete" type="button" class="danger" hidden>刪除記事</button>
+</div>
+<p id="conflict" class="notice" hidden></p>
+<div id="conflictPanel" class="notice" hidden aria-live="polite">
+ <h2>兩個版本需要你確認</h2>
+ <p class="muted">上方編輯欄仍是你這支手機的草稿。以下是發生衝突時的雲端版本，可能已再次更新。</p>
+ <strong>雲端標題</strong><div id="cloudTitle" class="remote-preview"></div>
+ <strong>雲端內容</strong><div id="cloudContent" class="remote-preview"></div>
+ <p id="cloudVersion" class="muted"></p>
+ <div class="actions">
+  <button id="keepDraft" type="button" class="secondary">繼續人工比較草稿</button>
+  <button id="takeCloud" type="button" class="secondary">採用顯示的雲端版本</button>
+  <button id="saveCopy" type="button">將我的文字另存成新記事</button>
+ </div>
+ <p class="muted">系統不會自動覆蓋他人的版本；另存記事會使用新的文件 ID。採用雲端版本會先確認是否放棄你原來的草稿。</p>
+</div>
+</section>
+</main>
+<section class="muted">
+<strong>限制與隱私</strong>
+<p>本候選版不會讀取舊 R73 隨手記或匯入既有資料。Firebase 內容並非端對端加密，專案管理員可能存取明文。</p>
+<p>已登入後編輯的草稿會另外保存在此 iPhone 的 Safari IndexedDB（未經額外加密），按『儲存』才送往 Firestore，不會自動重送。不同 Google UID 與群組分開存放；不保證 Safari 清除網站資料或儲存空間清理後仍能保留，請使用裝置密碼並避免共用裝置。</p>
+<p>共用群組與 Email 邀請管理仍在另一個隔離候選介面測試。正式 CRM、客戶、產品及報價資料不受影響。</p>
+</section>
+<script type="module">
+import {firebaseConfig,firestoreReadyForRealData} from './firebase-web-config.mjs';
+import {noteService} from './firebase-note-service.mjs';
+import {groupService} from './firebase-group-service.mjs';
+import {makeDraftStore} from './firebase-offline-drafts.mjs';
+import {conflictReview,buildSaveNewCopy,buildRemoteRestore} from './firebase-conflict-review.mjs';
+const $=id=>document.getElementById(id);
+const node=(tag,value)=>{const e=document.createElement(tag);e.textContent=String(value??'');return e};
+const msg=text=>$('status').textContent=String(text);
+let sdk=null,auth=null,db=null,notes=null,groups=null,account='',mode='PRIVATE';
+let selectedGroup=null,groupOptions=[],shown=[],active=null,pendingCreateId=null;
+let busy=false,ready=false,generation=0,editorDirty=false,revision=0;
+let draftStore=null,conflictState=null;
+const drafts=new Map();
+function hideConflict(){
+ conflictState=null;$('conflict').hidden=true;$('conflictPanel').hidden=true;
+ $('cloudTitle').textContent='';$('cloudContent').textContent='';$('cloudVersion').textContent='';
+}
+function showConflict(error){
+ const id=active?.id||pendingCreateId;
+ if(!id)return;
+ const review=conflictReview({sourceNoteId:id,local:snapshotDraft(),remote:error.remote});
+ conflictState={review,account,mode,groupId:selectedGroup?.id||null};
+ $('conflict').hidden=false;$('conflictPanel').hidden=false;
+ $('conflict').textContent='雲端版本已變更。手機草稿仍保留，請自行決定處理方式。';
+ $('cloudTitle').textContent=review.remote?.title||'雲端記事不存在或已被刪除';
+ $('cloudContent').textContent=review.remote?.content||'無可讀取的雲端內容';
+ $('cloudVersion').textContent=review.remote?'雲端版本：'+review.remote.version+(review.remote.deleted?'（已刪除）':''):'雲端記事不存在';
+ $('takeCloud').disabled=!review.cloudAvailable;
+}
+function checkedConflict(){
+ const state=conflictState;
+ if(!state||state.account!==account||state.mode!==mode||
+    state.groupId!==(selectedGroup?.id||null)||
+    state.review.sourceNoteId!==(active?.id||pendingCreateId))
+    throw Error('CONFLICT_CONTEXT_CHANGED');
+ return state.review;
+}
+const snapshotDraft=()=>({title:$('title').value,content:$('content').value,
+  active:active?{...active}:null,pendingCreateId});
+const key=()=>account+':'+mode+':'+(selectedGroup?.id||'private');
+const draftContext=()=>{
+ if(!account||(mode==='SHARED'&&!selectedGroup))return null;
+ return {uid:account,mode,groupId:mode==='SHARED'?selectedGroup.id:null};
+};
+const draftMessage=text=>$('draftStatus').textContent=text;
+function noteSession(){
+ const session={epoch:generation,uid:account,service:notes};
+ if(!session.uid||!session.service||auth?.currentUser?.uid!==session.uid)
+  throw Error('GOOGLE_ACCOUNT_CHANGED');
+ return session;
+}
+function verifyNoteSession(session){
+ if(session.epoch!==generation||session.uid!==account||
+   session.service!==notes||auth?.currentUser?.uid!==session.uid)
+   throw Error('GOOGLE_ACCOUNT_CHANGED');
+}
+function remember(){
+ const context=draftContext();
+ if(!context||!editorDirty)return;
+ const snap=snapshotDraft(),k=key(),seq=++revision;
+ drafts.set(k,snap);
+ draftMessage('草稿正在保存到這支手機……');
+ if(!draftStore){draftMessage('此瀏覽器未提供安全可用的本機草稿儲存；不可宣稱草稿已保存。');return}
+ void draftStore.save(context,snap).then(()=>{
+  if(seq===revision&&account===context.uid&&key()===k)
+    draftMessage('草稿已儲存在這支手機（尚未同步雲端）。');
+ }).catch(()=>{
+  if(seq===revision&&account===context.uid&&key()===k)
+    draftMessage('本機草稿儲存失敗！請不要關閉頁面，先複製文字備份。');
+ });
+}
+async function persistBeforeCloud(){
+ const context=draftContext();
+ if(!context||!draftStore)throw Error('LOCAL_DRAFT_PERSISTENCE_REQUIRED');
+ const snap=snapshotDraft();editorDirty=true;drafts.set(key(),snap);
+ await draftStore.save(context,snap);
+ draftMessage('本機草稿已保存，正嘗試雲端交易……');
+}
+async function dropDraft(context=draftContext()){
+ if(!context)return;
+ const k=context.uid+':'+context.mode+':'+(context.groupId||'private');
+ drafts.delete(k);revision++;
+ if(!draftStore)return;
+ try{await draftStore.remove(context)}catch{
+  if(account===context.uid)draftMessage('本機草稿清除失敗，請檢查 Safari 網站資料。');
+ }
+}
+async function loadDraft(){
+ const context=draftContext();
+ if(!context||!draftStore)return;
+ // An old group EDITOR draft must not reappear after role downgrade.
+ if(context.mode==='SHARED'&&selectedGroup?.role==='VIEWER')return;
+ const epoch=generation,k=key();
+ try{
+  const found=await draftStore.read(context);
+  if(epoch!==generation||account!==context.uid||key()!==k)return;
+  if(found){drafts.set(k,found);restore();draftMessage('已恢復此帳號在這支手機留下的草稿；尚未雲端同步。');}
+ }catch{if(epoch===generation&&account===context.uid)
+  draftMessage('無法讀取本機草稿，請檢查 Safari 儲存權限。');}
+}
+function restore(){
+ const canEdit=mode==='PRIVATE'||(selectedGroup&&selectedGroup.role!=='VIEWER');
+ const v=canEdit?drafts.get(key()):null;
+ active=v?.active||null;pendingCreateId=v?.pendingCreateId||null;editorDirty=Boolean(v);
+ $('title').value=v?.title||'';$('content').value=v?.content||'';
+ $('editTitle').textContent=active?'編輯記事（版本 '+active.version+'）':'新增記事';
+ $('delete').hidden=!active||(mode==='SHARED'&&selectedGroup?.role!=='ADMIN');
+ hideConflict();
+}
+function clearEditor(){
+ const oldScope=draftContext();editorDirty=false;void dropDraft(oldScope);
+ active=null;pendingCreateId=null;$('title').value='';$('content').value='';
+ $('delete').hidden=true;$('editTitle').textContent='新增記事';hideConflict();
+ draftMessage('已放棄此範圍的本機草稿。');
+}
+function clearSensitive(){
+ drafts.clear();editorDirty=false;revision++;
+ account='';notes=null;groups=null;selectedGroup=null;groupOptions=[];shown=[];
+ active=null;pendingCreateId=null;$('title').value='';$('content').value='';
+ $('list').replaceChildren();$('groupSelect').replaceChildren();
+ $('workspace').hidden=true;$('groupsBox').hidden=true;$('conflict').hidden=true;
+ $('delete').hidden=true;$('editTitle').textContent='新增記事';hideConflict();
+ draftMessage('尚未恢復任何已登入帳號的草稿。');
+}
+function buttons(){
+ $('login').disabled=!ready||busy||Boolean(auth?.currentUser);
+ $('logout').disabled=!ready||busy||!auth?.currentUser;
+ for(const el of $('workspace').querySelectorAll('button,input,textarea,select'))el.disabled=busy;
+ const mayWrite=mode==='PRIVATE'||(selectedGroup&&selectedGroup.role!=='VIEWER');
+ const mayDelete=mode==='PRIVATE'||selectedGroup?.role==='ADMIN';
+ $('title').readOnly=!mayWrite;
+ $('content').readOnly=!mayWrite;
+ $('save').disabled=busy||!mayWrite;
+ $('delete').disabled=busy||!mayDelete;
+ if(active)$('delete').hidden=!mayDelete;
+}
+function scope(){
+ if(mode==='PRIVATE')return {mode};
+ if(!selectedGroup)throw Error('GROUP_NOT_SELECTED');
+ return {mode,groupId:selectedGroup.id};
+}
+function reason(e){
+ if(e?.code==='NOTE_VERSION_CONFLICT')return '版本衝突：伺服器已有新版本，你的文字仍保留，沒有覆蓋別人的更新。請比較後自行處理。';
+ if(e?.code==='permission-denied')return '伺服器拒絕存取，可能已被撤銷權限。共用內容已隱藏。';
+ if(e?.code==='unavailable')return '網路或伺服器不可用。草稿仍留在此頁，尚未雲端儲存。';
+ if(e?.message==='GOOGLE_ACCOUNT_CHANGED')return 'Google 帳號已切換，舊帳號的操作已停止。';
+ return '操作未完成（'+String(e?.code||e?.message||'UNKNOWN')+'）。';
+}
+async function execute(work){
+ if(!notes||busy)return;
+ const token=generation;busy=true;buttons();
+ try{
+  const result=await work();
+  if(token===generation)msg(result||'操作完成。');
+ }catch(e){
+  if(token!==generation)return;
+  if(e?.code==='NOTE_VERSION_CONFLICT'){
+   try{showConflict(e)}catch{
+    $('conflict').hidden=false;
+    $('conflict').textContent='版本衝突：草稿仍保留，請勿覆蓋雲端版本。';
+   }
+   remember();
+  }
+  if(e?.code==='permission-denied'&&mode==='SHARED'){
+   void dropDraft(draftContext());editorDirty=false;
+   hideConflict();selectedGroup=null;groupOptions=[];shown=[];$('list').replaceChildren();
+   $('groupsBox').hidden=true;$('title').value='';$('content').value='';
+   active=null;pendingCreateId=null;$('delete').hidden=true;
+  }
+  msg(reason(e));
+ }finally{if(token===generation){busy=false;buttons();}}
+}
+async function loadGroups(){
+ const epoch=generation;
+ const result=await groups.listGroups();
+ if(epoch!==generation)return;
+ // Losing membership must hide the previously rendered shared article
+ // even when the next group index refresh returns an empty list (no 403).
+ if(selectedGroup&&!result.some(group=>group.id===selectedGroup.id)){
+  void dropDraft(draftContext());
+  active=null;pendingCreateId=null;editorDirty=false;
+  $('title').value='';$('content').value='';
+  $('delete').hidden=true;hideConflict();
+  $('editTitle').textContent='新增記事';
+  $('list').replaceChildren();
+ }
+ groupOptions=result;
+ const select=$('groupSelect');select.replaceChildren();
+ for(const group of result){
+  const o=node('option',group.name+'（'+group.role+'）');o.value=group.id;select.append(o);
+ }
+ if(!result.length){
+  selectedGroup=null;$('groupRole').textContent='目前沒有可存取的共用群組。';
+  return;
+ }
+ selectedGroup=result.find(g=>g.id===selectedGroup?.id)||result[0];
+ select.value=selectedGroup.id;
+ $('groupRole').textContent='已驗證角色：'+selectedGroup.role;
+ if(selectedGroup.role==='VIEWER'){
+  // A former editor's offline group draft must never be displayed to an
+  // account whose CURRENT server-verified role is only VIEWER.
+  await dropDraft(draftContext());
+  editorDirty=false;active=null;pendingCreateId=null;
+  $('title').value='';$('content').value='';
+  $('delete').hidden=true;hideConflict();
+  $('editTitle').textContent='檢視記事（唯讀）';
+  draftMessage('目前是檢視者，舊共用草稿已隱藏並嘗試從本機移除。');
+ }
+ buttons();
+}
+async function loadNotes(){
+ const epoch=generation;
+ if(mode==='SHARED'){await loadGroups();if(epoch!==generation)return}
+ if(mode==='SHARED'&&!selectedGroup){
+   shown=[];$('list').replaceChildren();
+   $('list').append(node('p','尚未加入共用群組，可先使用私人記事。'));
+   return;
+ }
+ const query=scope();
+ const all=await notes.list({...query,search:$('search').value});
+ if(epoch!==generation)return;
+ shown=all;const root=$('list');root.replaceChildren();
+ if(!all.length)root.append(node('p','此範圍目前沒有符合條件的記事。'));
+ for(const item of all){
+  const e=node('div');e.className='entry';
+  e.append(node('strong',item.title),node('div','版本 '+item.version+'｜'+
+   String(item.content).slice(0,70)));
+  e.append(node('div','更新日期：'+(item.updatedAt?.toDate?.().toLocaleString('zh-TW')||'未提供')));
+  const b=node('button','開啟／編輯');b.type='button';b.className='secondary';
+  b.addEventListener('click',()=>{
+   if($('title').value||$('content').value){
+    if(!window.confirm('目前草稿尚未儲存。確定切換記事？'))return;
+   }
+   void dropDraft(draftContext());editorDirty=false;
+   active={id:item.id,version:item.version};pendingCreateId=null;
+   $('title').value=item.title;$('content').value=item.content;
+   $('editTitle').textContent='編輯記事（版本 '+item.version+'）';
+   $('delete').hidden=mode==='SHARED'&&selectedGroup?.role!=='ADMIN';
+   hideConflict();buttons();
+  });
+  e.append(b);root.append(e);
+ }
+}
+async function modeChange(next){
+ if(mode===next)return;
+ remember();hideConflict();mode=next;selectedGroup=null;shown=[];$('list').replaceChildren();
+ $('groupsBox').hidden=mode!=='SHARED';
+ $('privateMode').className=mode==='PRIVATE'?'':'secondary';
+ $('sharedMode').className=mode==='SHARED'?'':'secondary';
+ await execute(async()=>{
+  if(mode==='SHARED')await loadGroups();
+  restore();await loadDraft();await loadNotes();return '已切換記事範圍。';
+ });
+}
+$('privateMode').addEventListener('click',()=>modeChange('PRIVATE'));
+$('sharedMode').addEventListener('click',()=>modeChange('SHARED'));
+$('groupSelect').addEventListener('change',()=>{
+ remember();hideConflict();selectedGroup=groupOptions.find(x=>x.id===$('groupSelect').value)||null;
+ restore();execute(async()=>{await loadDraft();await loadNotes();return '已重新讀取群組記事。';});
+});
+$('refresh').addEventListener('click',()=>execute(async()=>{
+ await loadNotes();return '已從伺服器重新讀取，沒有自動覆蓋編輯草稿。';
+}));
+$('search').addEventListener('input',()=>{const query=$('search').value.toLocaleLowerCase('zh-Hant');
+ const root=$('list');for(const child of [...root.children]){
+  if(!child.classList.contains('entry'))continue;
+  child.hidden=!child.textContent.toLocaleLowerCase('zh-Hant').includes(query);
+ }
+});
+$('title').addEventListener('input',()=>{editorDirty=true;remember();});
+$('content').addEventListener('input',()=>{editorDirty=true;remember();});
+$('cancel').addEventListener('click',()=>{
+ if(($('title').value||$('content').value)&&!window.confirm('確定放棄目前未儲存的修改？'))return;
+ clearEditor();
+});
+$('keepDraft').addEventListener('click',()=>{
+ checkedConflict();
+ // Keep remote preview visible while users manually compare or combine
+ // text in their own editor. Do not switch the note version.
+ $('conflictPanel').hidden=false;
+ $('conflict').hidden=false;
+ $('conflict').textContent='草稿與雲端版本都保留在畫面。請人工比較；按一般儲存仍會檢查舊版本，絕不自動覆蓋。';
+ $('title').focus();
+ msg('已保留手機草稿，沒有寫入 Firestore；雲端比較內容仍可查看。');
+});
+$('takeCloud').addEventListener('click',()=>execute(async()=>{
+ const session=noteSession();
+ const review=checkedConflict(),remote=buildRemoteRestore(review);
+ if(!window.confirm('確定放棄這支手機尚未上傳的草稿，改成顯示的雲端版本？'))return '已取消，原草稿仍保留。';
+ await dropDraft(draftContext());
+ verifyNoteSession(session);
+ active={id:remote.id,version:remote.version};pendingCreateId=null;
+ editorDirty=false;$('title').value=remote.title;$('content').value=remote.content;
+ $('editTitle').textContent='編輯記事（版本 '+remote.version+'）';
+ hideConflict();buttons();
+ return '已在畫面採用衝突時的雲端版本，尚未執行更新寫入。';
+}));
+$('saveCopy').addEventListener('click',()=>execute(async()=>{
+ const session=noteSession();
+ const review=checkedConflict(),target=scope();
+ const newId=session.service.newId(target);
+ const latest=conflictReview({sourceNoteId:review.sourceNoteId,
+   local:snapshotDraft(),remote:review.remote});
+ const plan=buildSaveNewCopy(latest,newId);
+ active=null;pendingCreateId=plan.noteId;editorDirty=true;
+ $('editTitle').textContent='另存新記事';
+ $('delete').hidden=true;
+ await persistBeforeCloud(); // Save fixed copy ID before attempting a network transaction.
+ verifyNoteSession(session);
+ hideConflict();
+ const result=await session.service.create({...target,...plan});
+ verifyNoteSession(session);
+ clearEditor();await loadNotes();
+ return '已將你的草稿另存為不同的新記事（版本 '+result.version+'），沒有覆蓋原記事。';
+}));
+$('save').addEventListener('click',()=>execute(async()=>{
+ const session=noteSession(),target=scope(),title=$('title').value,content=$('content').value;
+ if(!active&&!pendingCreateId)pendingCreateId=session.service.newId(target);
+ // Persist the exact create nonce/version BEFORE initiating cloud transaction.
+ // Retrying after a lost ACK cannot silently create a second note.
+ await persistBeforeCloud();
+ verifyNoteSession(session);
+ const result=active?
+  await session.service.update({...target,noteId:active.id,expectedVersion:active.version,title,content}):
+  await session.service.create({...target,noteId:pendingCreateId,title,content});
+ verifyNoteSession(session);
+ clearEditor();await loadNotes();
+ return (result.alreadyCreated?'已確認先前記事存在。':'已收到伺服器交易成功回覆。')+
+   '目前版本：'+result.version;
+}));
+$('delete').addEventListener('click',()=>{
+ if(!active||!window.confirm('確定刪除此記事？將先標記刪除，不直接移除資料庫文件。'))return;
+ execute(async()=>{
+  const session=noteSession(),target=scope(),noteId=active.id,expectedVersion=active.version;
+  await persistBeforeCloud();
+  verifyNoteSession(session);
+  await session.service.softDelete({...target,noteId,expectedVersion});
+  verifyNoteSession(session);
+  clearEditor();await loadNotes();return '已由伺服器確認刪除標記。';
+ });
+});
+$('login').addEventListener('click',()=>{
+ if(!ready||busy||!auth)return;
+ busy=true;buttons();
+ // Popup must be initiated synchronously by a direct iPhone tap.
+ sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider())
+   .catch(error=>msg(reason(error))).finally(()=>{busy=false;buttons();});
+});
+$('logout').addEventListener('click',()=>{
+ if(!auth||busy)return;remember();busy=true;buttons();
+ sdk.signOut(auth).catch(e=>msg(reason(e))).finally(()=>{busy=false;buttons();});
+});
+async function start(){
+ // The current branch deliberately stays fail-closed. NO SDK / getFirestore
+ // or cloud requests are reached until a later authorized release.
+ if(firestoreReadyForRealData!==true){
+  msg('安全 HOLD：測試介面已發佈，但真實 Firestore 尚未核准啟用，這個頁面不會讀寫任何記事。');
+  return;
+ }
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_PROJECT');
+ const appSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js');
+ const authSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js');
+ const fsSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js');
+ sdk={...authSdk,...fsSdk};const app=appSdk.initializeApp(firebaseConfig);
+ auth=authSdk.getAuth(app);await authSdk.setPersistence(auth,authSdk.browserSessionPersistence);
+ db=fsSdk.getFirestore(app);
+ try{draftStore=makeDraftStore({factory:window.indexedDB})}catch{draftStore=null}
+ ready=true;
+ authSdk.onAuthStateChanged(auth,async user=>{
+  remember();const epoch=++generation;clearSensitive();buttons();
+  if(!user){$('identity').textContent='尚未登入';msg('請使用自己的 Google 帳號登入。');return;}
+  try{
+   const claim=await user.getIdTokenResult();
+   if(epoch!==generation||auth.currentUser?.uid!==user.uid)return;
+   if(user.emailVerified!==true||claim.claims.firebase?.sign_in_provider!=='google.com'){
+    await authSdk.signOut(auth);return;
+   }
+   account=user.uid;
+   notes=noteService({db,sdk,identity:{uid:user.uid,emailVerified:true,
+      providerId:'google.com'},currentUid:()=>auth.currentUser?.uid});
+   groups=groupService({db,sdk,identity:user});
+   $('identity').textContent='已登入：'+user.email;
+   $('workspace').hidden=false;mode='PRIVATE';selectedGroup=null;restore();
+   await loadDraft();await loadNotes();if(epoch===generation)msg('已載入此 Google 帳號的私人記事。');
+  }catch(e){if(epoch===generation){clearSensitive();msg(reason(e));}}
+  finally{buttons();}
+ });
+ buttons();
+}
+start().catch(e=>msg(reason(e)));
+</script>
+</body>
+</html>
