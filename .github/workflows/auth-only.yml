@@ -52,3 +52,5 @@ jobs:
         run: node notebook-member-role-owner-preflight.mjs
       - name: Verify local draft write coalescing, barriers, and UID isolation
         run: node firebase-offline-drafts-coalescing-preflight.mjs
+      - name: Verify simplified TEST workspace and task security gates
+        run: node workspace-v2-preflight.mjs
