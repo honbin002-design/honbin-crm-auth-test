@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>鴻繽｜記事與任務 TEST V2</title>
+<style>
+:root{font:16px/1.55 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#20334d;background:#f5f7fb}
+*{box-sizing:border-box}body{max-width:720px;margin:auto;padding:14px 14px 90px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+h1{font-size:1.3rem;margin:0}h2{font-size:1.05rem;margin:0 0 12px}
+p{margin:8px 0}small,.hint{color:#5c6c80;font-size:.87rem}
+.panel{background:#fff;border:1px solid #d8e2ee;border-radius:16px;padding:16px;margin:12px 0}
+button,input,textarea,select{font:inherit}button{border:0;background:#205a9a;color:#fff;border-radius:11px;min-height:45px;padding:10px 14px;font-weight:600}
+button.alt{background:#e7eff9;color:#205a9a}button:disabled{opacity:.5}
+input,textarea,select{width:100%;padding:11px;border:1px solid #9fafc2;border-radius:10px;background:#fff;min-height:46px}
+textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;margin:10px 0 5px}
+.nav{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.nav button{background:#e7eff9;color:#24486c}.nav button.active{background:#205a9a;color:#fff}
+.line{border-bottom:1px solid #e1e8f0;padding:12px 0}.line:last-child{border:0}
+.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.row button{flex:0 0 auto}.status{background:#eaf2fb;border-radius:11px;padding:11px;overflow-wrap:anywhere}
+.pill{display:inline-block;background:#e9f0f8;color:#2d5072;border-radius:30px;padding:3px 9px;font-size:.8rem}
+.note-content{white-space:pre-wrap;overflow-wrap:anywhere;color:#54667c;font-size:.9rem}
+.warning{background:#fff5de;padding:11px;border-radius:10px}
+[hidden]{display:none!important}
+</style></head><body>
+<header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
+<div class="panel" id="loginBox"><p id="identity">正在檢查 Google 登入……</p><div class="row"><button id="login" disabled>Google 登入</button><button id="logout" class="alt" disabled>切換帳號</button></div></div>
+<div id="message" class="status" role="status" aria-live="polite">準備中……</div>
+<main id="app" hidden>
+ <div class="panel"><div class="nav">
+  <button id="tabNotes" class="active" type="button">記事</button>
+  <button id="tabTasks" type="button">任務</button>
+  <button id="tabSettings" type="button">設定</button>
+ </div></div>
+ <div class="panel"><label for="mode">記事範圍</label><select id="mode"><option value="PRIVATE">我的私人記事</option><option value="SHARED">多人共用記事</option></select>
+ <div id="groupWrap" hidden><label for="group">選擇共用記事簿</label><select id="group"></select><p class="hint" id="role"></p></div></div>
+ <section id="notesPanel">
+  <div class="panel"><div class="row" style="justify-content:space-between"><h2>記事列表</h2><button class="alt" id="newNote">＋ 新記事</button></div>
+  <label for="search">搜尋記事</label><input id="search" type="search" placeholder="搜尋標題或內容">
+  <div id="notesList"></div></div>
+  <div class="panel" id="noteEditor" hidden><h2 id="noteHeading">新增記事</h2>
+   <label for="noteTitle">標題</label><input id="noteTitle" maxlength="120">
+   <label for="noteContent">內容</label><textarea id="noteContent" maxlength="30000"></textarea>
+   <div class="row" style="margin-top:12px"><button id="saveNote">儲存</button><button id="closeNote" class="alt">返回</button></div>
+   <p id="noteTiming" class="hint">輸入時先保存到本機，按「儲存」才上傳。</p>
+  </div>
+ </section>
+ <section id="tasksPanel" hidden>
+  <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2><span class="pill">TEST 功能開發中</span></div>
+   <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。</p>
+   <div id="taskScopeHint" class="warning">任務必須在多人共用記事簿中使用。</div>
+   <div id="tasksList"></div>
+   <form id="taskForm">
+    <label for="taskTitle">任務名稱</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
+    <label for="taskDetail">任務說明</label><textarea id="taskDetail" maxlength="3000" placeholder="要處理的內容"></textarea>
+    <label for="taskAssignee">執行人</label><select id="taskAssignee"><option value="">所有成員皆可執行</option></select>
+    <label for="taskDue">截止日期（選填）</label><input id="taskDue" type="date">
+    <button type="submit" id="taskPublish" disabled>發布任務（待伺服器權限驗收）</button>
+   </form>
+   <p class="warning">目前是介面候選版。任務寫入與完成回覆尚未開放，須先部署並驗證專屬 Firestore 規則；不會假裝已發布任務。</p>
+  </div>
+ </section>
+ <section id="settingsPanel" hidden>
+  <div class="panel"><h2>我的顯示暱稱</h2><p class="hint">例如：威、VIC。Google UID 不會改變。</p>
+   <label for="nickname">暱稱</label><input id="nickname" maxlength="24" placeholder="輸入想顯示的名字">
+   <div class="row" style="margin-top:12px"><button id="saveNick">儲存此手機顯示暱稱</button></div>
+   <p class="warning">暱稱目前只保存在本手機的 TEST 頁面。跨手機共用暱稱需要後續伺服器規則驗收。</p>
+  </div>
+  <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿、邀請成員及技術驗收放在進階頁，不占用日常畫面。</p>
+   <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a></div>
+ </section>
+</main>
+<script type="module">
+import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
+import {noteService} from './firebase-note-service.mjs';
+import {groupService} from './firebase-group-service.mjs';
+import {makeDraftStore} from './firebase-offline-drafts.mjs';
+import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
+import {taskService} from './firebase-task-service.mjs';
+const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
+const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
+let auth,db,sdk,notes,groups,tasks,drafts,uid='',epoch=0,groupItems=[],selected=null,items=[],current=null,pendingId=null,busy=false;
+const scope=()=>$('mode').value==='PRIVATE'?{mode:'PRIVATE'}:{mode:'SHARED',groupId:selected?.id};
+const context=()=>uid?{uid,mode:$('mode').value,groupId:$('mode').value==='SHARED'?selected?.id:null}:null;
+const mayWrite=()=>$('mode').value==='PRIVATE'||['ADMIN','EDITOR'].includes(selected?.role);
+function session(){if(!uid||auth?.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED');return {uid,epoch}}
+function check(s){if(s.uid!==uid||s.epoch!==epoch||auth?.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')}
+function nickKey(){return 'honbin-test-v2-nick:'+uid}
+function showNick(){const nick=localStorage.getItem(nickKey())||'';$('nickname').value=nick;$('who').textContent=nick||auth?.currentUser?.email?.split('@')[0]||'已登入'}
+function tab(name){for(const n of ['Notes','Tasks','Settings']){$('tab'+n).classList.toggle('active',n===name);$(n.toLowerCase()+'Panel').hidden=n!==name}}
+function clearEditor(){$('noteEditor').hidden=true;current=null;pendingId=null;$('noteTitle').value='';$('noteContent').value=''}
+function draftSnap(){return {title:$('noteTitle').value,content:$('noteContent').value,active:current?{...current}:null,pendingCreateId:pendingId}}
+function saveDraft(){const c=context();if(!c||!drafts||!mayWrite()||$('noteEditor').hidden)return;void drafts.save(c,draftSnap()).catch(()=>say('本機草稿保存失敗，請先複製內容備份。'))}
+function openEditor(item=null){
+ if(!mayWrite()){say('此共用記事簿為唯讀，無法修改記事。');return}
+ current=item?{id:item.id,version:item.version}:null;pendingId=null;
+ $('noteTitle').value=item?.title||'';$('noteContent').value=item?.content||'';
+ $('noteHeading').textContent=item?'編輯記事':'新增記事';
+ $('noteEditor').hidden=false;$('noteEditor').scrollIntoView({behavior:'smooth',block:'start'});
+}
+async function loadNotes(){
+ const s=session(),sc=scope();if(sc.mode==='SHARED'&&!selected){$('notesList').textContent='尚未加入共用記事簿。';return}
+ const all=await notes.list(sc);check(s);items=all;renderNotes();
+}
+function renderNotes(){
+ const term=$('search').value.trim().toLowerCase(),root=$('notesList');root.replaceChildren();
+ const visible=items.filter(x=>(x.title+' '+x.content).toLowerCase().includes(term));
+ if(!visible.length){root.append(mk('p','目前沒有記事。'));return}
+ for(const item of visible){
+  const line=mk('div');line.className='line';line.append(mk('strong',item.title));
+  const body=mk('p',item.content.slice(0,100));body.className='note-content';line.append(body);
+  const btn=mk('button',mayWrite()?'開啟／編輯':'查看');btn.className='alt';btn.addEventListener('click',()=>{
+   if(mayWrite())openEditor(item);
+   else {const p=mk('p',item.content);p.className='note-content';p.style.marginTop='8px';line.append(p);btn.disabled=true}
+  });line.append(btn);root.append(line);
+ }
+}
+async function loadGroups(){
+ const s=session(),all=await groups.listGroups();check(s);groupItems=all;
+ selected=all.find(g=>g.id===selected?.id)||all[0]||null;
+ const select=$('group');select.replaceChildren();
+ for(const g of all){const o=mk('option',g.name);o.value=g.id;select.append(o)}
+ if(selected)select.value=selected.id;
+ $('role').textContent=selected?'目前身分：'+notebookRoleLabel(selected.role):'尚未加入共用記事簿。';
+ $('newNote').disabled=!mayWrite();$('taskScopeHint').textContent=selected?'目前共用記事簿：'+selected.name:'請先在設定中的進階管理頁加入共用記事簿。';
+}
+async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s)}
+async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
+$('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
+$('mode').onchange=()=>run(async()=>{await reload();say('已切換記事範圍。')});
+$('group').onchange=()=>run(async()=>{selected=groupItems.find(x=>x.id===$('group').value)||null;await reload();say('已切換共用記事簿。')});
+$('search').oninput=renderNotes;
+$('newNote').onclick=()=>openEditor();
+$('noteTitle').oninput=saveDraft;$('noteContent').oninput=saveDraft;
+$('closeNote').onclick=()=>{if(($('noteTitle').value||$('noteContent').value)&&!confirm('返回列表？未上傳的草稿會留在本機。'))return;clearEditor()};
+$('saveNote').onclick=()=>run(async()=>{
+ if(!mayWrite())throw Error('READ_ONLY');const s=session(),sc=scope(),title=$('noteTitle').value,content=$('noteContent').value;
+ if(!drafts)throw Error('LOCAL_DRAFT_UNAVAILABLE');
+ if(!current&&!pendingId)pendingId=notes.newId(sc);
+ const t=Date.now();$('saveNote').disabled=true;$('noteTiming').textContent='本機草稿儲存中……';
+ try{
+  await drafts.save(context(),draftSnap());check(s);
+  const local=Date.now()-t;$('noteTiming').textContent='本機已保存，正在等待雲端確認……';
+  const result=current?await notes.update({...sc,noteId:current.id,expectedVersion:current.version,title,content}):
+    await notes.create({...sc,noteId:pendingId,title,content});
+  check(s);const cloud=Date.now()-t-local;
+  await drafts.remove(context());check(s);
+  clearEditor();await loadNotes();check(s);
+  say('儲存成功，版本 '+result.version+'。');
+  $('noteTiming').textContent='本機 '+(local/1000).toFixed(1)+' 秒｜雲端 '+(cloud/1000).toFixed(1)+' 秒｜總計 '+((Date.now()-t)/1000).toFixed(1)+' 秒';
+ }finally{$('saveNote').disabled=false}
+});
+$('saveNick').onclick=()=>{if(!uid)return;const nick=$('nickname').value.trim();if(!nick||nick.length>24){say('請輸入 1～24 字的暱稱。');return}localStorage.setItem(nickKey(),nick);showNick();say('此手機的顯示暱稱已更新。跨手機同步尚未啟用。')};
+$('taskForm').onsubmit=e=>{e.preventDefault();say('任務發布尚未開放：需要先完成 TEST Firestore 權限部署與驗收。')};
+$('login').onclick=()=>{if(!auth)return;sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider()).catch(e=>say(String(e?.code||e?.message||e)))};
+$('logout').onclick=()=>{if(auth)sdk.signOut(auth).catch(e=>say(String(e?.code||e?.message||e)))};
+async function start(){
+ if(!firestoreReadyForRealData||firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_TEST_PROJECT');
+ const appSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js');
+ const authSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js');
+ const fsSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js');
+ sdk={...authSdk,...fsSdk};const app=appSdk.initializeApp(firebaseConfig);
+ auth=authSdk.getAuth(app);await authSdk.setPersistence(auth,authSdk.browserSessionPersistence);db=fsSdk.getFirestore(app);
+ try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
+ $('login').disabled=false;
+ authSdk.onAuthStateChanged(auth,async user=>{
+  const generation=++epoch;uid='';items=[];selected=null;groupItems=[];clearEditor();$('app').hidden=true;
+  $('logout').disabled=!user;$('login').disabled=!!user;
+  if(!user){$('identity').textContent='請使用已核准的 Google 帳號登入';$('who').textContent='未登入';say('尚未登入');return}
+  try{
+   const token=await user.getIdTokenResult();
+   if(generation!==epoch||auth.currentUser?.uid!==user.uid)return;
+   if(!user.emailVerified||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('VERIFIED_GOOGLE_REQUIRED');
+   uid=user.uid;
+   notes=noteService({db,sdk,identity:{uid,emailVerified:true,providerId:'google.com'},currentUid:()=>auth.currentUser?.uid});
+   groups=groupService({db,sdk,identity:user});tasks=taskService({db,sdk,currentUid:()=>auth.currentUser?.uid});
+   $('mode').value='PRIVATE';$('groupWrap').hidden=true;
+   // Verify server authorization before revealing any saved local identity or content.
+   await loadNotes();if(generation!==epoch)return;
+   $('app').hidden=false;$('identity').textContent='Google 帳號：'+user.email;
+   showNick();say('已通過 TEST 帳號核准。記事可使用；任務與跨手機暱稱等待規則驗收。');
+  }catch(e){
+   if(generation!==epoch)return;uid='';$('app').hidden=true;
+   say('登入驗證未通過：'+String(e?.code||e?.message||e));
+  }
+ });
+}
+start().catch(e=>say(String(e?.message||e)));
+</script></body></html>
