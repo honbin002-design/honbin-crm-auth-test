@@ -46,3 +46,5 @@ jobs:
         run: node notebook-v4d-invite-accept-preflight.mjs
       - name: Verify scoped VIEWER denial test requires explicit tap and checks no writes
         run: node notebook-viewer-write-denial-preflight.mjs
+      - name: Verify private-notes isolation and VIEWER absent-path denial remain scoped
+        run: node notebook-private-viewer-denial-preflight.mjs

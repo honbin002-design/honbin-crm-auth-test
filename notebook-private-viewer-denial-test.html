@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>HONBIN TEST｜私人隔離與 VIEWER 限制驗收</title>
+<style>
+*{box-sizing:border-box}
+body{max-width:730px;margin:auto;padding:16px 14px 60px;background:#f4f7fb;color:#22364d;font:17px/1.7 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+section{background:#fff;border:1px solid #d9e2ed;border-radius:14px;padding:18px;margin:14px 0}
+button{font:inherit;border:0;border-radius:10px;background:#215a99;color:#fff;padding:11px 15px;min-height:46px;margin:5px 5px 5px 0}
+button:disabled{opacity:.4}
+pre,#status{white-space:pre-wrap;overflow-wrap:anywhere}
+h1{font-size:1.35rem}h2{font-size:1.1rem}
+.warn{padding:12px;border-left:4px solid #b18127;background:#fff4de}
+</style></head><body>
+<h1>私人記事隔離／VIEWER 禁止修改與刪除</h1>
+<p class="warn">僅限原本 Firebase TEST 的「測試共用記事」與 <strong>wind99vic@gmail.com</strong>。第一步純唯讀，確認無法列出建立者私人記事。第二步只對<strong>事先確認不存在</strong>的兩個全新隨機測試路徑嘗試 UPDATE／DELETE，絕不對任何既有記事執行修改或刪除。若伺服器異常放行，會停止並顯示 FAIL。本頁不調整安全規則或正式 CRM。</p>
+<section><h2>Google 帳號</h2>
+<p id="identity">尚未登入</p>
+<button id="login" type="button" disabled>Google 登入</button><button id="logout" type="button" disabled>登出／切換帳號</button>
+<p id="status" role="status" aria-live="polite">初始化中……</p></section>
+<section><h2>限定驗收範圍</h2>
+<p>群組：<strong>測試共用記事</strong></p>
+<p>受邀角色：<strong>VIEWER（唯讀）</strong></p>
+<button id="private" type="button" disabled>第一步：私人記事跨帳號隔離（唯讀）</button>
+<button id="mutation" type="button" disabled>第二步：禁止 UPDATE／DELETE（測試不存在路徑）</button>
+<pre id="result" aria-live="polite">尚未驗收，未執行任何寫入。</pre>
+</section>
+<section><h2>驗收界線</h2>
+<p>拒絕私人記事清單列舉，是獨立帳號權限隔離的伺服器證據；程式不會顯示私人記事內容。UPDATE／DELETE 的驗收對象是不存在的隨機路徑，測試的是操作權限拒絕，<strong>並非直接對現存記事做破壞性測試</strong>。若出現非 <code>permission-denied</code>，一律不宣稱 PASS。</p></section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,doc,getDoc,getDocs,collection,updateDoc,deleteDoc} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore-lite.js';
+const GROUP='D0iiTJNmLt5tIs64sTL6',NAME='測試共用記事',RECIPIENT='wind99vic@gmail.com';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,actor=null,busy=false,epoch=0,privatePassed=false,attempted=false,watchdog=null;
+function buttons(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('private').disabled=!actor||busy;
+ $('mutation').disabled=!actor||!privatePassed||busy||attempted;
+}
+function clear(){epoch++;actor=null;privatePassed=false;attempted=false;clearTimeout(watchdog);watchdog=null;$('result').textContent='尚未驗收，未執行任何寫入。';buttons()}
+function guard(uid,t){if(epoch!==t||!actor||actor.uid!==uid||auth.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')}
+function progress(text){$('status').textContent=text}
+async function identify(user){
+ clear();
+ if(!user){$('identity').textContent='尚未登入';progress('請以指定第二帳號登入。');return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com'||
+    String(user.email||'').toLowerCase()!==RECIPIENT)throw Error('EXACT_VERIFIED_GOOGLE_ACCOUNT_REQUIRED');
+ if(auth.currentUser?.uid!==user.uid)throw Error('ACCOUNT_CHANGED');
+ actor={uid:user.uid};$('identity').textContent='已驗證：'+user.email;
+ progress('請按第一步：私人記事跨帳號隔離（唯讀）。');buttons();
+}
+async function checkScope(uid,t){
+ guard(uid,t);
+ const group=await getDoc(doc(db,'groups',GROUP));guard(uid,t);
+ if(!group.exists()||group.data().name!==NAME||group.data().deleteState||
+    typeof group.data().ownerUid!=='string'||group.data().ownerUid===uid)throw Error('EXACT_ACTIVE_OWNER_GROUP_REQUIRED');
+ const member=await getDoc(doc(db,'groups',GROUP,'members',uid));guard(uid,t);
+ if(!member.exists()||member.data().uid!==uid||member.data().status!=='ACTIVE'||
+    member.data().role!=='VIEWER')throw Error('ACTIVE_VIEWER_REQUIRED');
+ return group.data().ownerUid;
+}
+async function confirmPrivateDenied(ownerUid,uid,t){
+ guard(uid,t);
+ let rejected=false;
+ try{
+  // Exact owner UID comes from authorized group document, not a stale hard-coded UID.
+  // This operation deliberately never reads or displays private note contents.
+  await getDocs(collection(db,'users',ownerUid,'notes'));
+ }catch(error){
+  if(error?.code!=='permission-denied')throw error;
+  rejected=true;
+ }
+ guard(uid,t);
+ if(!rejected)throw Error('PRIVATE_NOTES_LIST_ACCESS_UNEXPECTEDLY_ALLOWED');
+}
+async function privateCheck(){
+ if(!actor||busy)return;
+ const uid=actor.uid,t=epoch;busy=true;privatePassed=false;buttons();
+ progress('核對 VIEWER 角色，然後從伺服器驗證私人記事列舉是否遭拒……');
+ try{
+  const ownerUid=await checkScope(uid,t);
+  await confirmPrivateDenied(ownerUid,uid,t);
+  privatePassed=true;
+  $('result').textContent='PRIVATE_NOTES_ISOLATION_SERVER_PASS\nFirestore 私人記事清單：permission-denied'+
+   '\n第二帳號：VIEWER\n私人記事內容讀取：0\n新增／修改／刪除：0';
+  progress('私人記事跨帳號隔離 PASS。可選擇執行第二步操作權限測試。');
+ }catch(error){if(t===epoch){$('result').textContent='HOLD／FAIL：'+String(error.code||error.message)+
+  '\n本次沒有執行寫入。';progress('隔離驗收未通過；停止。')}}
+ finally{if(t===epoch){busy=false;buttons()}}
+}
+async function denyOperation(uid,t,operation){
+ guard(uid,t);
+ const id='viewer_noexist_'+operation+'_'+crypto.randomUUID().replaceAll('-','');
+ const ref=doc(db,'groups',GROUP,'notes',id);
+ const before=await getDoc(ref);guard(uid,t);
+ if(before.exists())throw Error('TEST_PATH_MUST_NOT_EXIST');
+ let denied=false;
+ try{
+  if(operation==='update')await updateDoc(ref,{title:'純測試－VIEWER 應被拒絕修改'});
+  else if(operation==='delete')await deleteDoc(ref);
+  else throw Error('INVALID_OPERATION');
+ }catch(error){if(error?.code!=='permission-denied')throw error;denied=true}
+ guard(uid,t);
+ const after=await getDoc(ref);guard(uid,t);
+ if(after.exists())throw Error('UNEXPECTED_TEST_DOCUMENT_PRESENT');
+ if(!denied)throw Error('OPERATION_NOT_DENIED_BY_FIRESTORE');
+ return {operation,id};
+}
+async function mutationCheck(){
+ if(!actor||busy||!privatePassed||attempted)return;
+ const uid=actor.uid,t=epoch;attempted=true;busy=true;privatePassed=false;buttons();
+ watchdog=setTimeout(()=>{if(t===epoch&&busy){
+   progress('安全 HOLD：操作等待超過 20 秒，仍不能判定成功或失敗。請不要重複按鈕。');
+   $('result').textContent+='\\n等待逾時，背景請求可能尚未結束；請勿視為 PASS。';
+ }},20000);
+ progress('[1/4] 再次核對 VIEWER 與私人記事隔離……');
+ try{
+  const ownerUid=await checkScope(uid,t);
+  await confirmPrivateDenied(ownerUid,uid,t);
+  progress('[2/4] 只對不存在的隨機路徑測試 UPDATE……');
+  const update=await denyOperation(uid,t,'update');
+  progress('[3/4] 只對另一個不存在的隨機路徑測試 DELETE……');
+  const deletion=await denyOperation(uid,t,'delete');
+  progress('[4/4] UPDATE／DELETE 拒絕與不存在狀態均已核對。');
+  $('result').textContent='VIEWER_UPDATE_DELETE_DENIED_SERVER_PASS'+
+    '\nUPDATE：permission-denied\nDELETE：permission-denied'+
+    '\nUPDATE 測試路徑不存在：'+update.id+
+    '\nDELETE 測試路徑不存在：'+deletion.id+
+    '\n沒有讀取其他群組，沒有改動任何既有記事。\n新增／修改／刪除成功筆數：0';
+ }catch(error){if(t===epoch){
+   $('result').textContent='HOLD／FAIL：'+String(error.code||error.message)+
+      '\n不宣稱 UPDATE／DELETE PASS，請保留畫面進一步核對。';
+   progress('伺服器操作權限驗收未通過／未完成。');
+ }}
+ finally{if(watchdog!==null)clearTimeout(watchdog);watchdog=null;if(t===epoch){busy=false;buttons()}}
+}
+$('private').addEventListener('click',privateCheck);
+$('mutation').addEventListener('click',mutationCheck);
+$('login').addEventListener('click',()=>{signInWithPopup(auth,new GoogleAuthProvider())
+ .catch(e=>progress('登入未完成：'+String(e.code||e.message)))});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>progress('登出失敗：'+String(e.code||e.message))));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{try{await identify(user)}
+  catch(error){clear();$('identity').textContent='身分驗證未完成';progress('驗證停止：'+String(error.code||error.message))}});
+ buttons();
+}
+start().catch(error=>progress('初始化停止：'+String(error.code||error.message)));
+</script></body></html>
