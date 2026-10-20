@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>HONBIN CRM｜共用群組與邀請隔離候選</title>
+<style>
+:root{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#20334d;background:#f4f7fb}
+*{box-sizing:border-box}body{margin:0 auto;max-width:720px;padding:16px 14px 72px}
+h1{font-size:1.35rem;margin:4px 0}h2{font-size:1.12rem;margin:2px 0 10px}
+section{background:#fff;border:1px solid #d9e1ee;border-radius:14px;margin:14px 0;padding:15px}
+.note{font-size:14px;color:#546279}.warn{border-left:5px solid #d39838;padding:10px;background:#fff6e8}
+#status{padding:12px;border-radius:10px;background:#e6eef9;white-space:pre-wrap;overflow-wrap:anywhere}
+button,select,input{font:inherit;border-radius:9px}button{border:0;background:#235b9b;color:#fff;padding:10px 14px;min-height:44px;font-weight:600;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#e8edf5;color:#173c66}.danger{background:#8d3646}
+input,select{padding:10px;border:1px solid #9aaec8;width:100%;min-height:44px;background:#fff}
+label{display:block;font-weight:600;margin:10px 0 6px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.item{border-top:1px solid #e3e8f0;padding:12px 0}.item:first-child{border-top:none}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.row strong{overflow-wrap:anywhere}.small{font-size:13px;color:#5a6778}
+[hidden]{display:none!important}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #d39b38}
+</style>
+</head>
+<body>
+<h1>HONBIN CRM｜共用群組測試候選</h1>
+<p class="note">獨立隔離工程頁，非正式 CRM；沒有發佈或啟用真實 Firestore。</p>
+<p id="gate" class="warn">安全 HOLD：正式 Firebase 仍為拒絕所有用戶端讀寫。本測試頁目前不會連接 Firestore。</p>
+<section>
+ <h2>Google 帳號</h2>
+ <p id="identity">尚未登入</p>
+ <div class="actions"><button id="login" disabled>使用 Google 帳號登入</button><button id="logout" class="secondary" disabled>登出／切換帳號</button></div>
+ <p id="status" role="status" aria-live="polite">正在驗證安全設定……</p>
+</section>
+<main id="workspace" hidden>
+<section>
+ <h2>我的共用群組</h2>
+ <form id="groupForm"><label for="groupName">建立群組名稱</label><input id="groupName" maxlength="120" autocomplete="off" required><div class="actions"><button type="submit">建立群組</button><button id="refreshGroups" type="button" class="secondary">重新整理</button></div></form>
+ <div id="groupList" aria-live="polite"></div>
+</section>
+<section id="selected" hidden>
+ <h2 id="selectedName">群組</h2><p id="selectedRole" class="note"></p>
+ <div id="admin" hidden>
+  <h2>邀請成員</h2>
+  <form id="inviteForm">
+   <label for="inviteEmail">Google Email</label><input id="inviteEmail" type="email" autocomplete="email" required>
+   <label for="inviteRole">邀請權限</label>
+   <select id="inviteRole"><option value="VIEWER">檢視者（唯讀）</option><option value="EDITOR">編輯者</option><option value="ADMIN">管理員</option></select>
+   <div class="actions"><button type="submit">建立邀請</button></div>
+  </form>
+  <p class="note">邀請紀錄儲存在只有群組管理員能存取的索引，重新整理後仍可查詢與撤銷待接受邀請。系統目前不會自動寄送 Email，受邀者須用自己的 Google 帳號查看邀請。</p>
+  <div id="sentList"></div>
+  <h2>管理成員</h2>
+  <div class="actions"><button id="refreshMembers" type="button" class="secondary">讀取成員</button></div>
+  <div id="memberList"></div>
+ </div>
+</section>
+<section>
+ <h2>我收到的邀請</h2>
+ <p class="note">僅顯示與目前已驗證 Google Email 相符的邀請。接受邀請與建立群組成員資格採單一原子交易。</p>
+ <div class="actions"><button id="refreshInbox" type="button" class="secondary">重新整理邀請</button></div>
+ <div id="inboxList"></div>
+</section>
+</main>
+<section class="note"><strong>資料與費用保護</strong>
+<p>本頁不含原 R73 記事讀取／匯入功能，也不處理正式 CRM、客戶、產品、報價或 ERP 資料。Firebase Web 公開設定不等於 Google 管理權限。</p>
+<p>僅限 Spark 免費方案。本頁為獨立 HTTPS 候選預覽，真實 Firestore 保持關閉；不能以此頁取代跨手機實測。</p></section>
+<script type="module">
+import {firebaseConfig,firestoreReadyForRealData} from './firebase-web-config.mjs';
+import {groupService} from './firebase-group-service.mjs';
+const $=id=>document.getElementById(id);
+const msg=text=>$('status').textContent=text;
+const el=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
+let auth=null,db=null,sdk=null,svc=null,selected=null,account='',generation=0,busy=false;
+// Outbound invitation history is server-backed, never shared across user sessions.
+function wipe(){
+ selected=null;svc=null;
+ $('workspace').hidden=true;$('selected').hidden=true;$('admin').hidden=true;
+ for(const id of ['groupList','inboxList','sentList','memberList'])$(id).replaceChildren();
+ for(const id of ['groupForm','inviteForm'])$(id).reset();
+}
+function btns(){const ready=Boolean(auth)&&!busy;
+ $('login').disabled=!ready||!!auth.currentUser;
+ $('logout').disabled=!ready||!auth.currentUser;
+ for(const b of $('workspace').querySelectorAll('button,input,select'))b.disabled=busy;
+}
+function statusError(error) {
+ const code=String(error?.code||'UNKNOWN');
+ if(code==='permission-denied')return '伺服器拒絕存取，權限可能已撤銷。已隱藏之前的群組畫面。';
+ if(code.startsWith('auth/'))return 'Google 登入尚未完成（'+code+'）。';
+ if(code==='unavailable')return '網路暫時無法取得資料，沒有宣稱儲存成功。';
+ if(code==='INVITATION_NOT_PENDING')return '此邀請已失效或已使用。';
+ if(code==='INVITATION_NOT_FOUND')return '找不到這筆邀請。';
+ return '操作未完成（'+code+'），請檢查後重試。';
+}
+async function operation(work,{refresh=false}={}){
+ if(busy||!svc)return;
+ const epoch=generation;busy=true;btns();
+ try{
+  const result=await work();
+  if(epoch!==generation)return;
+  if(refresh)await reload();
+  if(epoch===generation)msg(typeof result==='string'?result:'操作完成；請確認下方最新資料。');
+ }catch(error){
+  if(epoch!==generation)return;
+  msg(statusError(error));
+  if(error?.code==='permission-denied'){
+   selected=null;$('selected').hidden=true;$('admin').hidden=true;
+   $('selectedName').textContent='群組';$('selectedRole').textContent='';
+   for(const id of ['groupList','inboxList','memberList','sentList'])$(id).replaceChildren();
+  }
+ }finally{if(epoch===generation){busy=false;btns();}}
+}
+function listItem(label,detail){
+ const outer=el('div');outer.className='item';
+ const title=el('strong',label);const description=el('div',detail);description.className='small';
+ outer.append(title,description);return outer;
+}
+function uiButton(title,cb,kind='secondary'){
+ const b=el('button',title);b.type='button';b.className=kind;b.addEventListener('click',cb);
+ return b;
+}
+async function reload(){
+ const epoch=generation;
+ const groups=await svc.listGroups();
+ if(epoch!==generation)return;
+ const box=$('groupList');box.replaceChildren();
+ if(selected){
+  const current=groups.find(item=>item.id===selected.id);
+  if(!current){
+    selected=null;$('selected').hidden=true;$('admin').hidden=true;
+    $('memberList').replaceChildren();$('sentList').replaceChildren();
+    $('selectedName').textContent='群組';$('selectedRole').textContent='';
+  }else{
+    selected=current;$('selectedName').textContent=current.name;
+    $('selectedRole').textContent='目前權限：'+current.role;
+    $('admin').hidden=current.role!=='ADMIN';
+    if(current.role!=='ADMIN'){
+      $('memberList').replaceChildren();$('sentList').replaceChildren();
+    }
+  }
+ }
+ if(!groups.length)box.append(el('p','目前沒有可存取的群組。'));
+ for(const g of groups){
+  const item=listItem(g.name,'身分：'+g.role);
+  item.append(uiButton('開啟群組',()=>chooseGroup(g)));
+  box.append(item);
+ }
+ await inbox();
+}
+async function chooseGroup(group){
+ selected=group;$('selected').hidden=false;
+ $('selectedName').textContent=group.name;
+ $('selectedRole').textContent='目前權限：'+group.role;
+ $('admin').hidden=group.role!=='ADMIN';
+ $('memberList').replaceChildren();$('sentList').replaceChildren();
+ if(group.role==='ADMIN')await operation(async()=>{
+   await renderSent();await renderMembers();return '已載入共用群組管理。';
+ });
+ else msg('已開啟群組。VIEWER 不可變更內容，EDITOR 不能管理成員。');
+}
+async function inbox(){
+ const epoch=generation;const invites=await svc.listInbox();
+ if(epoch!==generation)return;
+ const box=$('inboxList');box.replaceChildren();
+ if(!invites.length)box.append(el('p','目前沒有收到邀請。'));
+ for(const inv of invites){
+  const item=listItem('群組邀請', '權限：'+inv.role+'｜狀態：'+inv.status);
+  if(inv.status==='PENDING')item.append(uiButton('接受邀請',()=>operation(async()=>{
+    const r=await svc.acceptInvite(inv);
+    if(!r.indexed)return '邀請已接受，但群組索引尚未建立；請按重新整理後重試補建。';
+    await reload();return '邀請已接受，群組索引已建立。';
+  }),''));
+  if(inv.status==='ACCEPTED')item.append(uiButton('補建群組索引',()=>operation(async()=>{
+   await svc.ensureIndex(inv.groupId);
+   await reload();return '已確認群組權限及索引。';
+  })));
+  box.append(item);
+ }
+}
+async function renderSent(){
+ const box=$('sentList');box.replaceChildren();
+ if(!selected||selected.role!=='ADMIN')return;
+ const gid=selected.id;
+ const current=await svc.listSentInvites(gid);
+ if(selected?.id!==gid||selected.role!=='ADMIN')return;
+ if(!current.length)box.append(el('p','目前沒有發出邀請。'));
+ for(const inv of current){
+  const item=listItem(inv.recipientEmail,'權限：'+inv.role+'｜邀請 ID：'+inv.id);
+  if(inv.status==='PENDING')item.append(uiButton('撤銷此邀請',()=>operation(async()=>{
+   await svc.revokeInvite(inv.recipientEmail,inv.id);
+   await renderSent();return '邀請已撤銷。';
+  }),'danger'));
+  box.append(item);
+ }
+}
+async function renderMembers(){
+ if(!selected||selected.role!=='ADMIN')return;
+ const gid=selected.id;
+ const members=await svc.listMembers(gid);
+ if(selected?.id!==gid)return;
+ const box=$('memberList');box.replaceChildren();
+ if(!members.length)box.append(el('p','目前沒有其他成員。'));
+ for(const m of members){
+  const item=listItem('成員 UID：'+m.uid,'狀態：'+m.status+'｜權限：'+m.role);
+  if(m.status==='ACTIVE'){
+   const sel=el('select');sel.setAttribute('aria-label','調整成員權限');
+   for(const r of ['VIEWER','EDITOR','ADMIN']){
+    const option=el('option',r);option.value=r;if(m.role===r)option.selected=true;sel.append(option);
+   }
+   item.append(sel,uiButton('更改權限',()=>operation(async()=>{
+    await svc.changeMember(gid,m.uid,sel.value);await renderMembers();return '已修改成員權限。';
+   })),uiButton('撤銷成員',()=>operation(async()=>{
+    if(!window.confirm('確定撤銷此成員的共用群組權限？'))return '已取消。';
+    await svc.changeMember(gid,m.uid,'REVOKED');await renderMembers();return '已撤銷成員權限。';
+   }),'danger'));
+  }
+  box.append(item);
+ }
+}
+$('groupForm').addEventListener('submit',event=>{
+ event.preventDefault();operation(async()=>{
+  const g=await svc.createGroup($('groupName').value);
+  $('groupForm').reset();await reload();return '已建立群組：'+g.name;
+ });
+});
+$('inviteForm').addEventListener('submit',event=>{
+ event.preventDefault();if(!selected||selected.role!=='ADMIN')return;
+ operation(async()=>{
+  const invite=await svc.sendInvite(selected.id,$('inviteEmail').value,$('inviteRole').value);
+  await renderSent();$('inviteEmail').value='';
+  return '已建立邀請紀錄，但系統沒有寄送 Email，受邀者需使用自己帳號登入查看。';
+ });
+});
+$('refreshGroups').addEventListener('click',()=>operation(async()=>{await reload();return '已重新讀取群組及邀請。'}));
+$('refreshInbox').addEventListener('click',()=>operation(async()=>{await inbox();return '已重新讀取收件邀請。'}));
+$('refreshMembers').addEventListener('click',()=>operation(async()=>{await renderMembers();return '已重新讀取群組成員。'}));
+$('login').addEventListener('click',()=>{
+ if(!auth||busy)return;
+ busy=true;btns();
+ // Popup must be initiated in the user's direct tap callback.
+ sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider())
+  .catch(error=>msg(statusError(error)))
+  .finally(()=>{busy=false;btns();});
+});
+$('logout').addEventListener('click',()=>{if(!auth||busy)return;
+ busy=true;btns();sdk.signOut(auth)
+ .catch(error=>msg(statusError(error)))
+ .finally(()=>{busy=false;btns();});
+});
+async function start(){
+ // Hard production gate: ZERO Firestore initialization, reads or writes
+ // while owner-approved activation is absent.
+ if(firestoreReadyForRealData!==true){
+  msg('安全 HOLD：目前只提供隔離介面的程式與官方模擬器驗證。未連接真實 Firestore。');
+  return;
+ }
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const appSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js');
+ const authSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js');
+ const storeSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js');
+ sdk={...authSdk,...storeSdk};const app=appSdk.initializeApp(firebaseConfig);
+ auth=authSdk.getAuth(app);
+ await authSdk.setPersistence(auth,authSdk.browserSessionPersistence);
+ db=storeSdk.getFirestore(app);
+ authSdk.onAuthStateChanged(auth,async user=>{
+  const epoch=++generation;wipe();account='';btns();
+  if(!user){$('identity').textContent='尚未登入';msg('請以 Google 帳號登入。');return;}
+  try{
+   const token=await user.getIdTokenResult();
+   if(epoch!==generation||auth.currentUser?.uid!==user.uid)return;
+   if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com'){
+    await authSdk.signOut(auth);return;
+   }
+   account=user.uid;
+   svc=groupService({db,sdk,identity:user});
+   $('identity').textContent='已登入：'+user.email;
+   $('workspace').hidden=false;
+   await reload();if(epoch===generation)msg('已載入此帳號專屬的共用群組。');
+  }catch(error){
+   if(epoch!==generation)return;wipe();msg(statusError(error));
+  }finally{btns();}
+ });
+ btns();$('gate').textContent='隔離驗證版：只能使用合成測試資料，禁止匯入正式記事。';
+}
+start().catch(error=>msg(statusError(error)));
+</script>
+</body>
+</html>
