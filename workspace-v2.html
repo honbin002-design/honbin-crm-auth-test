@@ -52,14 +52,16 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2><span class="pill">TEST 功能開發中</span></div>
    <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。</p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
+   <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
    <div id="tasksList"></div>
-   <form id="taskForm">
+   <form id="taskForm" hidden>
+    <h2 style="margin-top:18px">發布新任務</h2>
     <label for="taskTitle">任務名稱</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
     <label for="taskDetail">任務說明</label><textarea id="taskDetail" maxlength="3000" placeholder="要處理的內容"></textarea>
     <label for="taskAssignee">執行人</label><select id="taskAssignee"><option value="">所有成員皆可執行</option></select>
     <label for="taskExecuteDate">預定執行日期（選填）</label><input id="taskExecuteDate" type="date">
     <label for="taskDue">截止日期（選填）</label><input id="taskDue" type="date">
-    <button type="submit" id="taskPublish" disabled>發布任務（待伺服器權限驗收）</button>
+    <div class="row" style="margin-top:12px"><button type="submit" id="taskPublish" disabled>發布任務（待伺服器權限驗收）</button><button id="cancelTaskForm" class="alt" type="button">取消</button></div>
    </form>
    <p class="warning">目前是介面候選版。任務寫入與完成回覆尚未開放，須先部署並驗證專屬 Firestore 規則；不會假裝已發布任務。</p>
   </div>
@@ -216,6 +218,19 @@ async function loadTasks(){
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
+function setTaskForm(open){
+ $('taskForm').hidden=!open;
+ $('toggleTaskForm').setAttribute('aria-expanded',String(open));
+ $('toggleTaskForm').textContent=open?'收起表單':'＋ 發布任務';
+}
+$('toggleTaskForm').onclick=()=>{
+ const open=$('taskForm').hidden;
+ if(!open&&($('taskTitle').value||$('taskDetail').value||$('taskExecuteDate').value||$('taskDue').value)&&
+    !confirm('收起任務表單？尚未發布的輸入內容會保留在此頁。'))return;
+ setTaskForm(open);
+ if(open)$('taskTitle').focus();
+};
+$('cancelTaskForm').onclick=()=>setTaskForm(false);
 async function changeNoteMode(mode){
  if(!authenticated)return;
  if($('mode').value===mode)return;
@@ -277,7 +292,7 @@ $('taskForm').onsubmit=e=>{e.preventDefault();
   await tasks.create({groupId:taskSelected.id,title:$('taskTitle').value,
    description:$('taskDetail').value,assignedUid:$('taskAssignee').value||null,
    executeDate:$('taskExecuteDate').value,dueDate:$('taskDue').value});
-  check(s);$('taskForm').reset();await loadTasks();say('任務已發布，伺服器確認成功。');
+  check(s);$('taskForm').reset();setTaskForm(false);await loadTasks();say('任務已發布，伺服器確認成功。');
  });
 };
 $('login').onclick=()=>{if(!auth)return;sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider()).catch(e=>say(String(e?.code||e?.message||e)))};
