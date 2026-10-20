@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import {taskCanComplete} from './firebase-task-service.mjs';
 const page=readFileSync('workspace-v2.html','utf8');
 const service=readFileSync('firebase-task-service.mjs','utf8');
 const rules=readFileSync('firestore-tasks-v2-rules-REVIEW-ONLY.rules','utf8');
+const inline=page.match(/<script type="module">([\\s\\S]*?)<\\/script>/)?.[1];
+assert.ok(inline,'module script required');
+const syntax=spawnSync(process.execPath,['--input-type=module','--check'],{input:inline,encoding:'utf8'});
+assert.equal(syntax.status,0,syntax.stderr);
 assert.match(page,/firestoreReadyForRealData/);
 assert.match(page,/projectId!=='honbin-crm-notes-spark'/);
 assert.match(page,/taskPublish" disabled/);
