@@ -64,6 +64,8 @@ jobs:
         run: node push-subscription-client-preflight.mjs
       - name: Verify zero-cost sender safe-hold and private subscription ACL
         run: node --check notification-free-sender-REVIEW-ONLY.mjs && node notification-sender-review-preflight.mjs && node notification-free-sender-REVIEW-ONLY.mjs
+      - name: Verify safe incremental push-only or three-rule candidate
+        run: node firestore-push-safe-candidate-preflight.mjs
       - name: Verify offline-only exact two-match Firestore rules merge
         run: node firestore-task-nickname-merge-preflight.mjs
       - name: Verify owner-only settings member management and scoped Firestore transaction
