@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>V4D｜指定測試記事簿唯讀盤點</title>
+<style>
+body{max-width:720px;margin:0 auto;padding:20px 14px 65px;background:#f4f7fb;color:#20334b;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+*{box-sizing:border-box}section{padding:18px;margin:14px 0;border:1px solid #dae2eb;border-radius:14px;background:#fff}
+h1{font-size:1.35rem}h2{font-size:1.13rem}button{border:0;padding:12px 16px;margin:5px 5px 5px 0;border-radius:10px;color:white;background:#245d9b;font:inherit;min-height:46px}
+button:disabled{opacity:.45}.hint{background:#fef5e7;border-left:4px solid #a87520;padding:12px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}#result,#status{overflow-wrap:anywhere;white-space:pre-wrap}
+</style></head><body>
+<h1>V4D｜專用記事簿唯讀盤點</h1>
+<p class="hint">僅核對使用者指定、剛建立的虛構測試記事簿。這個頁面<strong>沒有任何 Firestore 寫入、修改或刪除功能</strong>，不會影響「共用測試01」或私人記事。</p>
+<section><h2>Google 擁有者</h2><p id="identity">尚未登入</p>
+<button id="login" disabled type="button">以 Google 登入</button>
+<button id="logout" disabled type="button">登出</button>
+<p id="status" role="status" aria-live="polite">等待 Google 擁有者驗證。</p></section>
+<section><h2>唯一指定測試資料</h2>
+<p id="target"></p><button id="verify" disabled type="button">唯讀核對記事簿與兩筆記事</button>
+<pre id="result" aria-live="polite">尚未讀取資料。</pre>
+<p>核對完成後，先將畫面傳回 ChatGPT。<strong>此頁不會刪除任何資料。</strong></p>
+</section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,collection,doc,getDocsFromServer,getDocFromServer} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const TARGET='v4d_test_efbbf2dced534cb5a6f1d117023fd069';
+const EXPECTED_NAME='V4D_永久刪除測試_023fd069';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,ownerUid=null,busy=false;
+const status=x=>$('status').textContent=x;
+const toggle=()=>{$('login').disabled=!auth||!!auth.currentUser||busy;
+ $('logout').disabled=!auth||!auth.currentUser||busy;
+ $('verify').disabled=!ownerUid||busy};
+$('target').textContent='記事簿名稱：'+EXPECTED_NAME+'；指定 ID：'+TARGET;
+const assertSession=()=>{if(!ownerUid||auth.currentUser?.uid!==ownerUid)throw Error('OWNER_SESSION_CHANGED')};
+async function ownerCheck(user){
+ ownerUid=null;$('result').textContent='尚未讀取資料。';toggle();
+ if(!user){$('identity').textContent='尚未登入';status('請使用原 Firebase Google 管理員帳號登入。');return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('VERIFIED_GOOGLE_ACCOUNT_REQUIRED');
+ // Only the actual pre-existing fixed Google owner can list approvals.
+ await getDocsFromServer(collection(db,'approvedAccounts'));
+ if(auth.currentUser?.uid!==user.uid)throw Error('IDENTITY_CHANGED_DURING_VERIFICATION');
+ ownerUid=user.uid;$('identity').textContent='原擁有者帳號已驗證：'+user.email;
+ status('擁有者權限通過；請按「唯讀核對」取得真實 Firestore 資料。');toggle();
+}
+async function verify(){
+ if(busy||!ownerUid)return;
+ busy=true;toggle();status('正在從 Firestore 伺服器讀取指定測試記事簿……');
+ try{
+  assertSession();
+  const group=await getDocFromServer(doc(db,'groups',TARGET));assertSession();
+  if(!group.exists()||group.data().ownerUid!==ownerUid||group.data().name!==EXPECTED_NAME||group.data().deleteState)
+    throw Error('SPECIFIED_SYNTHETIC_GROUP_MISMATCH');
+  const notes=await getDocsFromServer(collection(db,'groups',TARGET,'notes'));
+  const members=await getDocsFromServer(collection(db,'groups',TARGET,'members'));
+  const invites=await getDocsFromServer(collection(db,'groups',TARGET,'sentInvites'));
+  const ownIndex=await getDocFromServer(doc(db,'users',ownerUid,'groupIndex',TARGET));
+  assertSession();
+  const data=notes.docs.map(d=>({id:d.id,deleted:d.data().deleted===true,groupId:d.data().groupId}));
+  const twoNotes=data.length===2&&
+    data.some(x=>x.id==='test_note_01'&&!x.deleted&&x.groupId===TARGET)&&
+    data.some(x=>x.id==='test_note_02'&&x.deleted&&x.groupId===TARGET);
+  const indexOk=ownIndex.exists()&&ownIndex.data().uid===ownerUid&&ownIndex.data().groupId===TARGET;
+  const check=twoNotes&&indexOk&&members.size===0&&invites.size===0;
+  $('result').textContent=
+    '指定記事簿：'+EXPECTED_NAME+'\nID：'+TARGET+
+    '\n建立者 UID 符合：是'+
+    '\nArticle 數：'+notes.size+
+    '\n正常記事：'+data.filter(n=>!n.deleted).length+
+    '\n已軟刪除記事：'+data.filter(n=>n.deleted).length+
+    '\n成員：'+members.size+
+    '\n送出邀請：'+invites.size+
+    '\n本人索引：'+(indexOk?'正常':'異常')+
+    '\n唯讀驗收：'+(check?'PASS':'NEEDS_REVIEW');
+  status(check?'指定虛構記事簿唯讀盤點 PASS；沒有寫入或刪除任何資料。':
+    '盤點結果與預期不同，停止進入刪除驗收，請截圖。');
+ }catch(e){status('唯讀盤點未通過，未修改任何資料：'+String(e.code||e.message))}
+ finally{busy=false;toggle()}
+}
+$('verify').addEventListener('click',verify);
+$('login').addEventListener('click',async()=>{
+ try{await setPersistence(auth,browserSessionPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}
+ catch(e){status('登入未完成：'+String(e.code||e.message))}
+});
+$('logout').addEventListener('click',async()=>{try{await signOut(auth)}catch(e){status(String(e.code||e.message))}});
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);db=getFirestore(app);auth=getAuth(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  ownerUid=null;toggle();
+  try{await ownerCheck(user)}catch(e){ownerUid=null;toggle();status('擁有者驗證失敗：'+String(e.code||e.message))}
+ });
+ toggle();
+}
+start().catch(e=>status('初始化失敗：'+String(e.code||e.message)));
+</script></body></html>
