@@ -23,9 +23,9 @@ button:disabled{opacity:.45}button:focus-visible,input:focus-visible,textarea:fo
 [hidden]{display:none!important}
 </style></head>
 <body>
-<h1>鴻繽科技 CRM｜同步記事候選</h1>
-<p class="muted">獨立工程測試版，尚未正式部署，與原 CRM 隨手記分離。</p>
-<p id="gate" class="notice">安全 HOLD：Firestore 雲端讀寫尚未核准啟用。</p>
+<h1>鴻繽科技 CRM｜雲端記事 TEST</h1>
+<p class="muted">獨立測試版，僅供已核准 Google 帳號以虛構資料驗收；與正式 CRM 隨手記完全分離。</p>
+<p id="gate" class="notice">此測試版僅供虛構資料驗收，請勿輸入正式客戶、報價、產品或其他機密資料。Firebase 不是端對端加密。</p>
 <section>
 <h2>Google 身分驗證</h2>
 <p id="identity">尚未登入</p>
@@ -81,7 +81,7 @@ button:disabled{opacity:.45}button:focus-visible,input:focus-visible,textarea:fo
 <strong>限制與隱私</strong>
 <p>本候選版不會讀取舊 R73 隨手記或匯入既有資料。Firebase 內容並非端對端加密，專案管理員可能存取明文。</p>
 <p>已登入後編輯的草稿會另外保存在此 iPhone 的 Safari IndexedDB（未經額外加密），按『儲存』才送往 Firestore，不會自動重送。不同 Google UID 與群組分開存放；不保證 Safari 清除網站資料或儲存空間清理後仍能保留，請使用裝置密碼並避免共用裝置。</p>
-<p>共用群組與 Email 邀請管理仍在另一個隔離候選介面測試。正式 CRM、客戶、產品及報價資料不受影響。</p>
+<p>可在本測試頁建立不同共用記事簿並邀請已核准的 Google 帳號；正式 CRM、客戶、產品及報價資料不受影響。</p>
 </section>
 <script type="module">
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
@@ -251,11 +251,13 @@ async function execute(work){
    }
    remember();
   }
-  if(e?.code==='permission-denied'&&mode==='SHARED'){
-   void dropDraft(draftContext());editorDirty=false;
-   hideConflict();selectedGroup=null;groupOptions=[];shown=[];$('list').replaceChildren();
-   $('groupsBox').hidden=true;$('title').value='';$('content').value='';
-   active=null;pendingCreateId=null;$('delete').hidden=true;
+  if(e?.code==='permission-denied'){
+   // On revocation hide any previously displayed content; server rules
+   // remain authoritative for all notes, invites and memberships.
+   clearSensitive();
+   try{await sdk.signOut(auth)}catch{}
+   msg('雲端拒絕本次操作：帳號核准或記事簿權限可能已變更。請重新登入核對。');
+   return;
   }
   msg(reason(e));
  }finally{if(token===generation){busy=false;buttons();}}
@@ -520,10 +522,25 @@ async function start(){
    notes=noteService({db,sdk,identity:{uid:user.uid,emailVerified:true,
       providerId:'google.com'},currentUid:()=>auth.currentUser?.uid});
    groups=groupService({db,sdk,identity:user});
-   $('identity').textContent='已登入：'+user.email;
-   $('workspace').hidden=false;mode='PRIVATE';selectedGroup=null;restore();
-   await loadDraft();await loadNotes();if(epoch===generation)msg('已載入此 Google 帳號的私人記事。');
-  }catch(e){if(epoch===generation){clearSensitive();msg(reason(e));}}
+   $('identity').textContent='Google 已驗證：'+user.email+'；正在核對 Firestore 帳號核准……';
+   mode='PRIVATE';selectedGroup=null;
+   // Server authorization FIRST: never display old local drafts until
+   // global account allowlist is actually accepted by the Rules engine.
+   await loadNotes();
+   if(epoch!==generation||auth.currentUser?.uid!==user.uid)return;
+   $('workspace').hidden=false;restore();await loadDraft();
+   if(epoch===generation){
+     $('identity').textContent='已核准 Google 帳號：'+user.email;
+     msg('白名單驗證成功！可使用虛構資料測試私人雲端記事。');
+   }
+  }catch(e){
+   if(epoch!==generation)return;
+   clearSensitive();
+   if(e?.code==='permission-denied'){
+     try{await authSdk.signOut(auth)}catch{}
+     msg('此 Google 帳號未獲 CRM 白名單核准，或其權限已被撤銷。請由擁有者先核准。');
+   }else msg(reason(e));
+  }
   finally{buttons();}
  });
  buttons();
