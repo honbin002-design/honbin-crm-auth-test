@@ -1,0 +1,41 @@
+// REVIEW ONLY - NEVER DEPLOY AS A COMPLETE RULESET.
+// Future TEST-only extension for per-device iPhone Web Push subscriptions.
+// Requires current deployed Rules readback, exact-diff merge, emulator tests,
+// and explicit owner approval. Firebase Admin sender bypasses these rules.
+// Must not be used in the formal CRM.
+//
+// Insert at /databases/{database}/documents root:
+match /pushSubscriptions/{subscriberUid}/devices/{deviceId} {
+  // Push endpoint and keys are sensitive. Never allow public/group reads.
+  allow get, list: if googleUser()
+    && request.auth.uid == subscriberUid;
+  allow create, update: if googleUser()
+    && request.auth.uid == subscriberUid
+    && deviceId.matches('^[A-Za-z0-9_-]{1,100}$')
+    && request.resource.data.keys().hasAll([
+      'endpoint','p256dh','auth','createdAt','updatedAt'
+    ])
+    && request.resource.data.keys().hasOnly([
+      'endpoint','p256dh','auth','createdAt','updatedAt'
+    ])
+    && request.resource.data.endpoint is string
+    && request.resource.data.endpoint.size() >= 20
+    && request.resource.data.endpoint.size() <= 2048
+    && request.resource.data.endpoint.matches('^https://.+')
+    && request.resource.data.p256dh is string
+    && request.resource.data.p256dh.size() >= 32
+    && request.resource.data.p256dh.size() <= 256
+    && request.resource.data.auth is string
+    && request.resource.data.auth.size() >= 8
+    && request.resource.data.auth.size() <= 128
+    && request.resource.data.updatedAt == request.time
+    && (resource == null
+      ? request.resource.data.createdAt == request.time
+      : request.resource.data.createdAt == resource.data.createdAt);
+  allow delete: if googleUser() && request.auth.uid == subscriberUid;
+}
+
+// Delivery receipts must remain SERVER-ONLY. No client-side allow rules.
+// Sender must verify APPROVED account, ACTIVE group membership and current
+// assignment immediately before sending; never rely on a public token.
+// Never store customer/task text in push payload.
