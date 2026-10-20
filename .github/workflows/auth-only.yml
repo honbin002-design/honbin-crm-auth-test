@@ -26,3 +26,5 @@ jobs:
         run: node notebook-hard-delete-v4d-preflight.mjs
       - name: Verify V4D owner rule copy helper is review-only
         run: node firestore-notebook-hard-delete-v4d-preflight.mjs
+      - name: Verify V4D create-only synthetic notebook page
+        run: node notebook-v4d-fixture-preflight.mjs
