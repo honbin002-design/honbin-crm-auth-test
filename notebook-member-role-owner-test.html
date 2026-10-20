@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>HONBIN TEST｜指定成員權限驗收</title>
+<style>*{box-sizing:border-box}body{max-width:730px;margin:auto;padding:16px;background:#f4f7fb;color:#22364d;font:17px/1.7 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+section{background:#fff;border:1px solid #d9e2ed;border-radius:14px;padding:18px;margin:14px 0}
+button{font:inherit;border:0;border-radius:10px;background:#215a99;color:white;padding:11px 15px;min-height:46px;margin:5px 5px 5px 0}button:disabled{opacity:.4}
+pre,#status{white-space:pre-wrap;overflow-wrap:anywhere}h1{font-size:1.35rem}h2{font-size:1.1rem}
+.warn{padding:12px;border-left:4px solid #b18127;background:#fff4de}</style></head><body>
+<h1>測試共用記事｜指定成員權限驗收</h1>
+<p class="warn">僅限原有 Firebase TEST，僅允許管理者 <strong>honbin002@gmail.com</strong> 操作既有「測試共用記事」中已接受邀請的 <strong>wind99vic@gmail.com</strong>。本頁不建立或刪除記事、邀請、成員或群組；不會自動改權限。按鈕會變更該指定測試成員的角色，可能暫時賦予編輯或管理權限；驗收完應降回 VIEWER。請勿用於正式客戶資料。</p>
+<section><h2>管理者登入</h2><p id="identity">尚未登入</p>
+<button id="login" disabled>Google 登入</button><button id="logout" disabled>登出／切換帳號</button>
+<p id="status" role="status" aria-live="polite">初始化中……</p></section>
+<section><h2>限定目標</h2>
+<p>記事簿：<strong>測試共用記事</strong></p><p>成員：<strong>wind99vic@gmail.com</strong></p>
+<button id="read" disabled>第一步：唯讀核對指定成員與角色</button>
+<button id="editor" disabled>第二步：將指定成員改為 EDITOR</button>
+<button id="admin" disabled>後續驗收：將指定成員改為 ADMIN</button>
+<button id="viewer" disabled>驗收復原：將指定成員降回 VIEWER</button>
+<pre id="result" aria-live="polite">尚未核對，寫入：0。</pre>
+</section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,doc,getDoc,getDocs,collection,updateDoc} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore-lite.js';
+const GROUP='D0iiTJNmLt5tIs64sTL6',NAME='測試共用記事',OWNER='honbin002@gmail.com',RECIPIENT='wind99vic@gmail.com';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,actor=null,verified=null,busy=false,epoch=0,attempted=false,watchdog=null;
+function controls(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('read').disabled=!actor||busy;
+ $('editor').disabled=!verified||verified.role!=='VIEWER'||busy||attempted;
+ $('admin').disabled=!verified||verified.role!=='EDITOR'||busy||attempted;
+ $('viewer').disabled=!verified||verified.role==='VIEWER'||busy||attempted;
+}
+function clear(){epoch++;actor=null;verified=null;attempted=false;clearTimeout(watchdog);watchdog=null;$('result').textContent='尚未核對，寫入：0。';controls()}
+function guard(uid,t){if(epoch!==t||actor?.uid!==uid||auth.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')}
+function progress(s){$('status').textContent=s}
+async function identify(user){
+ clear();
+ if(!user){$('identity').textContent='尚未登入';progress('請以管理者 Google 帳號登入。');return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com'||
+   String(user.email||'').toLowerCase()!==OWNER)throw Error('EXACT_VERIFIED_OWNER_REQUIRED');
+ if(auth.currentUser?.uid!==user.uid)throw Error('ACCOUNT_CHANGED');
+ actor={uid:user.uid};$('identity').textContent='已驗證：'+user.email;
+ progress('按第一步，只核對伺服器資料。');controls();
+}
+async function inventory(uid,t){
+ guard(uid,t);
+ const group=await getDoc(doc(db,'groups',GROUP));guard(uid,t);
+ if(!group.exists()||group.data().ownerUid!==uid||group.data().name!==NAME||group.data().deleteState)
+   throw Error('EXACT_OWNER_GROUP_REQUIRED');
+ const members=await getDocs(collection(db,'groups',GROUP,'members'));guard(uid,t);
+ const sent=await getDocs(collection(db,'groups',GROUP,'sentInvites'));guard(uid,t);
+ const accepted=sent.docs.filter(x=>x.data().groupId===GROUP&&x.data().recipientEmail===RECIPIENT);
+ const candidates=members.docs.filter(x=>x.data().uid===x.id&&x.data().status==='ACTIVE'&&
+    accepted.some(inv=>inv.id===x.data().invitationId));
+ if(candidates.length!==1)throw Error('EXACT_ACCEPTED_MEMBER_NOT_UNIQUE');
+ const member=candidates[0];
+ if(!['VIEWER','EDITOR','ADMIN'].includes(member.data().role)||member.id===uid)throw Error('INVALID_TARGET_ROLE');
+ return {uid:member.id,role:member.data().role,ref:doc(db,'groups',GROUP,'members',member.id)};
+}
+async function read(){
+ if(!actor||busy)return;
+ const uid=actor.uid,t=epoch;busy=true;verified=null;attempted=false;controls();
+ progress('唯讀核對記事簿擁有者、成員與原始邀請……');
+ try{
+  const member=await inventory(uid,t);guard(uid,t);verified=member;
+  $('result').textContent='OWNER_MEMBER_SCOPE_READONLY_PASS\n目標帳號：'+RECIPIENT+
+   '\n目前角色：'+member.role+'\n群組：'+NAME+'\n本次新增／修改／刪除：0';
+  progress('唯讀核對 PASS。角色變更需另按按鈕才會執行。');
+ }catch(error){if(t===epoch){$('result').textContent='HOLD：'+String(error.code||error.message)+'\n沒有執行寫入。';progress('核對未通過，不允許變更角色。')}}
+ finally{if(t===epoch){busy=false;controls()}}
+}
+async function change(role){
+ if(!actor||!verified||busy||attempted||!['VIEWER','EDITOR','ADMIN'].includes(role))return;
+ if((role==='EDITOR'&&verified.role!=='VIEWER')||
+    (role==='ADMIN'&&verified.role!=='EDITOR')||
+    (role==='VIEWER'&&verified.role==='VIEWER'))return;
+ const uid=actor.uid,t=epoch;busy=true;attempted=true;controls();
+ progress('正在重新核對伺服器成員資料……');
+ try{
+  const current=await inventory(uid,t);guard(uid,t);
+  if(current.uid!==verified.uid||current.role!==verified.role)throw Error('MEMBERSHIP_CHANGED_STOP');
+  progress('正在提交唯一一次指定成員角色變更：'+current.role+' → '+role);
+  watchdog=setTimeout(()=>{if(t===epoch&&busy){
+    progress('安全 HOLD：超過 20 秒，回覆尚未確認；請勿再次提交。');
+    $('result').textContent+='\\n等待逾時；不能當作 PASS。';
+  }},20000);
+  await updateDoc(current.ref,{role});
+  guard(uid,t);
+  progress('伺服器已回覆；正在獨立複核成員角色……');
+  const after=await inventory(uid,t);guard(uid,t);
+  if(after.uid!==current.uid||after.role!==role)throw Error('SERVER_ROLE_READBACK_MISMATCH');
+  verified=after;
+  $('result').textContent='MEMBER_ROLE_CHANGE_SERVER_PASS\n指定成員：'+RECIPIENT+
+    '\n變更：'+current.role+' → '+role+
+    '\n伺服器複核角色：'+after.role+
+    '\n本次成功角色更新：1\n沒有新增或刪除記事／邀請／成員／群組。';
+  progress('角色變更成功；請由第二帳號驗收，之後回到本頁復原 VIEWER。');
+ }catch(error){if(t===epoch){
+   verified=null;$('result').textContent='HOLD：'+String(error.code||error.message)+
+     '\n權限變更結果尚未確認。請先重新執行唯讀核對，不要重複提交。';
+   progress('變更未確認；已停止後續動作。');
+ }}finally{if(watchdog!==null)clearTimeout(watchdog);watchdog=null;if(t===epoch){busy=false;controls()}}
+}
+$('read').addEventListener('click',read);
+$('editor').addEventListener('click',()=>change('EDITOR'));
+$('admin').addEventListener('click',()=>change('ADMIN'));
+$('viewer').addEventListener('click',()=>change('VIEWER'));
+$('login').addEventListener('click',()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(e=>progress('登入未完成：'+String(e.code||e.message))));
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>progress('登出失敗：'+String(e.code||e.message))));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{try{await identify(user)}catch(error){clear();$('identity').textContent='身分驗證未完成';progress('驗證停止：'+String(error.code||error.message))}});controls();
+}
+start().catch(error=>progress('初始化停止：'+String(error.code||error.message)));
+</script></body></html>

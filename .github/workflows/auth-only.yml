@@ -48,3 +48,5 @@ jobs:
         run: node notebook-viewer-write-denial-preflight.mjs
       - name: Verify private-notes isolation and VIEWER absent-path denial remain scoped
         run: node notebook-private-viewer-denial-preflight.mjs
+      - name: Verify owner-scoped member role change has exact recipient and single write
+        run: node notebook-member-role-owner-preflight.mjs
