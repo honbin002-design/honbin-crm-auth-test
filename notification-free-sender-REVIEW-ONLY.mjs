@@ -3,6 +3,7 @@
 // two-account acceptance. No secrets in repo, URLs or push payloads.
 import {createHash} from 'node:crypto';
 import {routeNotification} from './notification-recipient-router.mjs';
+import {notificationEventStillRelevant} from './notification-event-freshness.mjs';
 const PROJECT='honbin-crm-notes-spark';
 const required=[
  'TEST_FIREBASE_SERVICE_ACCOUNT_JSON','TEST_VAPID_PUBLIC_KEY',
@@ -60,27 +61,12 @@ async function main(){
  }
  async function stillRelevant(event,uid){
   const {kind,groupId,taskId,noteId}=event.payload;
-  const groupRef=db.collection('groups').doc(groupId);
-  if(kind==='SHARED_NOTE_CREATED'){
-   const snap=await groupRef.collection('notes').doc(noteId).get();
-   if(!snap.exists)return false;
-   const note=snap.data();
-   return note.groupId===groupId&&note.deleted!==true&&
-     note.ownerUid===event.actorUid&&note.ownerUid!==uid;
-  }
-  const snap=await groupRef.collection('tasks').doc(taskId).get();
-  if(!snap.exists)return false;
-  const task=snap.data();
-  if(kind==='TASK_ASSIGNED'){
-   return task.status==='OPEN'&&task.createdBy===event.actorUid&&
-     uid!==event.actorUid&&
-     (task.assignedUid===null||task.assignedUid===uid);
-  }
-  if(kind==='TASK_COMPLETED'){
-   return task.status==='DONE'&&task.completedBy===event.actorUid&&
-     task.createdBy===uid&&uid!==event.actorUid;
-  }
-  return false;
+  const base=db.collection('groups').doc(groupId);
+  const ref=kind==='SHARED_NOTE_CREATED'
+   ?base.collection('notes').doc(noteId)
+   :base.collection('tasks').doc(taskId);
+  const fresh=await ref.get();
+  return fresh.exists&&notificationEventStillRelevant(event,fresh.data(),uid);
  }
  async function sendEvent(event){
   for(const uid of event.recipients){
