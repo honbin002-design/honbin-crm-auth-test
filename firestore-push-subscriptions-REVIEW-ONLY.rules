@@ -19,7 +19,8 @@ match /pushSubscriptions/{subscriberUid}/devices/{deviceId} {
     && request.resource.data.endpoint is string
     && request.resource.data.endpoint.size() >= 20
     && request.resource.data.endpoint.size() <= 2048
-    && request.resource.data.endpoint.matches('^https://.+')
+    // iPhone-only TEST: reject arbitrary URLs to prevent push SSRF.
+    && request.resource.data.endpoint.matches('^https://web[.]push[.]apple[.]com/.+')
     && request.resource.data.p256dh is string
     && request.resource.data.p256dh.size() >= 32
     && request.resource.data.p256dh.size() <= 256
