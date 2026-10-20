@@ -22,6 +22,14 @@ assert.match(page,/id="taskGroup"/);
 assert.match(page,/id="taskExecuteDate"/);
 assert.match(page,/const PROFILE_RULES_ENABLED=false/);
 assert.match(page,/const TASK_RULES_ENABLED=false/);
+assert.match(page,/id="checkLiveRules"/);
+assert.match(page,/id="liveRulesStatus"/);
+assert.match(page,/async function checkLiveRulesReadOnly\(\)/);
+assert.match(page,/sdk\.getDocFromServer\(/);
+assert.match(page,/sdk\.getDocsFromServer\(/);
+assert.match(page,/groups\.listGroups\(\)/);
+assert.match(page,/尚未驗收寫入／越權拒絕／實際推播/);
+
 assert.match(page,/if\(!authenticated&&name!=='Settings'\)/);
 assert.doesNotMatch(page,/localStorage\.setItem/);
 assert.match(page,/id="settingsPanel"/);
