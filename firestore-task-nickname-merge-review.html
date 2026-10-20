@@ -10,7 +10,7 @@
 <p>請從 Firebase Console → Firestore Database → 規則，複製<strong>目前正在使用的完整版本</strong>到下面。不要使用舊備份規則。</p>
 <textarea id="original" spellcheck="false" placeholder="貼上完整的 rules_version = '2'; …"></textarea></section>
 <section><h2>第二步：唯讀產生差異候選</h2>
-<p class="warn">只允許新增兩個路徑：<code>/profiles/{profileUid}</code>（公開暱稱）及 <code>/groups/{groupId}/tasks/{taskId}</code>（指派任務）。所有原始規則必須逐字保留，已存在同一路徑就會拒絕合併。</p>
+<p class="warn">只允許新增三個路徑：<code>/profiles/{profileUid}</code>（公開暱稱）、<code>/groups/{groupId}/tasks/{taskId}</code>（指派任務）及 <code>/pushSubscriptions/{subscriberUid}/devices/{deviceId}</code>（僅本人可讀取的推播訂閱）。所有原始規則必須逐字保留，已存在同一路徑就會拒絕合併。</p>
 <button id="preview" type="button">產生安全合併預覽</button>
 <p id="result" role="status" aria-live="polite">尚未執行任何合併。</p>
 <div id="outWrap" hidden><h2>候選內容（尚未發布）</h2><p>請先確認差異；發布前須由擁有者核准並另行完成 TEST 規則編譯與實際權限拒絕測試。</p>
@@ -19,6 +19,7 @@
 <p><a href="./workspace-v2.html">返回記事／任務 TEST</a></p>
 <script type="module">
 import {mergeTestTaskAndNicknameRules} from './firestore-task-nickname-offline-merge.mjs';
+import {mergeTestPushRules} from './firestore-push-offline-merge.mjs';
 const $=id=>document.getElementById(id);
 let candidate='';
 $('preview').addEventListener('click',async()=>{
@@ -28,11 +29,14 @@ $('preview').addEventListener('click',async()=>{
   if(!response.ok)throw Error('無法讀取 TEST 片段');
   const fragment=await response.text();
   const result=mergeTestTaskAndNicknameRules($('original').value,fragment);
-  candidate=result.merged;$('merged').value=candidate;$('outWrap').hidden=false;
+  const pushResponse=await fetch('./firestore-push-subscriptions-REVIEW-ONLY.rules',{cache:'no-store'});
+  if(!pushResponse.ok)throw Error('無法讀取 TEST 私人推播片段');
+  const push=mergeTestPushRules(result.merged,await pushResponse.text());
+  candidate=push.merged;$('merged').value=candidate;$('outWrap').hidden=false;
   $('result').textContent='安全候選已產生（未發布）。\n原始規則完整保留：'+
     (result.exactOriginalPreserved?'YES':'NO')+
     '\n原始長度：'+result.originalBytes+' 字元\n候選長度：'+
-    result.mergedBytes+' 字元\n只新增兩個 match：'+result.added.join('、')+
+    candidate.length+' 字元\n只新增三個 match：'+[...result.added,push.added].join('、')+
     '\n尚未經 Firebase 編譯或正式授權，請勿直接按發布。';
  }catch(error){$('result').textContent='安全 HOLD：'+String(error?.message||error)+
   '。沒有修改、發布或上傳任何 Firestore 規則。'}
