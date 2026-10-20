@@ -54,3 +54,5 @@ jobs:
         run: node firebase-offline-drafts-coalescing-preflight.mjs
       - name: Verify simplified TEST workspace and task security gates
         run: node workspace-v2-preflight.mjs
+      - name: Verify owner-only settings member management and scoped Firestore transaction
+        run: node owner-member-management-preflight.mjs
