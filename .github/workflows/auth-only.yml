@@ -70,6 +70,8 @@ jobs:
         run: node firebase-rules-final-verify-preflight.mjs
       - name: Verify current notification event before delivery
         run: node notification-event-freshness-preflight.mjs
+      - name: Verify live server read denial probes never write and fail closed
+        run: node firestore-live-denial-probes-preflight.mjs
       - name: Verify offline-only exact two-match Firestore rules merge
         run: node firestore-task-nickname-merge-preflight.mjs
       - name: Verify owner-only settings member management and scoped Firestore transaction
