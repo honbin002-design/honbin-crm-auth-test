@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>V4D 指定虛構記事簿清理驗收｜第一階段</title>
+<style>
+body{max-width:700px;margin:0 auto;padding:18px 14px 70px;background:#f4f7fa;color:#20344e;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+*{box-sizing:border-box}h1{font-size:1.35rem}h2{font-size:1.12rem}section{border:1px solid #d9e2ed;border-radius:13px;padding:18px;margin:14px 0;background:white}
+button,input{font:inherit;border-radius:10px;min-height:46px}button{border:0;background:#245d9b;color:white;padding:10px 16px;margin:6px 6px 6px 0}
+button.danger{background:#9f3036}button:disabled{opacity:.4}input{width:100%;border:1px solid #9aafc2;padding:10px;margin:4px 0 10px}
+label{font-weight:650;display:block}.warning{background:#fff2e5;border-left:4px solid #b67822;padding:12px}
+#status,#details,#result{white-space:pre-wrap;overflow-wrap:anywhere}
+[hidden]{display:none!important}
+</style></head><body>
+<h1>V4D｜唯一指定虛構記事簿清理驗收</h1>
+<p class="warning"><strong>不可逆測試：</strong>本頁僅能鎖定並清理已指定的虛構測試記事簿「V4D_永久刪除測試_023fd069」及其兩筆虛構記事。<strong>不會刪除記事簿主文件、不會清除本人索引</strong>，也絕不碰「共用測試01」、私人記事或正式 CRM。</p>
+<section><h2>Google 唯一擁有者</h2>
+<p id="identity">尚未登入</p>
+<button id="login" disabled type="button">Google 登入</button><button id="logout" disabled type="button">登出</button>
+<p id="status" role="status" aria-live="polite">等待擁有者身分核對。</p>
+</section>
+<section><h2>第一步｜重新盤點指定測試資料</h2>
+<p>固定 ID：<code id="target"></code></p>
+<button id="preview" disabled type="button">重新讀取並核對兩筆虛構記事</button>
+<p id="details">尚未讀取。</p>
+</section>
+<section id="confirmArea" hidden><h2>第二步｜親自確認不可逆清理</h2>
+<p class="warning">此操作會將這本虛構記事簿鎖定為 DELETING，並永久清除兩筆虛構記事（包含已軟刪除的一筆）。主文件仍會保留，必須經過後續獨立驗證才能在 Firebase Console 手動刪除。<strong>不能恢復為 ACTIVE。</strong></p>
+<label for="typedName">輸入完整記事簿名稱</label><input id="typedName" autocomplete="off" spellcheck="false">
+<label for="typedPhrase">輸入「永久刪除」</label><input id="typedPhrase" autocomplete="off" spellcheck="false">
+<button class="danger" id="cleanup" disabled type="button">二次確認後鎖定並清除測試記事</button>
+</section>
+<section id="resumeArea" hidden><h2>意外中斷後接續</h2>
+<p class="warning">這本指定測試記事簿已處於 DELETING。只能接續清理，不能恢復正常狀態。</p>
+<button id="resume" disabled type="button">確認後接續指定記事簿清理</button>
+</section>
+<section><h2>清理結果</h2><p id="result">尚未開始；沒有刪除任何資料。</p>
+<p>只有畫面出現 <strong>CONTENT_CLEANED_ROOT_LOCKED</strong>，才代表兩筆虛構記事已從伺服器刪除。這不代表整本記事簿已永久刪除；主文件及本人索引仍保留。</p>
+</section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {notebookHardDeleteV4C} from './notebook-hard-delete-v4c-service.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import * as sdk from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const TARGET='v4d_test_efbbf2dced534cb5a6f1d117023fd069';
+const NAME='V4D_永久刪除測試_023fd069';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,service=null,uid=null,busy=false,ready=false,lockedEpoch=null;
+const status=x=>$('status').textContent=x;
+const result=x=>$('result').textContent=x;
+$('target').textContent=TARGET;
+function buttons(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('preview').disabled=!uid||busy;
+ $('cleanup').disabled=!uid||busy||!ready||$('typedName').value!==NAME||$('typedPhrase').value!=='永久刪除';
+ $('resume').disabled=!uid||busy||!lockedEpoch;
+}
+function reset(){
+ service=null;uid=null;ready=false;lockedEpoch=null;
+ $('confirmArea').hidden=true;$('resumeArea').hidden=true;
+ $('typedName').value='';$('typedPhrase').value='';$('details').textContent='尚未讀取。';
+ buttons();
+}
+const guard=()=>{if(!uid||auth.currentUser?.uid!==uid)throw Error('OWNER_SESSION_CHANGED')};
+async function identity(user){
+ reset();
+ if(!user){$('identity').textContent='尚未登入';status('請以原 Google 擁有者登入。');return}
+ const token=await getIdTokenResult(user);
+ if(!user.emailVerified||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('VERIFIED_GOOGLE_REQUIRED');
+ await sdk.getDocsFromServer(sdk.collection(db,'approvedAccounts'));
+ if(auth.currentUser?.uid!==user.uid)throw Error('OWNER_CHANGED');
+ uid=user.uid;
+ service=notebookHardDeleteV4C({db,sdk,actor:{
+  uid,emailVerified:true,providerId:'google.com',currentUid:()=>auth.currentUser?.uid
+ }});
+ $('identity').textContent='Google 唯一擁有者已驗證：'+user.email;
+ status('驗證成功，請先進行伺服器盤點。');buttons();
+}
+async function scan(){
+ guard();
+ const group=await sdk.getDocFromServer(sdk.doc(db,'groups',TARGET));guard();
+ if(!group.exists()||group.data().ownerUid!==uid||group.data().name!==NAME)
+  throw Error('NOT_EXACT_SYNTHETIC_GROUP');
+ const index=await sdk.getDocFromServer(sdk.doc(db,'users',uid,'groupIndex',TARGET));guard();
+ if(!index.exists()||index.data().uid!==uid||index.data().groupId!==TARGET)
+  throw Error('OWNER_POINTER_MISMATCH');
+ const [notes,members,invites]=await Promise.all([
+  sdk.getDocsFromServer(sdk.collection(db,'groups',TARGET,'notes')),
+  sdk.getDocsFromServer(sdk.collection(db,'groups',TARGET,'members')),
+  sdk.getDocsFromServer(sdk.collection(db,'groups',TARGET,'sentInvites'))
+ ]);
+ guard();
+ if(members.size||invites.size)throw Error('UNEXPECTED_MEMBERS_OR_INVITES');
+ const data=notes.docs.map(d=>({id:d.id,groupId:d.data().groupId,deleted:d.data().deleted}));
+ const noteOk=data.length===2
+  && data.some(n=>n.id==='test_note_01'&&n.groupId===TARGET&&n.deleted===false)
+  && data.some(n=>n.id==='test_note_02'&&n.groupId===TARGET&&n.deleted===true);
+ const g=group.data();
+ if(g.deleteState==='DELETING'){
+  if(!g.deletionId||g.deletionId.length<16)throw Error('MISSING_LOCK_EPOCH');
+  if(data.length>2||data.some(n=>!['test_note_01','test_note_02'].includes(n.id)||n.groupId!==TARGET))
+   throw Error('UNEXPECTED_LOCKED_NOTE_SCOPE');
+  lockedEpoch=g.deletionId;
+  ready=false;$('confirmArea').hidden=true;$('resumeArea').hidden=false;
+  $('details').textContent='指定記事簿已鎖定 DELETING；尚有 '+notes.size+' 筆記事，0 成員，0 邀請。可接續清理。';
+  buttons();return;
+ }
+ if(g.deleteState)throw Error('UNKNOWN_DELETE_STATE');
+ if(!noteOk)throw Error('TEST_NOTES_NOT_EXACT_MATCH');
+ const p=await service.preview(TARGET);guard();
+ if(p.groupId!==TARGET||p.name!==NAME||p.noteCount!==2||p.memberCount!==0||p.invitationCount!==0)
+  throw Error('PREVIEW_SCOPE_MISMATCH');
+ ready=true;lockedEpoch=null;
+ $('resumeArea').hidden=true;$('confirmArea').hidden=false;
+ $('details').textContent='唯讀盤點 PASS：指定記事簿名稱與 ID 符合；正常記事 1、軟刪除記事 1、成員 0、邀請 0、本人索引正常。';
+ buttons();
+}
+async function doScan(){
+ if(busy||!uid)return;
+ busy=true;ready=false;buttons();status('正在讀取 Firebase 伺服器，沒有刪除資料。');
+ try{await scan();status('指定測試記事簿盤點完成，請檢查結果。')}
+ catch(e){ready=false;lockedEpoch=null;$('confirmArea').hidden=true;$('resumeArea').hidden=true;
+  status('盤點不符合預期，禁止刪除：'+String(e.code||e.message))}
+ finally{busy=false;buttons()}
+}
+async function doCleanup(resuming){
+ if(busy||!uid)return;
+ if(resuming?!lockedEpoch:(!ready||$('typedName').value!==NAME||$('typedPhrase').value!=='永久刪除'))return;
+ const warning=resuming?
+  '只接續已鎖定的這本虛構測試記事簿，永久清除剩餘虛構記事。確認？':
+  '不可逆！只鎖定 V4D_永久刪除測試_023fd069 並永久清除其中兩筆虛構記事；不刪除主文件及其他記事簿。確認？';
+ if(!confirm(warning))return;
+ busy=true;buttons();
+ try{
+  guard();
+  if(!resuming){
+   // Fresh exact server check immediately before lock, not just UI state.
+   ready=false;await scan();guard();
+   if(!ready||lockedEpoch)throw Error('FRESH_PREDELETE_CHECK_FAILED');
+   const deletionId=crypto.randomUUID().replaceAll('-','');
+   const locked=await service.lock(TARGET,{typedName:NAME,deletionId});
+   if(locked.stage!=='LOCKED')throw Error('LOCK_READBACK_FAILED');
+   lockedEpoch=deletionId;
+   $('confirmArea').hidden=true;$('resumeArea').hidden=false;
+   status('已鎖定指定虛構記事簿；正在清除兩筆虛構記事。');
+  }else{
+   await scan();guard();
+   if(!lockedEpoch)throw Error('LOCK_EPOCH_MISSING');
+  }
+  const receipt=await service.runCleanup(TARGET,lockedEpoch,{
+   onProgress:p=>result('清理中：'+p.stage+' '+p.processed+'/'+p.total+'；主文件仍保留。')
+  });
+  if(receipt.stage!=='CONTENT_CLEANED_ROOT_LOCKED'||receipt.notesRemaining!==0||
+     receipt.membersRemaining!==0||receipt.sentInvitesRemaining!==0||!receipt.ownerPointerRetained)
+    throw Error('UNVERIFIED_CLEANUP_RECEIPT');
+  result('第一階段 PASS：CONTENT_CLEANED_ROOT_LOCKED\n記事 0、成員 0、邀請 0。\n本人索引保留：是。\n主文件仍存在且鎖定：是。\n刪除 ID：'+lockedEpoch+
+    '\n下一階段需要另外驗證後，在 Firebase Console 手動刪除唯一主文件。此頁不提供主文件刪除功能。');
+  status('指定虛構測試記事清理成功。請截圖回傳；不要自行刪除主文件。');
+ }catch(e){
+  status('清理未完整驗證，請保留畫面並回傳：'+String(e.code||e.message));
+  result('若記事簿已鎖定 DELETING，請使用本頁「接續清理」，不要改動其他記事簿。');
+ }finally{busy=false;buttons()}
+}
+$('login').addEventListener('click',async()=>{try{await setPersistence(auth,browserSessionPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){status('登入未完成：'+String(e.code||e.message))}});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>status(String(e.code||e.message))));
+$('preview').addEventListener('click',doScan);
+$('typedName').addEventListener('input',buttons);
+$('typedPhrase').addEventListener('input',buttons);
+$('cleanup').addEventListener('click',()=>doCleanup(false));
+$('resume').addEventListener('click',()=>doCleanup(true));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=sdk.getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  reset();try{await identity(user)}catch(e){reset();status('Google 擁有者驗證失敗：'+String(e.code||e.message))}
+ });
+ buttons();
+}
+start().catch(e=>status('初始化失敗：'+String(e.code||e.message)));
+</script></body></html>
