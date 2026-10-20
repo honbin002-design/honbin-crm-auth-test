@@ -123,15 +123,24 @@ const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
+const sharedNickCache=new Map();
 let inviteGroups=[],inviteGroupId='',inviteLoaded=false,receivedLoaded=false,inviteSubmitting=false;
 const scope=()=>$('mode').value==='PRIVATE'?{mode:'PRIVATE'}:{mode:'SHARED',groupId:selected?.id};
 const context=()=>uid?{uid,mode:$('mode').value,groupId:$('mode').value==='SHARED'?selected?.id:null}:null;
 const mayWrite=()=>$('mode').value==='PRIVATE'||['ADMIN','EDITOR'].includes(selected?.role);
 function session(){if(!uid||auth?.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED');return {uid,epoch}}
 function check(s){if(s.uid!==uid||s.epoch!==epoch||auth?.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')}
+async function nicknameFor(memberUid){
+ if(!PROFILE_RULES_ENABLED||!memberUid)return '';
+ const s=session(),member=String(memberUid);
+ if(sharedNickCache.has(member))return sharedNickCache.get(member);
+ // One read per known UID per page session, not one read per article/task.
+ const nick=await tasks.profile(member);check(s);
+ sharedNickCache.set(member,nick);return nick;
+}
 async function showNick(){
  if(!PROFILE_RULES_ENABLED){$('nickname').value='';$('who').textContent='待設定暱稱';return}
- const s=session(),name=await tasks.profile(uid);check(s);
+ const name=await nicknameFor(uid);
  $('nickname').value=name;$('who').textContent=name||'未設定暱稱';
 }
 function tab(name){
@@ -170,7 +179,14 @@ function openEditor(item=null){
 }
 async function loadNotes(){
  const s=session(),sc=scope();if(sc.mode==='SHARED'&&!selected){$('notesList').textContent='尚未加入共用記事簿。';return}
- const all=await notes.list(sc);check(s);items=all;renderNotes();
+ const all=await notes.list(sc);check(s);
+ if(PROFILE_RULES_ENABLED){
+  const actors=[...new Set(all.map(x=>x.ownerUid).filter(Boolean))];
+  // Missing profiles are optional and do not block reading shared notes.
+  for(const actorUid of actors)try{await nicknameFor(actorUid)}catch{}
+  check(s);
+ }
+ items=all;renderNotes();
 }
 function renderNotes(){
  const term=$('search').value.trim().toLowerCase(),root=$('notesList');root.replaceChildren();
@@ -178,6 +194,10 @@ function renderNotes(){
  if(!visible.length){root.append(mk('p','目前沒有記事。'));return}
  for(const item of visible){
   const line=mk('div');line.className='line';line.append(mk('strong',item.title));
+  if(PROFILE_RULES_ENABLED&&item.ownerUid){
+   const author=sharedNickCache.get(item.ownerUid);
+   line.append(mk('small','建立者：'+(author||'未設定暱稱')));
+  }
   const body=mk('p',item.content.slice(0,100));body.className='note-content';line.append(body);
   const btn=mk('button',mayWrite()?'開啟／編輯':'查看');btn.className='alt';btn.addEventListener('click',()=>{
    if(mayWrite())openEditor(item);
@@ -214,18 +234,16 @@ async function loadTasks(){
  if(taskSelected.role==='ADMIN'){
   const members=await groups.listMembers(taskGroupId);check(s);
   for(const m of members.filter(x=>x.status==='ACTIVE'&&x.uid!==uid)){
-   const name=await tasks.profile(m.uid).catch(()=>''),opt=mk('option',name||m.uid);
+   const name=await nicknameFor(m.uid).catch(()=>''),opt=mk('option',name||'未設定暱稱（成員）');
    opt.value=m.uid;choices.append(opt);
   }
  }
  const entries=await tasks.list(taskGroupId);check(s);
  if(!entries.length)root.append(mk('p','目前沒有任務。'));
- const nickCache=new Map();
  async function displayName(id){
   if(!id)return '所有成員';
   if(id===uid)return $('who').textContent==='待設定暱稱'?'未設定暱稱':$('who').textContent;
-  if(!nickCache.has(id))nickCache.set(id,await tasks.profile(id).catch(()=>''));
-  return nickCache.get(id)||'未設定暱稱';
+  return (await nicknameFor(id).catch(()=>''))||'未設定暱稱';
  }
  for(const item of entries){
   const box=mk('div');box.className='line';
@@ -406,7 +424,9 @@ async function loadOwnerRoster(){
  for(const member of result.members){
   const card=mk('div');card.className='line';
   const display=member.email||'帳號識別待核對（'+member.uid.slice(0,8)+'…）';
-  card.append(mk('strong',display));
+  const nick=member.email?await nicknameFor(member.uid).catch(()=>''):'';
+  card.append(mk('strong',nick||display));
+  if(nick)card.append(mk('small','登入帳號：'+display));
   if(member.status!=='ACTIVE'){
    card.append(mk('p','狀態：'+member.status+'（不可變更）'));
    root.append(card);continue;
@@ -530,7 +550,7 @@ $('saveNick').onclick=()=>{
   const s=session(),nick=$('nickname').value.trim();
   if(!nick||nick.length>24)throw Error('暱稱必須為 1～24 字');
   const saved=await tasks.saveNickname(nick);
-  check(s);$('who').textContent=saved;
+  check(s);sharedNickCache.set(uid,saved);$('who').textContent=saved;
   say('共用暱稱已由伺服器確認：'+saved+'。所有有權讀取暱稱的成員可看到。');
  });
 };
@@ -557,7 +577,7 @@ async function start(){
  try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
-  const generation=++epoch;uid='';authenticated=false;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;
+  const generation=++epoch;uid='';authenticated=false;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();
   inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
   $('receivedInvites').replaceChildren();$('sentInvites').replaceChildren();
