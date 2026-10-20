@@ -16,3 +16,5 @@ jobs:
           node-version: '22'
       - name: Verify standalone page does not touch Firestore or CRM
         run: node auth-only-preflight.mjs
+      - name: Verify notes preview is complete and Firestore stays HOLD
+        run: node notes-preview-preflight.mjs
