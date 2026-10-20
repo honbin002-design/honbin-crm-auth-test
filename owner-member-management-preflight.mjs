@@ -21,6 +21,10 @@ assert.match(html,/ownerMembers\.changeRole/);
 assert.match(html,/expectedRole:member\.role/);
 assert.match(html,/id="ownerGroup"/);
 assert.match(html,/id="ownerMembers"/);
+assert.match(html,/尚未儲存：目前 /);
+assert.match(html,/action\.disabled=!changed/);
+assert.match(html,/pending\.className=changed\?'warning':'hint'/);
+
 assert.doesNotMatch(html,/ownerMembers\.changeMember/);
 let liveUid='owner_123',writeCount=0;
 const groups='groups/testgroup';
