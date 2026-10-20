@@ -13,10 +13,10 @@ export function pushSubscriptionService({db,sdk,currentUid,registration,publicVa
   notification,deviceId}){
  if(!db||!sdk||typeof currentUid!=='function'||!registration?.pushManager||
   !notification||!ID.test(deviceId))throw Error('PUSH_CONTEXT_REQUIRED');
- const {doc,setDoc,deleteDoc,serverTimestamp}=sdk;
- if(![doc,setDoc,deleteDoc,serverTimestamp].every(f=>typeof f==='function'))
+ const {doc,getDoc,setDoc,deleteDoc,serverTimestamp}=sdk;
+ if(![doc,getDoc,setDoc,deleteDoc,serverTimestamp].every(f=>typeof f==='function'))
   throw Error('PUSH_SDK_REQUIRED');
- const uid=()=>{const value=currentUid();if(typeof value!=='string'||!value)
+ const uid=()=>{const value=currentUid();if(typeof value!=='string'||!ID.test(value))
   throw Error('NOT_AUTHENTICATED');return value};
  const ref=user=>doc(db,'pushSubscriptions',user,'devices',deviceId);
  // Must only be invoked by an explicit tap AFTER TEST backend is enabled.
@@ -35,9 +35,12 @@ export function pushSubscriptionService({db,sdk,currentUid,registration,publicVa
   if(!json.endpoint||!json.keys?.p256dh||!json.keys?.auth)
    throw Error('PUSH_SUBSCRIPTION_INCOMPLETE');
   const key=ref(user);
+  const existing=await getDoc(key);
+  if(uid()!==user)throw Error('ACCOUNT_CHANGED');
   await setDoc(key,{
    endpoint:json.endpoint,p256dh:json.keys.p256dh,auth:json.keys.auth,
-   createdAt:serverTimestamp(),updatedAt:serverTimestamp()
+   createdAt:existing.exists()?existing.data().createdAt:serverTimestamp(),
+   updatedAt:serverTimestamp()
   });
   if(uid()!==user)throw Error('ACCOUNT_CHANGED');
   return {enabled:true};
