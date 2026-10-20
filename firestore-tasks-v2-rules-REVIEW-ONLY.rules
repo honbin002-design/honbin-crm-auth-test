@@ -9,16 +9,22 @@
 match /profiles/{profileUid} {
   allow get: if googleUser();  // Approved Google users can read a known UID's nickname only.
   allow list: if false;        // No profile directory enumeration.
-  allow create, update: if googleUser() && request.auth.uid == profileUid
+  allow create: if googleUser() && request.auth.uid == profileUid
+    && request.resource.data.keys().hasOnly(['nickname','updatedAt'])
+    && request.resource.data.keys().hasAll(['nickname','updatedAt'])
+    && request.resource.data.nickname is string
+    && request.resource.data.nickname.size() >= 1
+    && request.resource.data.nickname.size() <= 24
+    && request.resource.data.updatedAt == request.time;
+  allow update: if googleUser() && request.auth.uid == profileUid
     && request.resource.data.keys().hasOnly(['nickname','updatedAt'])
     && request.resource.data.keys().hasAll(['nickname','updatedAt'])
     && request.resource.data.nickname is string
     && request.resource.data.nickname.size() >= 1
     && request.resource.data.nickname.size() <= 24
     && request.resource.data.updatedAt == request.time
-    && (resource == null ||
-      request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['nickname','updatedAt']));
+    && request.resource.data.diff(resource.data).affectedKeys()
+       .hasOnly(['nickname','updatedAt']);
   allow delete: if false;
 }
 
@@ -28,16 +34,144 @@ match /tasks/{taskId} {
   allow get, list: if canViewGroup(groupId);
   allow create: if canEditGroup(groupId)
     && request.resource.data.keys().hasOnly([
-      'title','description','assignedUid','dueDate','status',
+      'title','description','assignedUid','executeDate','dueDate','status',
       'createdBy','createdAt','completedBy','completedAt','completionReply'])
     && request.resource.data.keys().hasAll([
-      'title','description','assignedUid','dueDate','status',
+      'title','description','assignedUid','executeDate','dueDate','status',
       'createdBy','createdAt','completedBy','completedAt','completionReply'])
     && request.resource.data.title is string
     && request.resource.data.title.size() >= 1
     && request.resource.data.title.size() <= 120
     && request.resource.data.description is string
     && request.resource.data.description.size() <= 3000
+    && request.resource.data.executeDate is string
+    && request.resource.data.executeDate.size() <= 10
+    && (request.resource.data.executeDate == ''
+      || request.resource.data.executeDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
+    && request.resource.data.dueDate.size() <= 10
+    && (request.resource.data.dueDate == ''
+      || request.resource.data.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
+      || (request.resource.data.assignedUid is string
+        && (request.resource.data.assignedUid == get(groupPath(groupId)).data.ownerUid
+          || (exists(memberPath(groupId, request.resource.data.assignedUid))
+            && get(memberPath(groupId, request.resource.data.assignedUid)).data.status == 'ACTIVE'))))
+    && request.resource.data.status == 'OPEN'
+    && request.resource.data.createdBy == request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.completedBy == null
+    && request.resource.data.completedAt == null
+    && request.resource.data.completionReply == '';
+  allow update: if canViewGroup(groupId)
+    && resource.data.status == 'OPEN'
+    && request.resource.data.diff(resource.data).affectedKeys()
+       .hasOnly(['status','completedBy','completedAt','completionReply'])
+    && (resource.data.assignedUid == null
+      || resource.data.assignedUid == request.auth.uid)
+    && request.resource.data.status == 'DONE'
+    && request.resource.data.completedBy == request.auth.uid
+    && request.resource.data.completedAt == request.time
+    && request.resource.data.completionReply is string
+    && request.resource.data.completionReply.size() >= 1
+    && request.resource.data.completionReply.size() <= 3000;
+  allow delete: if false;
+}
+
+// Required future tests before enabling UI:
+// 1. OWNER/EDITOR create valid assigned and unassigned tasks.
+// 2. VIEWER cannot create/update notes, but can complete an assigned task.
+// 3. VIEWER cannot complete another person's task.
+// 4. Any ACTIVE member can complete unassigned task exactly once.
+// 5. A second completion cannot overwrite first completion's UID/time/reply.
+// 6. Revoked/non-member accounts cannot read or complete tasks.
+// 7. Nickname writes are self-only, cannot edit others' profile.
+// 8. Existing note rules, V4D cleanup, and PROD isolation regression PASS.
+// 9. Server timestamp is authoritative (request.time); no client timestamps.
+// 10. For future group deletion, tasks collection must be included in cleanup
+//     inventory before considering a group empty.
+))
+    && request.resource.data.dueDate is string
+    && request.resource.data.dueDate.size() <= 10
+    && (request.resource.data.assignedUid == null
+      || (request.resource.data.assignedUid is string
+        && (request.resource.data.assignedUid == get(groupPath(groupId)).data.ownerUid
+          || (exists(memberPath(groupId, request.resource.data.assignedUid))
+            && get(memberPath(groupId, request.resource.data.assignedUid)).data.status == 'ACTIVE'))))
+    && request.resource.data.status == 'OPEN'
+    && request.resource.data.createdBy == request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.completedBy == null
+    && request.resource.data.completedAt == null
+    && request.resource.data.completionReply == '';
+  allow update: if canViewGroup(groupId)
+    && resource.data.status == 'OPEN'
+    && request.resource.data.diff(resource.data).affectedKeys()
+       .hasOnly(['status','completedBy','completedAt','completionReply'])
+    && (resource.data.assignedUid == null
+      || resource.data.assignedUid == request.auth.uid)
+    && request.resource.data.status == 'DONE'
+    && request.resource.data.completedBy == request.auth.uid
+    && request.resource.data.completedAt == request.time
+    && request.resource.data.completionReply is string
+    && request.resource.data.completionReply.size() >= 1
+    && request.resource.data.completionReply.size() <= 3000;
+  allow delete: if false;
+}
+
+// Required future tests before enabling UI:
+// 1. OWNER/EDITOR create valid assigned and unassigned tasks.
+// 2. VIEWER cannot create/update notes, but can complete an assigned task.
+// 3. VIEWER cannot complete another person's task.
+// 4. Any ACTIVE member can complete unassigned task exactly once.
+// 5. A second completion cannot overwrite first completion's UID/time/reply.
+// 6. Revoked/non-member accounts cannot read or complete tasks.
+// 7. Nickname writes are self-only, cannot edit others' profile.
+// 8. Existing note rules, V4D cleanup, and PROD isolation regression PASS.
+// 9. Server timestamp is authoritative (request.time); no client timestamps.
+// 10. For future group deletion, tasks collection must be included in cleanup
+//     inventory before considering a group empty.
+))
+    && (request.resource.data.executeDate == ''
+      || request.resource.data.dueDate == ''
+      || request.resource.data.executeDate <= request.resource.data.dueDate)
+    && (request.resource.data.assignedUid == null
+      || (request.resource.data.assignedUid is string
+        && (request.resource.data.assignedUid == get(groupPath(groupId)).data.ownerUid
+          || (exists(memberPath(groupId, request.resource.data.assignedUid))
+            && get(memberPath(groupId, request.resource.data.assignedUid)).data.status == 'ACTIVE'))))
+    && request.resource.data.status == 'OPEN'
+    && request.resource.data.createdBy == request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.completedBy == null
+    && request.resource.data.completedAt == null
+    && request.resource.data.completionReply == '';
+  allow update: if canViewGroup(groupId)
+    && resource.data.status == 'OPEN'
+    && request.resource.data.diff(resource.data).affectedKeys()
+       .hasOnly(['status','completedBy','completedAt','completionReply'])
+    && (resource.data.assignedUid == null
+      || resource.data.assignedUid == request.auth.uid)
+    && request.resource.data.status == 'DONE'
+    && request.resource.data.completedBy == request.auth.uid
+    && request.resource.data.completedAt == request.time
+    && request.resource.data.completionReply is string
+    && request.resource.data.completionReply.size() >= 1
+    && request.resource.data.completionReply.size() <= 3000;
+  allow delete: if false;
+}
+
+// Required future tests before enabling UI:
+// 1. OWNER/EDITOR create valid assigned and unassigned tasks.
+// 2. VIEWER cannot create/update notes, but can complete an assigned task.
+// 3. VIEWER cannot complete another person's task.
+// 4. Any ACTIVE member can complete unassigned task exactly once.
+// 5. A second completion cannot overwrite first completion's UID/time/reply.
+// 6. Revoked/non-member accounts cannot read or complete tasks.
+// 7. Nickname writes are self-only, cannot edit others' profile.
+// 8. Existing note rules, V4D cleanup, and PROD isolation regression PASS.
+// 9. Server timestamp is authoritative (request.time); no client timestamps.
+// 10. For future group deletion, tasks collection must be included in cleanup
+//     inventory before considering a group empty.
+))
     && request.resource.data.dueDate is string
     && request.resource.data.dueDate.size() <= 10
     && (request.resource.data.assignedUid == null
