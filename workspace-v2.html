@@ -68,11 +68,6 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
  </section>
  <section id="settingsPanel">
   <div class="panel" id="loginBox"><h2>Google 帳號</h2><p id="identity">正在檢查 Google 登入……</p><div class="row"><button id="login" disabled>Google 登入</button><button id="logout" class="alt" disabled>登出／切換帳號</button></div></div>
-  <div class="panel"><h2>所有成員看到的暱稱</h2><p class="hint">例如：威、VIC。顯示暱稱不會取代伺服器留存的 Google UID。</p>
-   <label for="nickname">我的公開暱稱</label><input id="nickname" maxlength="24" placeholder="輸入想讓其他成員看到的暱稱">
-   <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱（待權限驗收）</button></div>
-   <p id="nicknameHint" class="warning">不再使用「僅本機暱稱」。須完成 Firestore 共用個人檔案規則驗收後，才可讓所有成員跨裝置看到你的暱稱。</p>
-  </div>
   <div class="panel" id="ownerManagement" hidden>
    <h2>最高權限｜成員權限管理</h2>
    <p class="hint">僅供 honbin002 最高權限帳號使用。每本共用記事簿的成員權限獨立，不會跨群組改動。</p>
@@ -82,6 +77,11 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <p id="ownerStatus" class="hint" role="status" aria-live="polite">尚未讀取成員。</p>
    <div id="ownerMembers"></div>
    <p class="hint">權限：VIEWER 檢視者（記事唯讀）、EDITOR 編輯者、ADMIN 該記事簿管理員。最高擁有者帳號本身不可被降權。此處不提供停用帳號或不可逆的撤銷操作。</p>
+  </div>
+  <div class="panel"><h2>所有成員看到的暱稱</h2><p class="hint">例如：威、VIC。顯示暱稱不會取代伺服器留存的 Google UID。</p>
+   <label for="nickname">我的公開暱稱</label><input id="nickname" maxlength="24" placeholder="輸入想讓其他成員看到的暱稱">
+   <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱（待權限驗收）</button></div>
+   <p id="nicknameHint" class="warning">不再使用「僅本機暱稱」。須完成 Firestore 共用個人檔案規則驗收後，才可讓所有成員跨裝置看到你的暱稱。</p>
   </div>
   <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿、邀請成員及技術驗收放在進階頁，不占用日常畫面。</p>
    <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a></div>
