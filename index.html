@@ -44,6 +44,10 @@ import {getAuth,GoogleAuthProvider,browserSessionPersistence,
 const $=id=>document.getElementById(id);
 const say=message=>{$("status").textContent=message;};
 const login=$("login"),logout=$("logout");
+if(!firebaseConfig.apiKey||firebaseConfig.apiKey.startsWith("PASTE_")){
+  say("Google 登入測試頁已就緒，但公開 Firebase Web API Key 尚未填入。請先在 GitHub 的 firebase-web-config.mjs 填入原 Firebase 專案既有的 Web API Key。");
+  throw Error("FIREBASE_PUBLIC_WEB_CONFIG_INCOMPLETE");
+}
 if(firestoreReadyForRealData!==false)throw Error("FIRESTORE_WRITE_GUARD_REQUIRED");
 if(firebaseConfig.projectId!=="honbin-crm-notes-spark")throw Error("WRONG_FIREBASE_PROJECT");
 const app=initializeApp(firebaseConfig);
