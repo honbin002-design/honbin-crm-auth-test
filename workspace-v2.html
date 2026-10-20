@@ -91,6 +91,16 @@ function tab(name){for(const n of ['Notes','Tasks','Settings']){$('tab'+n).class
 function clearEditor(){$('noteEditor').hidden=true;current=null;pendingId=null;$('noteTitle').value='';$('noteContent').value=''}
 function draftSnap(){return {title:$('noteTitle').value,content:$('noteContent').value,active:current?{...current}:null,pendingCreateId:pendingId}}
 function saveDraft(){const c=context();if(!c||!drafts||!mayWrite()||$('noteEditor').hidden)return;void drafts.save(c,draftSnap()).catch(()=>say('本機草稿保存失敗，請先複製內容備份。'))}
+async function restoreDraft(){
+ const c=context();if(!c||!drafts||!mayWrite())return;
+ const s=session(),draft=await drafts.read(c);check(s);
+ if(!draft||(!draft.title&&!draft.content))return;
+ current=draft.active||null;pendingId=draft.pendingCreateId||null;
+ $('noteTitle').value=draft.title||'';$('noteContent').value=draft.content||'';
+ $('noteHeading').textContent=current?'繼續編輯未上傳草稿':'繼續未上傳的新記事';
+ $('noteEditor').hidden=false;
+ say('已恢復這支手機先前未上傳的草稿。');
+}
 function openEditor(item=null){
  if(!mayWrite()){say('此共用記事簿為唯讀，無法修改記事。');return}
  current=item?{id:item.id,version:item.version}:null;pendingId=null;
@@ -124,7 +134,7 @@ async function loadGroups(){
  $('role').textContent=selected?'目前身分：'+notebookRoleLabel(selected.role):'尚未加入共用記事簿。';
  $('newNote').disabled=!mayWrite();$('taskScopeHint').textContent=selected?'目前共用記事簿：'+selected.name:'請先在設定中的進階管理頁加入共用記事簿。';
 }
-async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s)}
+async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
 $('mode').onchange=()=>run(async()=>{$('groupWrap').hidden=$('mode').value!=='SHARED';await reload();say('已切換記事範圍。')});
@@ -177,6 +187,7 @@ async function start(){
    $('mode').value='PRIVATE';$('groupWrap').hidden=true;
    // Verify server authorization before revealing any saved local identity or content.
    await loadNotes();if(generation!==epoch)return;
+   await restoreDraft();if(generation!==epoch)return;
    $('app').hidden=false;$('identity').textContent='Google 帳號：'+user.email;
    showNick();say('已通過 TEST 帳號核准。記事可使用；任務與跨手機暱稱等待規則驗收。');
   }catch(e){
