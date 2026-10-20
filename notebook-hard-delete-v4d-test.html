@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>HONBIN CRM｜共用記事簿永久刪除工程測試</title>
+<style>
+:root{font:16px/1.6 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#1d2e46;background:#f4f7fa}
+*{box-sizing:border-box}body{margin:0 auto;max-width:720px;padding:20px 14px 90px}
+h1{font-size:1.45rem}h2{font-size:1.13rem}section{background:white;border:1px solid #dce2ec;border-radius:15px;padding:17px;margin:16px 0}
+.warn{border-left:5px solid #b94747;padding:10px;background:#fff2f2;color:#822c2c}
+button,input,select{font:inherit;border-radius:10px}button{min-height:44px;border:0;background:#235b9c;color:white;padding:11px 15px;margin:5px 6px 5px 0;font-weight:600}
+button.danger{background:#a13741}button:disabled{opacity:.5}input,select{width:100%;padding:12px;border:1px solid #8ba3ba;background:white}
+label{display:block;font-weight:600;margin:10px 0 5px}
+.item{border-top:1px solid #e0e7ef;padding:12px 0}
+.muted{font-size:14px;color:#526175}#status{overflow-wrap:anywhere;white-space:pre-wrap;padding:12px;background:#e8f0f9;border-radius:10px}
+[hidden]{display:none!important}
+</style></head><body>
+<h1>HONBIN CRM｜永久刪除工程預覽（安全停用）</h1>
+<p class="warn">安全 HOLD：此頁仍使用不啟用雲端的測試設定，不能刪除任何真實記事簿。程式完成模擬器測試不等於已通過最終主文件實體刪除。</p>
+<section><h2>Google 身分</h2><p id="identity">尚未登入</p>
+<button id="login" type="button" disabled>使用 Google 登入</button><button id="logout" type="button" disabled>登出</button>
+<p id="status" role="status" aria-live="polite">安全 HOLD：永久刪除尚未啟用，這個頁面不會登入或連線 Firestore。</p></section>
+<main id="workspace" hidden>
+<section><h2>僅顯示我建立的記事簿</h2><p class="muted">一般群組管理員不能刪除別人建立的記事簿。</p><div id="books" aria-live="polite"></div><button id="refresh" type="button">重新確認記事簿</button></section>
+<section id="selectedArea" hidden><h2 id="selectedName">選擇記事簿</h2>
+<p id="counts"></p><p class="warn">不可逆：會清除這本的共用記事、軟刪除記事、成員、跨帳號索引及邀請。其他私人記事及其他記事簿不會刪除；其他人先前儲存的離線副本無法遠端抹除。</p>
+<div id="newDelete">
+<label for="typedName">請親自輸入記事簿完整名稱以確認</label><input id="typedName" autocomplete="off" spellcheck="false">
+<label for="typedPhrase">再輸入「永久刪除」</label><input id="typedPhrase" autocomplete="off" spellcheck="false">
+<button class="danger" id="lock" type="button">二次確認並鎖定這本記事簿</button></div>
+<div id="resumeBox" hidden><p class="warn">此記事簿已鎖定刪除。可繼續清理尚未完成的資料，不能恢復正常記事模式。</p>
+<button class="danger" id="resume" type="button">接續尚未完成的清理</button></div>
+<p id="progress" role="status" aria-live="polite"></p>
+<div id="finalizeArea" hidden>
+<h3>最後一步｜在 Firebase Console 實體刪除主文件</h3>
+<p class="warn">只有記事、成員、邀請均已完成清理，才能進行這一步。請勿刪除整個集合或其他記事簿。</p>
+<p>前往 Firebase Console → Firestore Database → 資料，找到以下<strong>單一文件</strong>，核對完整 ID 後再刪除：</p>
+<code id="rootPath"></code>
+<p><button id="copyRootPath" type="button">一鍵複製主文件路徑</button>
+<a href="https://console.firebase.google.com/project/honbin-crm-notes-spark/" target="_blank" rel="noopener">開啟 Firebase Console</a></p>
+<label for="typedFinal">完成後輸入「我已刪除記事簿主文件」</label>
+<input id="typedFinal" autocomplete="off" spellcheck="false">
+<button id="confirmRootRemoved" class="danger" type="button">核對主文件不存在並清除最後索引</button>
+<p class="muted">Safari 若重新載入而遺失清理證明，只能確認根文件是否消失並清理自己的失效索引；不能假稱全部內容已重新驗證。</p>
+</div>
+<p class="muted">最終根文件會留在不可恢復的 DELETING 鎖定狀態，直至可信的伺服器端最終刪除流程完成。不得把 CONTENT_CLEANED_ROOT_LOCKED 當成根文件已物理刪除。</p>
+</section></main>
+<script type="module">
+import {firebaseConfig,firestoreReadyForRealData} from './notebook-delete-hold-config.mjs';
+import {notebookHardDeleteV4C} from './notebook-hard-delete-v4c-service.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import * as sdk from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const $=id=>document.getElementById(id);
+const msg=t=>$('status').textContent=t;
+const progress=t=>$('progress').textContent=t;
+const el=(tag,t)=>{const n=document.createElement(tag);n.textContent=String(t);return n};
+let auth=null,db=null,service=null,selected=null,verifiedReceipt=null,busy=false,epoch=0;
+function wipe(){
+ selected=null;verifiedReceipt=null;service=null;$('finalizeArea').hidden=true;$('typedFinal').value='';
+ $('workspace').hidden=true;$('selectedArea').hidden=true;
+ $('books').replaceChildren();$('counts').textContent='';$('typedName').value='';
+ $('typedPhrase').value='';$('progress').textContent='';
+}
+function buttons(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ for(const control of $('workspace').querySelectorAll('button,input,select'))control.disabled=busy;
+}
+const deny=e=>{
+ if(e?.code==='permission-denied'){wipe();msg('Firestore 拒絕存取。身份或權限已失效，所有操作已停止。');return}
+ msg('未完成，資料未宣稱已刪除：'+String(e?.code||e?.message||'UNKNOWN'));
+};
+async function ownedList(){
+ const myEpoch=epoch,uid=auth.currentUser?.uid;
+ if(!uid||!service)return;
+ const pointers=await sdk.getDocsFromServer(sdk.collection(db,'users',uid,'groupIndex'));
+ if(myEpoch!==epoch)return;
+ const root=$('books');root.replaceChildren();
+ for(const pointer of pointers.docs){
+  try{
+   const snap=await sdk.getDocFromServer(sdk.doc(db,'groups',pointer.id));
+   if(myEpoch!==epoch)return;
+   if(!snap.exists()){
+    const orphan=el('div');orphan.className='item';
+    orphan.append(el('strong','主文件已不存在：'+pointer.id+'（只剩自己的失效索引）'));
+    const clear=el('button','清理我的失效索引');clear.type='button';
+    clear.addEventListener('click',async()=>{
+     if(busy)return;
+     if(!window.confirm('只會移除你自己的失效索引，不能證明所有歷史子集合都曾完整清理。確定嗎？'))return;
+     busy=true;buttons();
+     try{
+      await service.removeOwnOrphanedPointer(pointer.id,{typedPhrase:'只清除我的失效索引'});
+      msg('已確認主文件不存在並移除自己的失效索引；歷史內容仍須以原清理紀錄為準。');
+      await ownedList();
+     }catch(e){deny(e)}finally{busy=false;buttons()}
+    });
+    orphan.append(clear);root.append(orphan);continue;
+   }
+   if(snap.data().ownerUid!==uid)continue;
+   const book={id:pointer.id,...snap.data()},item=el('div');item.className='item';
+   const title=el('strong',book.name+(book.deleteState?'（正在清理）':''));
+   const choose=el('button','選擇這本');choose.type='button';
+   choose.addEventListener('click',()=>chooseBook(book));
+   item.append(title,choose);root.append(item);
+  }catch(e){if(e?.code!=='permission-denied')throw e}
+ }
+ if(!root.children.length)root.append(el('p','沒有可存取、由你建立的記事簿。'));
+}
+async function chooseBook(book){
+ if(busy)return;
+ selected=book;verifiedReceipt=null;$('finalizeArea').hidden=true;$('typedFinal').value='';
+ $('selectedArea').hidden=false;
+ $('selectedName').textContent='目前選擇：'+book.name;
+ $('newDelete').hidden=!!book.deleteState;$('resumeBox').hidden=book.deleteState!=='DELETING';
+ progress('');
+ if(book.deleteState==='DELETING'){
+  $('counts').textContent='刪除鎖定已存在。請僅接續這一筆刪除進度。';
+  return;
+ }
+ busy=true;buttons();
+ try{
+  const p=await service.preview(book.id);
+  if(selected?.id!==book.id)return;
+  $('counts').textContent='伺服器盤點：記事 '+p.noteCount+' 筆；成員 '+p.memberCount+' 筆；送出邀請 '+p.invitationCount+' 筆。';
+ }catch(e){deny(e)}
+ finally{busy=false;buttons()}
+}
+async function run(task){
+ if(busy||!selected||!service)return;
+ busy=true;buttons();
+ try{await task()}
+ catch(e){deny(e)}
+ finally{busy=false;buttons()}
+}
+const cleanupProgress=({stage,processed,total})=>{
+ const titles={NOTES:'清除記事',INVITES:'清除邀請與收件匣',MEMBERS:'清除成員與跨帳號索引',VERIFY:'重新向伺服器核對'};
+ progress((titles[stage]||'清理中')+'：'+processed+' / '+total+'。請保持頁面開啟；中斷可稍後接續。');
+};
+$('lock').addEventListener('click',()=>run(async()=>{
+ const name=$('typedName').value,book={...selected};
+ if(name!==book.name||$('typedPhrase').value!=='永久刪除'){
+  progress('必須輸入記事簿完整名稱及「永久刪除」。');return;
+ }
+ if(!window.confirm('確定要永久清除「'+book.name+'」全部共用記事與成員嗎？不可恢復。'))return;
+ if(!window.confirm('最後確認：這不是封存。鎖定後無法恢復原記事簿。確定繼續嗎？'))return;
+ const deletionId=crypto.randomUUID().replaceAll('-','');
+ const result=await service.lock(book.id,{typedName:name,deletionId});
+ progress('刪除鎖定已建立。即將逐批清理；若中斷可重新登入後續刪。');
+ const outcome=await service.runCleanup(book.id,result.deletionId,{onProgress:cleanupProgress});
+ verifiedReceipt=outcome;$('finalizeArea').hidden=false;
+ $('rootPath').textContent='groups/'+book.id;
+ progress('記事與關聯資料清理完成；下一步須到 Firebase Console 手動刪除指定主文件。'+outcome.stage);
+ await ownedList();
+}));
+$('resume').addEventListener('click',()=>run(async()=>{
+ const book={...selected};if(book.deleteState!=='DELETING'||typeof book.deletionId!=='string')throw Error('INVALID_RESUME_LOCK');
+ if(!window.confirm('確定繼續清理「'+book.name+'」剩餘資料嗎？'))return;
+ const result=await service.runCleanup(book.id,book.deletionId,{onProgress:cleanupProgress});
+ verifiedReceipt=result;$('finalizeArea').hidden=false;
+ $('rootPath').textContent='groups/'+book.id;
+ progress('已核對清理結果：'+result.stage+'。下一步需到 Firebase Console 刪除主文件。');
+ await ownedList();
+}));
+$('copyRootPath').addEventListener('click',async()=>{
+ if(!verifiedReceipt||!selected)return;
+ const path='groups/'+selected.id;
+ try{
+  if(!navigator.clipboard||!window.isSecureContext)throw Error('UNSUPPORTED_CLIPBOARD');
+  await navigator.clipboard.writeText(path);
+  progress('已複製主文件路徑：'+path);
+ }catch(e){progress('請手動複製畫面上的主文件路徑：'+path)}
+});
+$('confirmRootRemoved').addEventListener('click',()=>run(async()=>{
+ if(!verifiedReceipt||!selected)throw Error('CLEANUP_RECEIPT_REQUIRED');
+ if($('typedFinal').value!=='我已刪除記事簿主文件'){
+  progress('請先在 Firebase Console 刪除指定文件，再輸入完整確認文字。');return;
+ }
+ if(!window.confirm('將核對主文件真的不存在，成功後只移除你的最後索引。確定嗎？'))return;
+ const id=selected.id;
+ const outcome=await service.confirmConsoleRootRemoved(id,{
+  cleanupReceipt:verifiedReceipt,typedPhrase:$('typedFinal').value
+ });
+ if(!outcome.rootPhysicallyDeleted||!outcome.ownerIndexCleared)
+  throw Error('FINAL_REMOVAL_UNVERIFIED');
+ selected=null;verifiedReceipt=null;
+ $('finalizeArea').hidden=true;$('selectedArea').hidden=true;
+ msg('已從伺服器確認指定主文件不存在，建立者索引清除。其他裝置已保存的副本無法遠端抹除。');
+ await ownedList();
+}));
+$('refresh').addEventListener('click',async()=>{if(busy||!service)return;
+ busy=true;buttons();try{await ownedList()}catch(e){deny(e)}finally{busy=false;buttons()}
+});
+$('login').addEventListener('click',()=>{if(!auth)return;
+ setPersistence(auth,browserSessionPersistence).catch(deny);
+ signInWithPopup(auth,new GoogleAuthProvider()).catch(deny);
+});
+$('logout').addEventListener('click',()=>auth&&signOut(auth).catch(deny));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ if(firestoreReadyForRealData!==true){msg('永久刪除工程預覽 HOLD：尚未啟用，不能登入、存取或刪除 Firebase 記事。');return}
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=sdk.getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  const local=++epoch;wipe();
+  if(!user){$('identity').textContent='尚未登入';buttons();return}
+  try{
+   const token=await getIdTokenResult(user);
+   if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com'){
+    await signOut(auth);return;
+   }
+   service=notebookHardDeleteV4C({db,sdk,actor:{uid:user.uid,
+    emailVerified:true,providerId:'google.com',currentUid:()=>auth.currentUser?.uid}});
+   $('identity').textContent='已驗證 Google 帳號：'+user.email;
+   await ownedList();
+   if(local!==epoch)return;
+   $('workspace').hidden=false;msg('僅限建立者與虛構測試資料，請先確認逐項清理預覽。');
+  }catch(e){wipe();deny(e)}
+  finally{buttons()}
+ });
+ buttons();
+}
+start().catch(deny);
+</script></body></html>

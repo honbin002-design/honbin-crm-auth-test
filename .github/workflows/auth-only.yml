@@ -22,3 +22,5 @@ jobs:
         run: node approved-accounts-preflight.mjs
       - name: Verify archive V3 rule copy helper honors current owner whitelist
         run: node firestore-notebook-archive-preflight.mjs
+      - name: Verify V4D delete preview stays disabled independent of notes sync
+        run: node notebook-hard-delete-v4d-preflight.mjs
