@@ -21,14 +21,16 @@ export function taskService({db,sdk,currentUid}){
   return result.docs.map(d=>({id:d.id,...d.data()}))
     .sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));
  }
- async function create({groupId,title,description='',assignedUid=null,dueDate='' }){
+ async function create({groupId,title,description='',assignedUid=null,executeDate='',dueDate=''}){
   const uid=actor(),name=text(title,120,'TASK_TITLE');
   const detail=String(description||'').trim();
   if(detail.length>3000)throw Error('INVALID_TASK_DESCRIPTION');
   if(assignedUid!==null)valid(assignedUid,'ASSIGNEE');
+  if(executeDate!==''&&!/^\d{4}-\d{2}-\d{2}$/.test(executeDate))throw Error('INVALID_EXECUTE_DATE');
   if(dueDate!==''&&!/^\d{4}-\d{2}-\d{2}$/.test(dueDate))throw Error('INVALID_DUE_DATE');
+  if(executeDate&&dueDate&&executeDate>dueDate)throw Error('EXECUTE_DATE_AFTER_DEADLINE');
   const ref=doc(taskRef(groupId));
-  await setDoc(ref,{title:name,description:detail,assignedUid,dueDate,
+  await setDoc(ref,{title:name,description:detail,assignedUid,executeDate,dueDate,
     status:'OPEN',createdBy:uid,createdAt:serverTimestamp(),
     completedBy:null,completedAt:null,completionReply:''});
   actor();return ref.id;
