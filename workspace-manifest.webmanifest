@@ -1,0 +1,20 @@
+{
+  "id": "/honbin-crm-auth-test/workspace-v2",
+  "name": "鴻繽記事與任務 TEST",
+  "short_name": "鴻繽記事",
+  "lang": "zh-TW",
+  "start_url": "/honbin-crm-auth-test/workspace-v2.html",
+  "scope": "/honbin-crm-auth-test/",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#205a9a",
+  "description": "鴻繽獨立測試環境：多人共用記事與任務",
+  "icons": [
+    {
+      "src": "/honbin-crm-auth-test/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
