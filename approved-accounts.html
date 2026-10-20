@@ -60,7 +60,8 @@ onAuthStateChanged(auth,async user=>{
  }catch(e){fail(e)}
 });
 $('login').addEventListener('click',()=>{
- setPersistence(auth,browserSessionPersistence).then(()=>signInWithPopup(auth,provider)).catch(fail);
+ setPersistence(auth,browserSessionPersistence).catch(fail);
+ signInWithPopup(auth,provider).catch(fail);
 });
 $('logout').addEventListener('click',()=>signOut(auth).catch(fail));
 $('refresh').addEventListener('click',()=>refresh().catch(fail));
