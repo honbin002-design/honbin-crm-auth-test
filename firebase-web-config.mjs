@@ -2,7 +2,7 @@
 // Owner must paste the existing Firebase Web API key into apiKey on GitHub.
 // Do not add service-account keys, passwords, OAuth secrets, or customer data.
 export const firebaseConfig = Object.freeze({
-  apiKey: "PASTE_EXISTING_FIREBASE_WEB_API_KEY_HERE",
+  apiKey: "AIzaSyB4EzMwS8hzDiec02jBVAe6ks5T8XiqELo",
   authDomain: "honbin-crm-notes-spark.firebaseapp.com",
   projectId: "honbin-crm-notes-spark",
   storageBucket: "honbin-crm-notes-spark.firebasestorage.app",
