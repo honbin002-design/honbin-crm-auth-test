@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>V4D｜指定共用記事邀請驗收</title>
+<style>
+*{box-sizing:border-box}body{max-width:740px;margin:auto;padding:18px 14px 75px;background:#f4f7fb;color:#22344a;font:17px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+section{background:white;border:1px solid #d9e2ee;border-radius:14px;padding:18px;margin:15px 0}
+h1{font-size:1.4rem}h2{font-size:1.15rem}button{font:inherit;border:0;border-radius:10px;background:#205b9e;color:white;padding:10px 16px;min-height:46px;margin:4px 5px 4px 0}
+button:disabled{opacity:.42}pre,#status{white-space:pre-wrap;overflow-wrap:anywhere}.warn{border-left:5px solid #b88125;background:#fff4e5;padding:12px}
+</style></head><body>
+<h1>V4D｜指定共用記事邀請驗收</h1>
+<p class="warn">此頁只處理「測試共用記事」與一個指定測試 Google 帳號。只有按下「建立唯讀邀請」才會新增邀請；只有收件人按下「接受邀請」才會新增成員與本人索引。<strong>不會刪除記事、建立其他記事簿、修改安全規則或觸碰正式 CRM。</strong></p>
+<section><h2>Google 帳號</h2><p id="identity">尚未登入</p>
+<button id="login" disabled type="button">Google 登入</button><button id="logout" disabled type="button">登出／切換帳號</button>
+<p id="status" role="status" aria-live="polite">初始化中……</p></section>
+<section><h2>固定驗收目標</h2>
+<p>記事簿名稱：<strong>測試共用記事</strong></p>
+<p>邀請權限：<strong>VIEWER（唯讀）</strong></p>
+<p>受邀帳號：<strong>wind99vic@gmail.com</strong></p>
+<button id="refresh" disabled type="button">唯讀檢查現有邀請／成員</button>
+<div id="controls"></div>
+<pre id="result" aria-live="polite">尚未讀取。</pre>
+</section>
+<section><h2>安全限制</h2><p>僅當 Firestore 伺服器確認指定記事簿名稱、建立者與 ACTIVE 狀態後，才允許建立邀請。會先查詢既有邀請，避免重複發送；如已有已接受的邀請，不能再次發送。權限拒絕或讀取失敗一律停止。</p>
+<p>系統不會寄送電子郵件；受邀者需要切換至自己的 Google 帳號開啟同一頁。所有操作均由 Firestore Rules 最終裁決。這不是永久刪除功能。</p></section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,collection,doc,getDocFromServer,getDocsFromServer,writeBatch,Timestamp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const GROUP='D0iiTJNmLt5tIs64sTL6';
+const NAME='測試共用記事';
+const OWNER='Iy5BWeZ17KW3Ost0m38LEhcj09F3';
+const RECIPIENT='wind99vic@gmail.com';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,actor=null,busy=false,epoch=0;
+function controls(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('refresh').disabled=!actor||busy;
+ for(const b of $('controls').querySelectorAll('button'))b.disabled=busy;
+}
+function clear(){epoch++;actor=null;$('controls').replaceChildren();$('result').textContent='尚未讀取。';controls()}
+function guard(u,g){if(!actor||actor.uid!==u||auth.currentUser?.uid!==u||g!==epoch)throw Error('SESSION_CHANGED')}
+function role(){
+ if(!actor)return null;
+ if(actor.uid===OWNER)return 'owner';
+ if(actor.email===RECIPIENT)return 'recipient';
+ return 'other';
+}
+async function rootCheck(u,g){
+ guard(u,g);
+ const snap=await getDocFromServer(doc(db,'groups',GROUP));guard(u,g);
+ if(snap.metadata.fromCache||!snap.exists()||snap.data().ownerUid!==OWNER||
+    snap.data().name!==NAME||snap.data().deleteState==='DELETING')
+  throw Error('TARGET_GROUP_MISMATCH_OR_NOT_ACTIVE');
+ return snap;
+}
+function action(label,callback){
+ const b=document.createElement('button');b.type='button';b.textContent=label;
+ b.addEventListener('click',callback);$('controls').append(b);controls();
+}
+async function load(){
+ if(!actor||busy)return;
+ const u=actor.uid,g=epoch,r=role();
+ busy=true;$('controls').replaceChildren();controls();$('status').textContent='正在讀取伺服器，尚未寫入……';
+ try{
+  guard(u,g);
+  if(r==='other')throw Error('NOT_A_DESIGNATED_TEST_ACCOUNT');
+  if(r==='owner'){
+   await rootCheck(u,g);
+   const members=await getDocsFromServer(collection(db,'groups',GROUP,'members'));guard(u,g);
+   const sent=await getDocsFromServer(collection(db,'groups',GROUP,'sentInvites'));guard(u,g);
+   if(members.metadata.fromCache||sent.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+   const existing=[];
+   for(const s of sent.docs){
+    if(s.data().recipientEmail!==RECIPIENT)continue;
+    const inbox=await getDocFromServer(doc(db,'inboxes',RECIPIENT,'invites',s.id));guard(u,g);
+    if(inbox.metadata.fromCache||!inbox.exists())throw Error('INCONSISTENT_INVITE_INDEX');
+    if(inbox.data().groupId!==GROUP||inbox.data().recipientEmail!==RECIPIENT)throw Error('INVITE_PAIR_MISMATCH');
+    existing.push({id:s.id,status:inbox.data().status});
+   }
+   const active=members.docs.some(m=>m.data().status==='ACTIVE');
+   $('result').textContent='建立者唯讀盤點完成\n記事簿：'+NAME+
+    '\n現有成員數：'+members.size+'\n現有送出邀請數：'+sent.size+
+    '\n指定收件人邀請：'+(existing.map(x=>x.status+'（'+x.id+'）').join('；')||'無')+
+    '\n寫入／刪除：0';
+   if(!active&&!existing.some(x=>x.status==='PENDING'||x.status==='ACCEPTED'))
+    action('建立唯讀邀請（將新增兩筆邀請紀錄）',sendInvite);
+   else $('status').textContent='已有成員或指定邀請，暫停建立新邀請，避免重複。';
+  }else{
+   const inbox=await getDocsFromServer(collection(db,'inboxes',RECIPIENT,'invites'));guard(u,g);
+   if(inbox.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+   const matches=inbox.docs.filter(x=>x.data().groupId===GROUP&&x.data().recipientEmail===RECIPIENT);
+   $('result').textContent='收件人唯讀盤點完成\n指定群組：'+GROUP+
+    '\n相關邀請：'+(matches.map(x=>x.data().status+'（'+x.id+'）').join('；')||'無')+
+    '\n寫入／刪除：0';
+   if(matches.length===1&&matches[0].data().status==='PENDING'){
+    const invitation=matches[0];
+    action('接受 VIEWER 邀請（將建立成員關係）',()=>acceptInvite(invitation.id));
+   }else if(matches.length>1)throw Error('MULTIPLE_INVITES_MANUAL_REVIEW_REQUIRED');
+   else $('status').textContent='沒有唯一的待接受邀請；不執行寫入。';
+  }
+  if(!$('status').textContent.startsWith('已有')&&!$('status').textContent.startsWith('沒有'))
+   $('status').textContent='伺服器盤點完成，請核對後再決定是否按寫入按鈕。';
+ }catch(e){
+  if(g===epoch){$('controls').replaceChildren();$('result').textContent='停止：'+String(e.code||e.message)+'\n沒有執行寫入。';$('status').textContent='驗證失敗；請勿改動安全規則。'}
+ }finally{if(g===epoch){busy=false;controls()}}
+}
+async function sendInvite(){
+ if(!actor||role()!=='owner'||busy)return;
+ const u=actor.uid,g=epoch;busy=true;controls();$('status').textContent='正在重新檢查後建立唯一邀請……';
+ try{
+  await rootCheck(u,g);
+  const sent=await getDocsFromServer(collection(db,'groups',GROUP,'sentInvites'));guard(u,g);
+  const members=await getDocsFromServer(collection(db,'groups',GROUP,'members'));guard(u,g);
+  if(sent.metadata.fromCache||members.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  if(members.docs.some(m=>m.data().status==='ACTIVE'))throw Error('EXISTING_MEMBER_REVIEW_REQUIRED');
+  for(const s of sent.docs)if(s.data().recipientEmail===RECIPIENT){
+   const current=await getDocFromServer(doc(db,'inboxes',RECIPIENT,'invites',s.id));guard(u,g);
+   if(current.metadata.fromCache||!current.exists()||['PENDING','ACCEPTED'].includes(current.data().status))
+    throw Error('EXISTING_INVITE_NO_DUPLICATE');
+  }
+  const ref=doc(collection(db,'inboxes',RECIPIENT,'invites'));
+  const batch=writeBatch(db);
+  batch.set(ref,{groupId:GROUP,recipientEmail:RECIPIENT,role:'VIEWER',status:'PENDING',invitedBy:OWNER});
+  batch.set(doc(db,'groups',GROUP,'sentInvites',ref.id),{
+   groupId:GROUP,recipientEmail:RECIPIENT,role:'VIEWER',invitedBy:OWNER,createdAt:Timestamp.now()
+  });
+  guard(u,g);await batch.commit();guard(u,g);
+  $('status').textContent='邀請已由伺服器確認建立。請切換至收件人帳號。';
+  $('result').textContent='INVITE_CREATED_SERVER_ACK\n邀請 ID：'+ref.id+
+    '\n目標：'+NAME+'\n受邀：'+RECIPIENT+'\n權限：VIEWER\n寫入：兩筆配對邀請紀錄\n刪除：0';
+  $('controls').replaceChildren();
+ }catch(e){if(g===epoch){$('status').textContent='未確認邀請成功：'+String(e.code||e.message);$('result').textContent='請先按唯讀檢查，勿連續重試建立。';$('controls').replaceChildren()}}
+ finally{if(g===epoch){busy=false;controls()}}
+}
+async function acceptInvite(id){
+ if(!actor||role()!=='recipient'||busy)return;
+ const u=actor.uid,g=epoch;busy=true;controls();$('status').textContent='重新確認唯一待接受邀請……';
+ try{
+  const inbox=await getDocsFromServer(collection(db,'inboxes',RECIPIENT,'invites'));guard(u,g);
+  if(inbox.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  const matches=inbox.docs.filter(x=>x.data().groupId===GROUP&&x.data().recipientEmail===RECIPIENT&&x.data().status==='PENDING');
+  if(matches.length!==1||matches[0].id!==id||matches[0].data().role!=='VIEWER')throw Error('INVITE_CHANGED_OR_NOT_UNIQUE');
+  const memberRef=doc(db,'groups',GROUP,'members',u);
+  const member=await getDocFromServer(memberRef);guard(u,g);
+  if(member.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  if(member.exists()&&member.data().status!=='REVOKED')throw Error('EXISTING_MEMBER_STOP');
+  const batch=writeBatch(db);
+  batch.update(doc(db,'inboxes',RECIPIENT,'invites',id),{status:'ACCEPTED',acceptedUid:u});
+  batch.set(memberRef,{uid:u,role:'VIEWER',status:'ACTIVE',invitationId:id});
+  guard(u,g);await batch.commit();guard(u,g);
+  // The atomic invitation+membership commit is authoritative. A personal
+  // discovery pointer is a separate recoverable step.
+  $('status').textContent='已接受邀請並建立成員資格。正在確認本人索引……';
+  const group=await rootCheck(u,g);
+  const pointer=doc(db,'users',u,'groupIndex',GROUP);
+  const p=await getDocFromServer(pointer);guard(u,g);
+  if(!p.exists()){
+   const b=writeBatch(db);b.set(pointer,{uid:u,groupId:GROUP,createdAt:Timestamp.now()});
+   guard(u,g);await b.commit();guard(u,g);
+  }
+  $('result').textContent='MEMBERSHIP_ACCEPTED_SERVER_ACK\n角色：VIEWER\n群組：'+group.data().name+
+   '\n成員及本人索引已建立\n未刪除任何資料。';
+  $('status').textContent='成員資格與索引建立完成；可進行成員唯讀權限驗收。';
+  $('controls').replaceChildren();
+ }catch(e){
+  if(g===epoch){$('status').textContent='接受流程未完全確認：'+String(e.code||e.message);
+   $('result').textContent='請先按唯讀檢查，勿重複接受。若伺服器已接受但索引未建立，需進行專門補建驗證。';$('controls').replaceChildren()}
+ }finally{if(g===epoch){busy=false;controls()}}
+}
+async function identify(user){
+ clear();
+ if(!user){$('identity').textContent='尚未登入';$('status').textContent='請以指定 Google 帳號登入。';return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('VERIFIED_GOOGLE_REQUIRED');
+ if(auth.currentUser?.uid!==user.uid)throw Error('ACCOUNT_CHANGED');
+ actor={uid:user.uid,email:String(user.email||'').toLowerCase()};
+ $('identity').textContent='已登入：'+actor.email;
+ $('status').textContent=role()==='other'?'非指定測試帳號；不允許操作。':'請先按「唯讀檢查現有邀請／成員」。';
+ controls();
+}
+$('refresh').addEventListener('click',load);
+$('login').addEventListener('click',async()=>{try{await setPersistence(auth,browserSessionPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){$('status').textContent='登入未完成：'+String(e.code||e.message)}});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>$('status').textContent=String(e.code||e.message)));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{try{await identify(user)}catch(e){clear();$('status').textContent='驗證失敗：'+String(e.code||e.message)}});
+ controls();
+}
+start().catch(e=>$('status').textContent='初始化失敗：'+String(e.code||e.message));
+</script></body></html>
