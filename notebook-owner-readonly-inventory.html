@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>共用記事簿｜永久刪除前唯讀盤點</title>
+<style>
+*{box-sizing:border-box}body{max-width:730px;margin:auto;padding:18px 14px 80px;background:#f4f7fb;color:#23354c;font:17px/1.7 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+h1{font-size:1.4rem}h2{font-size:1.16rem}section{border:1px solid #d9e2ee;border-radius:14px;background:#fff;padding:18px;margin:15px 0}
+button{font:inherit;border:0;border-radius:10px;background:#215c9d;color:#fff;padding:11px 16px;min-height:46px;margin:4px}
+button:disabled{opacity:.45}#status,#result{white-space:pre-wrap;overflow-wrap:anywhere}
+.notice{background:#fff3e4;border-left:4px solid #bd7b22;padding:12px}.item{border-top:1px solid #d9e2ee;padding:12px 0}
+</style></head><body>
+<h1>共用記事簿｜永久刪除前唯讀盤點</h1>
+<p class="notice">獨立測試頁，僅顯示目前 Google 帳號<strong>親自建立</strong>的記事簿，並從伺服器核對記事（含軟刪除）、成員與邀請數量。<strong>不會刪除、鎖定或修改任何資料</strong>。正式刪除功能仍為安全 HOLD。</p>
+<section><h2>Google 身分驗證</h2><p id="identity">尚未登入</p>
+<button id="login" disabled type="button">Google 登入</button><button id="logout" disabled type="button">登出</button>
+<p id="status" role="status" aria-live="polite">等待身分驗證。</p></section>
+<section><h2>我建立的記事簿</h2>
+<button id="refresh" disabled type="button">從伺服器重新載入</button>
+<div id="books" aria-live="polite">尚未讀取。</div></section>
+<section><h2>唯讀盤點結果</h2><pre id="result" aria-live="polite">請先選擇記事簿。</pre>
+<p>此頁不會提供永久刪除按鈕；不會把既有「共用測試01」當成虛構刪除目標。讀取失敗或權限拒絕一律停止，不宣稱 PASS。</p></section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,collection,doc,getDocsFromServer,getDocFromServer} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const $=id=>document.getElementById(id);
+const el=(tag,content)=>{const e=document.createElement(tag);e.textContent=content;return e};
+let auth=null,db=null,uid=null,busy=false,generation=0;
+function buttons(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('refresh').disabled=!uid||busy;
+ for(const b of $('books').querySelectorAll('button'))b.disabled=busy;
+}
+function reset(){uid=null;generation++;$('books').textContent='尚未讀取。';$('result').textContent='請先選擇記事簿。';buttons()}
+function guard(owner,epoch){if(!uid||uid!==owner||auth.currentUser?.uid!==owner||epoch!==generation)throw Error('OWNER_SESSION_CHANGED')}
+async function identify(user){
+ reset();
+ if(!user){$('identity').textContent='尚未登入';$('status').textContent='請以原 Google 擁有者登入。';return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('VERIFIED_GOOGLE_REQUIRED');
+ await getDocsFromServer(collection(db,'approvedAccounts'));
+ if(auth.currentUser?.uid!==user.uid)throw Error('OWNER_CHANGED');
+ uid=user.uid;$('identity').textContent='已驗證 Google 擁有者：'+user.email;
+ $('status').textContent='可從伺服器列出自己建立的記事簿。';
+ buttons();await refresh();
+}
+async function refresh(){
+ if(!uid||busy)return;
+ const owner=uid,epoch=generation;busy=true;buttons();
+ $('status').textContent='正在讀取本人索引與群組文件……';
+ $('books').textContent='讀取中……';$('result').textContent='請先選擇記事簿。';
+ try{
+  guard(owner,epoch);
+  const pointers=await getDocsFromServer(collection(db,'users',owner,'groupIndex'));guard(owner,epoch);
+  if(pointers.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  const books=[];
+  for(const pointer of pointers.docs){
+   const group=await getDocFromServer(doc(db,'groups',pointer.id));guard(owner,epoch);
+   if(group.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+   if(group.exists()&&group.data().ownerUid===owner)books.push({id:pointer.id,name:group.data().name,deleteState:group.data().deleteState||''});
+  }
+  $('books').replaceChildren();
+  if(!books.length)$('books').append(el('p','沒有可盤點的本人建立記事簿。'));
+  for(const book of books){
+   const line=el('div','');line.className='item';
+   const title=el('strong',book.name+'（'+(book.deleteState||'ACTIVE')+'）');
+   const b=el('button','唯讀盤點');b.type='button';
+   b.addEventListener('click',()=>inspect(book));
+   line.append(title,el('p','ID：'+book.id),b);$('books').append(line);
+  }
+  $('status').textContent='本人記事簿清單讀取完成；未修改資料。';
+ }catch(e){
+  if(epoch===generation){$('books').textContent='無法確認清單。';$('status').textContent='停止：'+String(e.code||e.message);}
+ }finally{if(epoch===generation){busy=false;buttons()}}
+}
+async function inspect(book){
+ if(!uid||busy)return;
+ const owner=uid,epoch=generation;busy=true;buttons();
+ $('result').textContent='正在重新讀取伺服器資料……';
+ try{
+  guard(owner,epoch);
+  const group=await getDocFromServer(doc(db,'groups',book.id));guard(owner,epoch);
+  if(group.metadata.fromCache||!group.exists()||group.data().ownerUid!==owner||group.data().name!==book.name)
+   throw Error('EXACT_OWNER_GROUP_MISMATCH');
+  const [notes,members,invites]=await Promise.all([
+   getDocsFromServer(collection(db,'groups',book.id,'notes')),
+   getDocsFromServer(collection(db,'groups',book.id,'members')),
+   getDocsFromServer(collection(db,'groups',book.id,'sentInvites'))
+  ]);guard(owner,epoch);
+  if([notes,members,invites].some(s=>s.metadata.fromCache))throw Error('CACHE_NOT_ACCEPTABLE');
+  const soft=notes.docs.filter(d=>d.data().deleted===true).length;
+  const fresh=await getDocFromServer(doc(db,'groups',book.id));guard(owner,epoch);
+  if(fresh.metadata.fromCache||!fresh.exists()||fresh.data().ownerUid!==owner||
+     fresh.data().name!==book.name||fresh.data().deleteState!==group.data().deleteState)
+   throw Error('ROOT_CHANGED_DURING_SCAN');
+  $('result').textContent=
+   '唯讀盤點：PASS（不是永久刪除驗收）\n'+
+   '名稱：'+book.name+'\nID：'+book.id+'\n'+
+   '狀態：'+(group.data().deleteState||'ACTIVE')+'\n'+
+   '記事總數：'+notes.size+'\n其中軟刪除：'+soft+'\n'+
+   '成員：'+members.size+'\n送出邀請：'+invites.size+'\n'+
+   '已再次核對建立者、名稱與狀態。\n'+
+   '修改／刪除：0\n'+
+   '此頁不掃描未知子集合或跨帳號 inbox；不構成刪除授權。';
+  $('status').textContent='唯讀盤點完成。';
+ }catch(e){
+  if(epoch===generation){$('result').textContent='盤點未通過：'+String(e.code||e.message)+'\n未修改資料。';$('status').textContent='停止：盤點不完整或權限拒絕。'}
+ }finally{if(epoch===generation){busy=false;buttons()}}
+}
+$('refresh').addEventListener('click',refresh);
+$('login').addEventListener('click',async()=>{try{await setPersistence(auth,browserSessionPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){$('status').textContent='登入未完成：'+String(e.code||e.message)}});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>$('status').textContent=String(e.code||e.message)));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  try{await identify(user)}catch(e){reset();$('status').textContent='擁有者驗證失敗：'+String(e.code||e.message)}
+ });
+ buttons();
+}
+start().catch(e=>$('status').textContent='初始化失敗：'+String(e.code||e.message));
+</script></body></html>
