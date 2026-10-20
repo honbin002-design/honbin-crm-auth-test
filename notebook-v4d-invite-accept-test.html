@@ -31,7 +31,7 @@ import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,sign
 import {getFirestore,collection,doc,getDocFromServer,getDocsFromServer,writeBatch,Timestamp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
 const GROUP='D0iiTJNmLt5tIs64sTL6';
 const NAME='測試共用記事';
-const OWNER='Iy5BWeZ17KW3Ost0m38LEhcj09F3';
+const OWNER_EMAIL='honbin002@gmail.com';
 const RECIPIENT='wind99vic@gmail.com';
 const $=id=>document.getElementById(id);
 let auth=null,db=null,actor=null,busy=false,epoch=0;
@@ -45,14 +45,14 @@ function clear(){epoch++;actor=null;$('controls').replaceChildren();$('result').
 function guard(u,g){if(!actor||actor.uid!==u||auth.currentUser?.uid!==u||g!==epoch)throw Error('SESSION_CHANGED')}
 function role(){
  if(!actor)return null;
- if(actor.uid===OWNER)return 'owner';
+ if(actor.email===OWNER_EMAIL)return 'owner';
  if(actor.email===RECIPIENT)return 'recipient';
  return 'other';
 }
 async function rootCheck(u,g){
  guard(u,g);
  const snap=await getDocFromServer(doc(db,'groups',GROUP));guard(u,g);
- if(snap.metadata.fromCache||!snap.exists()||snap.data().ownerUid!==OWNER||
+ if(snap.metadata.fromCache||!snap.exists()||(role()==='owner'&&snap.data().ownerUid!==u)||
     snap.data().name!==NAME||snap.data().deleteState==='DELETING')
   throw Error('TARGET_GROUP_MISMATCH_OR_NOT_ACTIVE');
  return snap;
@@ -124,9 +124,9 @@ async function sendInvite(){
   }
   const ref=doc(collection(db,'inboxes',RECIPIENT,'invites'));
   const batch=writeBatch(db);
-  batch.set(ref,{groupId:GROUP,recipientEmail:RECIPIENT,role:'VIEWER',status:'PENDING',invitedBy:OWNER});
+  batch.set(ref,{groupId:GROUP,recipientEmail:RECIPIENT,role:'VIEWER',status:'PENDING',invitedBy:u});
   batch.set(doc(db,'groups',GROUP,'sentInvites',ref.id),{
-   groupId:GROUP,recipientEmail:RECIPIENT,role:'VIEWER',invitedBy:OWNER,createdAt:Timestamp.now()
+   groupId:GROUP,recipientEmail:RECIPIENT,role:'VIEWER',invitedBy:u,createdAt:Timestamp.now()
   });
   guard(u,g);await batch.commit();guard(u,g);
   $('status').textContent='邀請已由伺服器確認建立。請切換至收件人帳號。';
