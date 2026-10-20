@@ -17,6 +17,7 @@ const sdk={
     .map(([path,value])=>({id:path.split('/').at(-1),data:()=>({...value})}))}),
   serverTimestamp:timestamp,
   async getDoc(ref){return {exists:()=>database.has(ref.path),data:()=>database.get(ref.path)}},
+  async getDocFromServer(ref){return {exists:()=>database.has(ref.path),data:()=>database.get(ref.path)}},
   async setDoc(ref,data){writes.push({op:'set',path:ref.path,data});database.set(ref.path,{...data})},
   async runTransaction(_db,callback){
    const staging=[];
@@ -66,4 +67,11 @@ signed=owner;await service.saveNickname('威');
 assert.equal(writes.at(-1).path,'profiles/'+owner);
 signed=other;assert.equal(await service.profile(owner),'威');
 assert.equal(writes.at(-1).path,'profiles/'+owner);
+const brokenSdk={...sdk,async getDocFromServer(ref){
+ if(ref.path==='profiles/'+owner)return {exists:()=>true,data:()=>({nickname:'異常'})};
+ return {exists:()=>database.has(ref.path),data:()=>database.get(ref.path)};
+}};
+const mismatch=taskService({db:{},sdk:brokenSdk,currentUid:()=>signed});
+signed=owner;
+await assert.rejects(mismatch.saveNickname('測試伺服器核對'),/NICKNAME_SERVER_READBACK_MISMATCH/);
 console.log('TASK_ASSIGNMENT_COMPLETION_AND_PUBLIC_NICKNAME_CLIENT_PASS');
