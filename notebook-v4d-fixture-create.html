@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>V4D 專用測試記事簿</title>
+<style>body{font:16px/1.6 -apple-system,"Noto Sans TC",sans-serif;max-width:650px;padding:20px;margin:auto;background:#f7f9fc;color:#223}section{border:1px solid #ddd;background:white;padding:18px;border-radius:12px;margin:12px 0}button{font:inherit;background:#2461ab;color:white;border:0;border-radius:10px;padding:12px;margin:5px}button:disabled{opacity:.5}pre{overflow-wrap:anywhere;white-space:pre-wrap}#status{white-space:pre-wrap}</style></head>
+<body><h1>V4D 永久刪除：虛構測試資料建立</h1><p>本頁只能建立新的測試記事簿，沒有刪除功能。現有私人記事、「共用測試01」和正式 CRM 完全不更動。</p>
+<section><p id="identity">尚未登入</p><button id="login" disabled>Google 登入</button><button id="logout" disabled>登出</button><p id="status">尚未驗證 Firebase 唯一擁有者。</p></section>
+<section><h2>建立新測試記事簿</h2><button id="create" disabled>建立 V4D 虛構測試記事簿</button><pre id="result"></pre><p>只會寫入專用測試記事簿、本人索引及兩筆虛構記事，沒有其他資料。</p></section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import * as sdk from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const $=x=>document.getElementById(x);
+const notice=x=>$('status').textContent=x;
+let auth,db,uid=null,busy=false,already=false;
+const buttons=()=>{$('login').disabled=busy||!auth||!!auth.currentUser;$('logout').disabled=busy||!auth||!auth.currentUser;$('create').disabled=busy||!uid||already};
+const guard=()=>{if(!uid||auth.currentUser?.uid!==uid)throw Error('帳號已切換，停止寫入')};
+async function init(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('錯誤 Firebase 專案');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=sdk.getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  uid=null;buttons();
+  if(!user){$('identity').textContent='尚未登入';notice('請先登入原 Google 管理員帳號。');return}
+  try{
+   const token=await getIdTokenResult(user);
+   if(!user.emailVerified||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('僅接受已驗證 Google 身分');
+   // Server rules allow ONLY the original fixed owner to list approvals.
+   await sdk.getDocsFromServer(sdk.collection(db,'approvedAccounts'));
+   if(auth.currentUser?.uid!==user.uid)throw Error('Google 身分已改變');
+   uid=user.uid;$('identity').textContent='已確認擁有者：'+user.email;
+   notice('權限已核對。按鈕僅會建立新的虛構資料。');
+  }catch(e){notice('未通過唯一擁有者核對：'+(e.code||e.message))}
+  finally{buttons()}
+ });
+ buttons();
+}
+$('login').onclick=async()=>{try{await setPersistence(auth,browserSessionPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){notice(e.code||e.message)}};
+$('logout').onclick=()=>signOut(auth);
+$('create').onclick=async()=>{
+ if(busy||already||!uid)return;
+ if(!confirm('只建立一個全新 V4D 測試記事簿與兩筆虛構記事，確定嗎？'))return;
+ busy=true;buttons();
+ let groupId='';
+ try{
+  guard();groupId='v4d_test_'+crypto.randomUUID().replaceAll('-','');
+  const name='V4D_永久刪除測試_'+groupId.slice(-8),time=sdk.Timestamp.now();
+  const batch=sdk.writeBatch(db);
+  batch.set(sdk.doc(db,'groups',groupId),{ownerUid:uid,name,createdAt:time});
+  batch.set(sdk.doc(db,'users',uid,'groupIndex',groupId),{uid,groupId,createdAt:time});
+  await batch.commit();
+  already=true;$('result').textContent='記事簿：'+name+'\nID：'+groupId+'\n已建立，正在加入兩筆虛構記事';
+  guard();
+  const notes=sdk.writeBatch(db);
+  for(const n of ['test_note_01','test_note_02']){
+   notes.set(sdk.doc(db,'groups',groupId,'notes',n),{ownerUid:uid,groupId,title:n,content:'V4D 虛構驗收資料',createdAt:sdk.Timestamp.now(),updatedAt:sdk.Timestamp.now(),version:1,deleted:false});
+  }
+  await notes.commit();
+  await sdk.updateDoc(sdk.doc(db,'groups',groupId,'notes','test_note_02'),{version:2,deleted:true,updatedAt:sdk.Timestamp.now()});
+  guard();const g=await sdk.getDocFromServer(sdk.doc(db,'groups',groupId));
+  if(!g.exists()||g.data().ownerUid!==uid)throw Error('雲端核對失敗');
+  $('result').textContent='建立成功！\n名稱：'+name+'\nID：'+groupId+'\n2 筆虛構記事（其中一筆軟刪除）';
+  notice('已建立獨立測試記事簿，不影響其他資料。');
+ }catch(e){notice('部分操作未完成：'+(e.code||e.message)+'。若已出現 ID，請截圖，勿重建。')}
+ finally{busy=false;buttons()}
+};
+init().catch(e=>notice('安全初始化失敗：'+e.message));
+</script></body></html>
