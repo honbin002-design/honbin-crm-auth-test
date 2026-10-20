@@ -7,7 +7,12 @@ const database=new Map();const writes=[];
 const timestamp=()=>({server:true});
 const sdk={
   collection(_db,...parts){return {path:parts.join('/')}},
-  doc(_db,...parts){return {path:parts.join('/')}},
+  doc(base,...parts){
+   if(base&&typeof base.path==='string'){
+    return {path:base.path+'/'+(parts.length?parts.join('/'):'synthetic_id')};
+   }
+   return {path:parts.join('/')};
+  },
   getDocs:async ref=>({docs:[...database.entries()].filter(([p])=>p.startsWith(ref.path+'/'))
     .map(([path,value])=>({id:path.split('/').at(-1),data:()=>({...value})}))}),
   serverTimestamp:timestamp,
