@@ -2,6 +2,10 @@
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
 <title>鴻繽｜記事與任務 TEST V2</title>
+<link rel="manifest" href="./workspace-manifest.webmanifest">
+<meta name="theme-color" content="#205a9a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="鴻繽記事">
 <style>
 :root{font:16px/1.55 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#20334d;background:#f5f7fb}
 *{box-sizing:border-box}body{max-width:720px;margin:auto;padding:14px 14px 90px}
@@ -102,6 +106,13 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <label for="nickname">我的公開暱稱</label><input id="nickname" maxlength="24" placeholder="輸入想讓其他成員看到的暱稱">
    <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱（待權限驗收）</button></div>
    <p id="nicknameHint" class="warning">不再使用「僅本機暱稱」。須完成 Firestore 共用個人檔案規則驗收後，才可讓所有成員跨裝置看到你的暱稱。</p>
+  </div>
+  <div class="panel" id="pushReadiness">
+   <h2>iPhone 通知</h2>
+   <p class="hint">目標：鎖定畫面可收到任務指派、任務完成與新共用記事。請先將本 TEST 網頁「加入主畫面」。</p>
+   <button id="checkPush" class="alt" type="button">檢查手機推播準備狀態</button>
+   <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
+   <p class="warning">背景通知目前尚未開通：仍需要免費的伺服器端發送與訂閱者身分驗證。在此階段不會向你的手機索取推播權限，也不會產生任何訂閱資料。</p>
   </div>
   <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿與工程驗收保留在進階頁；日常邀請、接受邀請和成員權限管理都在本設定頁完成。</p>
    <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a>
@@ -565,6 +576,25 @@ $('taskForm').onsubmit=e=>{e.preventDefault();
   check(s);$('taskForm').reset();setTaskForm(false);await loadTasks();say('任務已發布，伺服器確認成功。');
  });
 };
+async function checkPushReadiness(){
+ const out=$('pushStatus');
+ if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){
+  out.textContent='這個瀏覽環境缺少 Web Push 功能。請使用 iPhone 的主畫面網頁 App。';
+  return;
+ }
+ const standalone=window.matchMedia('(display-mode: standalone)').matches||
+   navigator.standalone===true;
+ if(!standalone){
+  out.textContent='目前在一般 Safari 網頁中。請用 Safari 分享 → 加入主畫面，從主畫面開啟「鴻繽記事」。此步不會要求通知權限。';
+  return;
+ }
+ const registration=await navigator.serviceWorker.register('./push-sw.js',{scope:'./'});
+ if(!registration||!registration.pushManager)throw Error('SERVICE_WORKER_PUSH_UNAVAILABLE');
+ out.textContent='主畫面 App 與 Service Worker 已準備完成；目前通知權限：'+
+    ({granted:'已允許',denied:'已拒絕',default:'尚未要求'}[Notification.permission]||'未確認')+
+    '。背景通知發送端與身分核對尚未完成，因此不會建立推播訂閱。';
+}
+$('checkPush').onclick=()=>run(checkPushReadiness);
 $('login').onclick=()=>{if(!auth)return;sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider()).catch(e=>say(String(e?.code||e?.message||e)))};
 $('logout').onclick=()=>{if(auth)sdk.signOut(auth).catch(e=>say(String(e?.code||e?.message||e)))};
 async function start(){
