@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>V4D｜清理後獨立唯讀驗證</title>
+<style>
+body{max-width:700px;margin:auto;padding:18px 14px 80px;background:#f4f7fb;color:#23354c;font:16px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+section{border:1px solid #d7e2ee;border-radius:14px;padding:18px;margin:14px 0;background:white}
+h1{font-size:1.4rem}h2{font-size:1.15rem}
+button{font:inherit;background:#215c9d;color:white;border:0;border-radius:10px;padding:12px 15px;margin:5px 5px 5px 0;min-height:46px}
+button:disabled{opacity:.4}
+pre,p{overflow-wrap:anywhere}pre{white-space:pre-wrap}
+.warning{padding:12px;border-left:4px solid #b47a20;background:#fff5e6}
+</style></head><body>
+<h1>V4D｜第一階段清理後獨立驗證</h1>
+<p class="warning">只讀取指定虛構記事簿的雲端狀態。本頁沒有任何資料寫入或刪除功能。確認 PASS 前，請勿手動刪除記事簿主文件。</p>
+<section><h2>Google 擁有者驗證</h2>
+<p id="identity">尚未登入</p>
+<button type="button" id="login" disabled>Google 登入</button><button type="button" id="logout" disabled>登出</button>
+<p id="status" role="status" aria-live="polite">等待擁有者身分驗證。</p></section>
+<section><h2>核對指定記事簿</h2>
+<p>記事簿：<strong>V4D_永久刪除測試_023fd069</strong></p>
+<p>ID：<code>v4d_test_efbbf2dced534cb5a6f1d117023fd069</code></p>
+<button type="button" id="verify" disabled>從伺服器重新核對清理結果</button>
+<pre id="result" aria-live="polite">尚未驗證。</pre>
+<p>請截圖回傳驗證結果，確認後才進入 Firebase Console 主文件刪除階段。</p></section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,doc,collection,getDocFromServer,getDocsFromServer} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const TARGET='v4d_test_efbbf2dced534cb5a6f1d117023fd069';
+const NAME='V4D_永久刪除測試_023fd069';
+const DELETE_EPOCH='5e2bbde9fbc345e78068a8caeedbc7c9';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,ownerUid=null,busy=false;
+const status=x=>$('status').textContent=x;
+const buttons=()=>{
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('verify').disabled=!ownerUid||busy;
+};
+const guard=()=>{if(!ownerUid||auth.currentUser?.uid!==ownerUid)throw Error('OWNER_SESSION_CHANGED')};
+async function identify(user){
+ ownerUid=null;buttons();
+ if(!user){$('identity').textContent='尚未登入';status('請以原 Google 管理員帳號登入。');return}
+ const token=await getIdTokenResult(user);
+ if(!user.emailVerified||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('VERIFIED_GOOGLE_REQUIRED');
+ await getDocsFromServer(collection(db,'approvedAccounts'));
+ if(auth.currentUser?.uid!==user.uid)throw Error('OWNER_CHANGED');
+ ownerUid=user.uid;
+ $('identity').textContent='唯一擁有者驗證通過：'+user.email;
+ status('請按「從伺服器重新核對清理結果」。');buttons();
+}
+async function verify(){
+ if(!ownerUid||busy)return;
+ busy=true;buttons();status('正在重新讀取 Firebase 伺服器；不會修改資料。');
+ try{
+  guard();
+  const group=await getDocFromServer(doc(db,'groups',TARGET));guard();
+  if(!group.exists())throw Error('ROOT_NOT_PRESENT_DO_NOT_CONTINUE');
+  const g=group.data();
+  if(g.ownerUid!==ownerUid||g.name!==NAME||g.deleteState!=='DELETING'||g.deletionId!==DELETE_EPOCH)
+   throw Error('LOCKED_ROOT_OR_DELETE_EPOCH_MISMATCH');
+  const [notes,members,invites,ownerIndex]=await Promise.all([
+   getDocsFromServer(collection(db,'groups',TARGET,'notes')),
+   getDocsFromServer(collection(db,'groups',TARGET,'members')),
+   getDocsFromServer(collection(db,'groups',TARGET,'sentInvites')),
+   getDocFromServer(doc(db,'users',ownerUid,'groupIndex',TARGET))
+  ]);
+  guard();
+  if(notes.size!==0||members.size!==0||invites.size!==0)throw Error('NONEMPTY_CHILD_COLLECTION');
+  if(!ownerIndex.exists()||ownerIndex.data().uid!==ownerUid||ownerIndex.data().groupId!==TARGET)
+   throw Error('OWNER_POINTER_MISSING_OR_MISMATCH');
+  const groupAgain=await getDocFromServer(doc(db,'groups',TARGET));guard();
+  if(!groupAgain.exists()||groupAgain.data().deletionId!==DELETE_EPOCH||
+     groupAgain.data().deleteState!=='DELETING')throw Error('SECOND_ROOT_READBACK_FAILED');
+  $('result').textContent=
+   '伺服器獨立驗收：PASS\n'+
+   '指定記事簿 ID：'+TARGET+'\n'+
+   '鎖定狀態：DELETING\n'+
+   '刪除 ID：'+DELETE_EPOCH+'\n'+
+   '記事：0\n成員：0\n送出邀請：0\n'+
+   '主文件：仍存在\n本人索引：仍存在且符合\n'+
+   '已完成兩次主文件讀取，未修改任何資料。\n'+
+   '下一步：將此畫面傳回 ChatGPT，不要自行刪除主文件。';
+  status('V4D 第一階段獨立唯讀驗收 PASS；無寫入、無刪除。');
+ }catch(e){$('result').textContent='獨立驗收未通過：'+String(e.code||e.message);
+  status('停止進入主文件刪除階段，請截圖回傳。')}
+ finally{busy=false;buttons()}
+}
+$('verify').addEventListener('click',verify);
+$('login').addEventListener('click',async()=>{try{
+ await setPersistence(auth,browserSessionPersistence);
+ await signInWithPopup(auth,new GoogleAuthProvider());
+ }catch(e){status('登入未完成：'+String(e.code||e.message))}});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>status(String(e.code||e.message))));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  ownerUid=null;buttons();
+  try{await identify(user)}catch(e){ownerUid=null;buttons();status('擁有者驗證失敗：'+String(e.code||e.message))}
+ });
+ buttons();
+}
+start().catch(e=>status('初始化失敗：'+String(e.code||e.message)));
+</script></body></html>
