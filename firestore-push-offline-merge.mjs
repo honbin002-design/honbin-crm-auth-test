@@ -4,8 +4,8 @@ const target='match /pushSubscriptions/{subscriberUid}/devices/{deviceId}';
 export function mergeTestPushRules(current,fragment){
  if(typeof current!=='string'||typeof fragment!=='string'
    ||current.length<1000||fragment.length<500)throw Error('INVALID_RULE_INPUT');
- if(!current.includes('BEGIN TEST TASK ACL EXTENSION')
-  ||!current.includes('BEGIN TEST NICKNAME ACL EXTENSION')
+ if(!/match\\s+\\/tasks\\/\\{taskId\\}\\s*\\{/.test(current)
+  ||!/match\\s+\\/profiles\\/\\{profileUid\\}\\s*\\{/.test(current)
   ||!current.includes('function googleUser()')
   ||!current.includes('function safeNoteUpdate('))
   throw Error('REQUIRED_BASELINE_MISSING');
