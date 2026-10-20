@@ -114,6 +114,12 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
    <p class="warning">背景通知目前尚未開通：仍需要免費的伺服器端發送與訂閱者身分驗證。在此階段不會向你的手機索取推播權限，也不會產生任何訂閱資料。</p>
   </div>
+  <div class="panel" id="liveRulesReadOnly">
+   <h2>TEST 伺服器規則唯讀核對</h2>
+   <p class="hint">直接向 Firestore 伺服器讀取「自己的公開暱稱」、「自己的私人推播訂閱」及「已加入群組的任務」。不建立、修改或刪除任何資料，不會要求通知權限。</p>
+   <button id="checkLiveRules" class="alt" type="button">核對已發布規則（唯讀）</button>
+   <p id="liveRulesStatus" class="hint" role="status" aria-live="polite">尚未核對；不代表已啟用任務或背景推播。</p>
+  </div>
   <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿與工程驗收保留在進階頁；日常邀請、接受邀請和成員權限管理都在本設定頁完成。</p>
    <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a>
    <p id="rulesOwnerLink" hidden><a href="./firestore-task-nickname-merge-review.html">共用暱稱／指定任務：TEST 規則安全核對工具</a></p></div>
@@ -629,6 +635,44 @@ async function checkPushReadiness(){
     '。背景通知發送端與身分核對尚未完成，因此不會建立推播訂閱。';
 }
 $('checkPush').onclick=()=>run(checkPushReadiness);
+async function checkLiveRulesReadOnly(){
+ if(!authenticated)throw Error('請先登入已核准的 Google 帳號');
+ const ss=session(),out=$('liveRulesStatus');
+ if(typeof sdk.getDocFromServer!=='function'||typeof sdk.getDocsFromServer!=='function')
+  throw Error('SERVER_ONLY_FIRESTORE_SDK_REQUIRED');
+ out.textContent='正在直接讀取 Firestore 伺服器權限；全程唯讀……';
+ const checked=[];
+ const verify=async(label,operation)=>{
+  try{
+   await operation();check(ss);
+   checked.push(label+'：SERVER READ PASS');return true;
+  }catch(error){
+   check(ss);
+   checked.push(label+'：HOLD（'+String(error?.code||error?.message||error)+'）');
+   return false;
+  }
+ };
+ const profile=await verify('公開暱稱',()=>sdk.getDocFromServer(sdk.doc(db,'profiles',ss.uid)));
+ const subscriptions=await verify('本人推播訂閱',()=>sdk.getDocsFromServer(
+   sdk.collection(db,'pushSubscriptions',ss.uid,'devices')));
+ let task=false;
+ try{
+  const membership=await groups.listGroups();check(ss);
+  const group=membership[0];
+  if(group){
+   task=await verify('群組任務',()=>sdk.getDocsFromServer(
+    sdk.collection(db,'groups',group.id,'tasks')));
+  }else checked.push('群組任務：HOLD（尚未加入可讀取的群組）');
+ }catch(error){
+  check(ss);checked.push('群組任務：HOLD（'+String(error?.code||error?.message||error)+'）');
+ }
+ out.textContent=checked.join('\n')+'\n'+
+  (profile&&subscriptions&&task
+   ?'三項已發布規則之伺服器唯讀核對 PASS；尚未驗收寫入／越權拒絕／實際推播。'
+   :'至少一項核對未通過，暫停啟用。請傳送此畫面供排查。');
+}
+$('checkLiveRules').onclick=()=>run(checkLiveRulesReadOnly);
+
 $('login').onclick=()=>{if(!auth)return;sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider()).catch(e=>say(String(e?.code||e?.message||e)))};
 $('logout').onclick=()=>{if(auth)sdk.signOut(auth).catch(e=>say(String(e?.code||e?.message||e)))};
 async function start(){
