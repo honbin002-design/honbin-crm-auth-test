@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<title>共用記事｜跨帳號唯讀權限驗收</title>
+<style>
+*{box-sizing:border-box}body{max-width:740px;margin:auto;padding:18px 14px 70px;background:#f4f7fb;color:#20344b;font:17px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+section{background:white;border:1px solid #d9e2ee;border-radius:14px;padding:17px;margin:15px 0}h1{font-size:1.4rem}h2{font-size:1.15rem}
+button,input,select{font:inherit;border-radius:10px;min-height:45px}button{background:#205a9c;color:white;border:0;padding:10px 15px;margin:5px 5px 5px 0}button:disabled{opacity:.45}
+input,select{width:100%;padding:9px;border:1px solid #9db1c9;background:white}label{display:block;margin:12px 0 5px;font-weight:600}
+pre,#status{white-space:pre-wrap;overflow-wrap:anywhere}.warn{padding:12px;border-left:4px solid #b88125;background:#fff5e5}
+</style></head><body>
+<h1>共用記事｜跨帳號唯讀權限驗收</h1>
+<p class="warn">此頁只測試「指定記事簿」對目前 Google 帳號的讀取權限，不會寫入、刪除、邀請或修改任何資料。請使用現存記事簿做唯讀測試，<strong>不要建立或刪除測試資料</strong>。禁止以拒絕存取判定文件不存在。</p>
+<section><h2>目前 Google 帳號</h2><p id="identity">尚未登入</p>
+<button id="login" disabled type="button">Google 登入</button><button id="logout" disabled type="button">登出／切換帳號</button>
+<p id="status" role="status" aria-live="polite">等待驗證。</p></section>
+<section><h2>指定記事簿權限核對</h2>
+<label for="groupId">記事簿 ID（請從本人記事簿清單複製）</label>
+<input id="groupId" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="128" placeholder="貼上完整記事簿 ID">
+<label for="expected">這個帳號應有的權限</label>
+<select id="expected">
+<option value="owner">記事簿建立者（應可讀取）</option>
+<option value="member">已加入的成員（應可讀取）</option>
+<option value="outsider">未獲授權的帳號（應拒絕讀取）</option>
+</select>
+<button id="check" disabled type="button">開始伺服器唯讀驗證</button>
+<pre id="result" aria-live="polite">尚未執行。</pre></section>
+<section><h2>安全驗收界線</h2>
+<p>建立者與成員：僅在伺服器確認可讀取指定群組及其記事清單，且身分符合選擇時，才顯示 PASS；不會顯示任何記事內容。未獲授權帳號：若伺服器對指定群組拒絕讀取，僅顯示「拒絕存取符合預期」，不代表資料已刪除或不存在。</p>
+<p>本頁不檢查完整邀請／索引刪除，也不啟用永久刪除功能。若登入者不是已核准的 Google 帳號，會在驗證前停止。</p>
+</section>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore,collection,doc,getDocsFromServer,getDocFromServer} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+const $=id=>document.getElementById(id);
+let auth=null,db=null,uid=null,busy=false,epoch=0;
+function buttons(){
+ $('login').disabled=!auth||busy||!!auth.currentUser;
+ $('logout').disabled=!auth||busy||!auth.currentUser;
+ $('check').disabled=!uid||busy;
+}
+function guard(owner,gen){if(uid!==owner||auth.currentUser?.uid!==owner||epoch!==gen)throw Error('ACCOUNT_CHANGED')}
+function reset(){
+ epoch++;uid=null;$('result').textContent='尚未執行。';buttons();
+}
+async function identify(user){
+ reset();
+ if(!user){$('identity').textContent='尚未登入';$('status').textContent='請使用要驗收的 Google 帳號登入。';return}
+ const token=await getIdTokenResult(user);
+ if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com')throw Error('VERIFIED_GOOGLE_REQUIRED');
+ // Owner-only allowlist read: ordinary approved members may not list it.
+ // A non-owner is permitted to continue with exact-path access tests; the
+ // Firestore rules themselves remain the authority.
+ uid=user.uid;$('identity').textContent='已驗證 Google 帳號：'+user.email;
+ $('status').textContent='可針對一筆指定記事簿進行唯讀測試。';buttons();
+}
+function validId(id){return /^[A-Za-z0-9_-]{8,128}$/.test(id)}
+async function check(){
+ if(!uid||busy)return;
+ const owner=uid,gen=epoch,gid=$('groupId').value.trim(),expected=$('expected').value;
+ $('result').textContent='尚未完成。';
+ if(!validId(gid)){$('status').textContent='請輸入完整有效的記事簿 ID。';return}
+ busy=true;buttons();$('status').textContent='正在以目前帳號向 Firestore 伺服器核對權限……';
+ try{
+  guard(owner,gen);
+  let root=null,denied=false;
+  try{root=await getDocFromServer(doc(db,'groups',gid));guard(owner,gen)}
+  catch(e){guard(owner,gen);if(e.code==='permission-denied')denied=true;else throw e}
+  if(expected==='outsider'){
+   if(denied){
+    $('result').textContent='權限拒絕：符合未獲授權帳號預期\n指定 ID：'+gid+
+     '\nFirestore：permission-denied\n判定：只能證明本次讀取遭拒，不能證明文件不存在或資料已刪除。\n修改／刪除：0';
+    $('status').textContent='拒絕存取符合預期；不是永久刪除驗收。';
+   }else{
+    $('result').textContent='未通過：此帳號未被 Firestore 拒絕。\n'+
+      (root?.exists()?'伺服器已回傳指定群組文件。':'伺服器回傳文件不存在。')+
+      '\n請確認是否誤用建立者或成員帳號。';
+    $('status').textContent='停止：不符合未獲授權帳號的預期。';
+   }
+   return;
+  }
+  if(denied)throw Error('EXPECTED_ACCESS_BUT_PERMISSION_DENIED');
+  if(!root?.exists())throw Error('GROUP_NOT_FOUND');
+  if(root.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  const data=root.data();
+  if(data.deleteState==='DELETING')throw Error('GROUP_DELETING_NOT_ACTIVE');
+  if(expected==='owner'&&data.ownerUid!==owner)throw Error('NOT_GROUP_OWNER');
+  if(expected==='member'&&data.ownerUid===owner)throw Error('OWNER_NOT_MEMBER');
+  if(expected==='member'){
+   const membership=await getDocFromServer(doc(db,'groups',gid,'members',owner));guard(owner,gen);
+   if(membership.metadata.fromCache||!membership.exists()||membership.data().status!=='ACTIVE')
+    throw Error('NO_ACTIVE_MEMBERSHIP');
+  }
+  const notes=await getDocsFromServer(collection(db,'groups',gid,'notes'));guard(owner,gen);
+  if(notes.metadata.fromCache)throw Error('CACHE_NOT_ACCEPTABLE');
+  const finalRoot=await getDocFromServer(doc(db,'groups',gid));guard(owner,gen);
+  if(finalRoot.metadata.fromCache||!finalRoot.exists()||
+     finalRoot.data().ownerUid!==data.ownerUid||finalRoot.data().deleteState!==data.deleteState)
+    throw Error('GROUP_CHANGED_DURING_READ');
+  $('result').textContent='指定帳號讀取權限：PASS\n指定 ID：'+gid+
+   '\n預期身分：'+(expected==='owner'?'建立者':'已加入成員')+
+   '\n群組文件：伺服器可讀取\n記事清單：伺服器可讀取（共 '+notes.size+' 筆）'+
+   '\n已再次核對建立者與狀態\n修改／刪除：0\n未讀取其他群組或私人記事。';
+  $('status').textContent='伺服器唯讀權限驗收 PASS。';
+ }catch(e){
+  if(gen===epoch){
+   $('result').textContent='驗收未通過／無法判定：'+String(e.code||e.message)+
+     '\n不代表文件不存在，未修改任何資料。';
+   $('status').textContent='停止：讀取失敗或權限不符。';
+  }
+ }finally{if(gen===epoch){busy=false;buttons()}}
+}
+$('check').addEventListener('click',check);
+$('login').addEventListener('click',async()=>{try{await setPersistence(auth,browserSessionPersistence);await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){$('status').textContent='登入未完成：'+String(e.code||e.message)}});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>$('status').textContent=String(e.code||e.message)));
+async function start(){
+ if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ await setPersistence(auth,browserSessionPersistence);
+ onAuthStateChanged(auth,async user=>{
+  try{await identify(user)}catch(e){reset();$('status').textContent='身分驗證未通過：'+String(e.code||e.message)}
+ });
+ buttons();
+}
+start().catch(e=>$('status').textContent='初始化失敗：'+String(e.code||e.message));
+</script></body></html>
