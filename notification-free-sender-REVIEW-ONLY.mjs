@@ -49,12 +49,23 @@ async function main(){
   }catch{/* Fail closed if auth/approval lookup fails. */}
   accountCache.set(uid,ok);return ok;
  }
+ async function stillMember(groupId,uid){
+  const groupRef=db.collection('groups').doc(groupId);
+  const live=await groupRef.get();
+  if(!live.exists)return false;
+  if(live.data().ownerUid===uid)return true;
+  const member=await groupRef.collection('members').doc(uid).get();
+  return member.exists&&member.data().status==='ACTIVE'&&
+    ['ADMIN','EDITOR','VIEWER'].includes(member.data().role);
+ }
  async function sendEvent(event){
   for(const uid of event.recipients){
-   if(!await approved(uid))continue;
+   if(!await approved(uid)||!await stillMember(event.payload.groupId,uid))continue;
    const devices=await db.collection('pushSubscriptions').doc(uid)
     .collection('devices').get();
    for(const device of devices.docs){
+    // Membership can be revoked while this job is processing other devices.
+    if(!await stillMember(event.payload.groupId,uid))break;
     const subscription=device.data();
     if(!appleEndpoint(subscription.endpoint)||!subscription.p256dh||
       !subscription.auth)continue;
