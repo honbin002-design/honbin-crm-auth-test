@@ -29,7 +29,7 @@ const alter=(from,to)=>{
 };
 alter('allow delete: if false;','allow delete: if true ;');
 alter('request.resource.data.completedAt == request.time',
- 'request.resource.data.completedAt == request.times');
+ 'request.resource.data.completedAt == request.timf');
 assert.throws(()=>verifyCandidateExact(expected.merged+' ',archive,task,push),
  /CANDIDATE_LENGTH_MISMATCH/);
 assert.throws(()=>verifyCandidateExact(expected.merged.replace(uid,'B'.repeat(28)),archive,task,push),
