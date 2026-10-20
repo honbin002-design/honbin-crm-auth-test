@@ -255,6 +255,7 @@ async function execute(work){
    // On revocation hide any previously displayed content; server rules
    // remain authoritative for all notes, invites and memberships.
    clearSensitive();
+   busy=false;
    try{await sdk.signOut(auth)}catch{}
    msg('雲端拒絕本次操作：帳號核准或記事簿權限可能已變更。請重新登入核對。');
    return;
