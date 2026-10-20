@@ -34,3 +34,5 @@ jobs:
         run: node notebook-v4d-target-cleanup-phase1-preflight.mjs
       - name: Verify V4D independent locked-root post-cleanup readback
         run: node notebook-v4d-target-postcleanup-readback-preflight.mjs
+      - name: Verify V4D final post-deletion index readback is read-only
+        run: node notebook-v4d-final-index-readback-preflight.mjs
