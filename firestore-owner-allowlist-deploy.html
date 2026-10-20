@@ -1,0 +1,383 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HONBIN CRM｜擁有者白名單規則發布</title><style>body{font:16px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;max-width:760px;margin:auto;padding:18px;background:#f8fafc;color:#1c2c3b}h1{font-size:1.45rem}section{background:white;border:1px solid #dbe2e9;border-radius:14px;padding:16px;margin:14px 0}button,a.action{display:inline-block;border:0;border-radius:10px;background:#1464bd;color:white;font-weight:650;font-size:1rem;padding:13px 15px;margin:5px 5px 5px 0;text-decoration:none}button:disabled{background:#8793a3}label{display:block;margin:12px 0}textarea{box-sizing:border-box;width:100%;height:135px;font-size:12px}li{margin:9px 0}.muted{color:#59697a}#identity,#result{overflow-wrap:anywhere;font-weight:650}</style></head><body>
+<h1>HONBIN CRM｜擁有者帳號白名單規則</h1>
+<p>此頁使用已通過 <b>36 項真實 Firestore 模擬器白名單測試</b>的獨立規則。只有你的 Firebase 擁有者 Google 帳號能管理整個 CRM 的核准清單。</p>
+<section><h2>步驟一｜確認唯一擁有者</h2><p id="identity">尚未驗證擁有者 Google 帳號。</p><button id="login" type="button">使用我的 Google 帳號驗證</button><button id="logout" type="button">切換 Google 帳號</button>
+<label><input id="confirm" type="checkbox" disabled> 我確認上方 Google 帳號是 CRM 唯一的全域核准管理員（發布後不可由其他人修改）。</label>
+<p class="muted">規則會在此 iPhone 上自動填入登入帳號的 Firebase UID；不會把 UID 或 Email 上傳到 GitHub，也不需要手動輸入。</p></section>
+<section><h2>步驟二｜複製限定權限規則</h2><button id="copy" type="button" disabled>一鍵複製完整白名單安全規則</button><p id="result" role="status" aria-live="polite">請先登入並確認擁有者帳號。</p>
+<details><summary>展開規則原文（發布時將自動代入擁有者 UID）</summary><textarea id="preview" readonly spellcheck="false"></textarea></details></section>
+<section><h2>步驟三｜到 Firebase Console 發布</h2><ol><li>先確認上方顯示的 Google 帳號就是你要指定的唯一管理員。</li><li>勾選確認後，按「一鍵複製完整白名單安全規則」。</li><li>開啟 Firebase Console，確認專案為 <b>honbin-crm-notes-spark</b>。</li><li>進入 Firestore Database → 規則，將原本的內容全部取代，貼上新規則並按「發布」。</li><li>回到 ChatGPT 告訴我「白名單規則已發布」，再繼續啟用記事測試站。</li></ol>
+<a class="action" href="https://console.firebase.google.com/project/honbin-crm-notes-spark/firestore/rules" target="_blank" rel="noopener">開啟 Firebase 規則設定</a>
+<p class="muted">若看到 Blaze 升級、計費要求或規則錯誤，請停止並回報。此頁不會直接寫入 Firebase，也不會更動正式 CRM。</p></section>
+<section><h2>發布後管理帳號</h2><p>只有你可在白名單管理頁核准或撤銷其他 Google Email；每本共用記事簿還有獨立邀請權限。</p><a class="action" href="./approved-accounts.html">開啟 Google 帳號核准管理</a></section>
+<textarea id="template" hidden readonly>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Independent Google-first alternative ONLY. NEVER deploy unreviewed rules.
+    // Verified Google identity alone is NOT permission to use HONBIN CRM.
+    // __OWNER_UID__ is substituted ONLY locally in the user's deployment
+    // helper after Firebase Authentication verifies the intended owner.
+    function rawGoogleUser() {
+      return request.auth != null
+        &amp;&amp; request.auth.uid is string
+        &amp;&amp; request.auth.token.firebase.sign_in_provider == 'google.com'
+        &amp;&amp; request.auth.token.email is string
+        &amp;&amp; request.auth.token.email_verified == true;
+    }
+    function accountOwner() {
+      return rawGoogleUser() &amp;&amp; request.auth.uid == '__OWNER_UID__';
+    }
+    function approvalPath(email) {
+      return /databases/$(database)/documents/approvedAccounts/$(email);
+    }
+    function googleUser() {
+      return rawGoogleUser() &amp;&amp; (
+        accountOwner()
+        || (exists(approvalPath(request.auth.token.email.lower()))
+          &amp;&amp; get(approvalPath(request.auth.token.email.lower())).data.email
+               == request.auth.token.email.lower()
+          &amp;&amp; get(approvalPath(request.auth.token.email.lower())).data.status == 'ACTIVE')
+      );
+    }
+    function groupPath(groupId) {
+      return /databases/$(database)/documents/groups/$(groupId);
+    }
+    function memberPath(groupId, uid) {
+      return /databases/$(database)/documents/groups/$(groupId)/members/$(uid);
+    }
+
+    // Invite ID is unpredictable and invitations stay under the recipient
+    // Google email's own inbox. Neither email nor the browser is an actor ID.
+    function invitationPath(email, invitationId) {
+      return /databases/$(database)/documents/inboxes/$(email)/invites/$(invitationId);
+    }
+    function verifiedGoogleEmail(email) {
+      return googleUser()
+        &amp;&amp; request.auth.token.email is string
+        &amp;&amp; request.auth.token.email_verified == true
+        &amp;&amp; request.auth.token.email.lower() == email;
+    }
+    function inviteRedemption(groupId, invitationId, role) {
+      return googleUser()
+        &amp;&amp; request.auth.token.email is string
+        &amp;&amp; request.auth.token.email_verified == true
+        &amp;&amp; invitationId is string
+        &amp;&amp; exists(invitationPath(request.auth.token.email.lower(), invitationId))
+        &amp;&amp; get(invitationPath(request.auth.token.email.lower(), invitationId)).data.groupId == groupId
+        &amp;&amp; get(invitationPath(request.auth.token.email.lower(), invitationId)).data.recipientEmail
+             == request.auth.token.email.lower()
+        &amp;&amp; get(invitationPath(request.auth.token.email.lower(), invitationId)).data.role == role
+        &amp;&amp; get(invitationPath(request.auth.token.email.lower(), invitationId)).data.status == 'PENDING'
+        &amp;&amp; getAfter(invitationPath(request.auth.token.email.lower(), invitationId)).data.status == 'ACCEPTED'
+        &amp;&amp; getAfter(invitationPath(request.auth.token.email.lower(), invitationId)).data.acceptedUid
+             == request.auth.uid;
+    }
+    function recipientMembershipRedemption(groupId, memberUid) {
+      return googleUser() &amp;&amp; memberUid == request.auth.uid
+        &amp;&amp; request.resource.data.keys().hasAll(['uid','role','status','invitationId'])
+        &amp;&amp; request.resource.data.keys().hasOnly(['uid','role','status','invitationId'])
+        &amp;&amp; request.resource.data.uid == memberUid
+        &amp;&amp; request.resource.data.status == 'ACTIVE'
+        &amp;&amp; request.resource.data.role in ['ADMIN','EDITOR','VIEWER']
+        &amp;&amp; inviteRedemption(groupId, request.resource.data.invitationId,
+              request.resource.data.role);
+    }
+    function groupOwner(groupId) {
+      return googleUser() &amp;&amp; exists(groupPath(groupId))
+        &amp;&amp; get(groupPath(groupId)).data.ownerUid == request.auth.uid;
+    }
+    function activeMember(groupId) {
+      return googleUser() &amp;&amp; exists(memberPath(groupId, request.auth.uid))
+        &amp;&amp; get(memberPath(groupId, request.auth.uid)).data.status == 'ACTIVE';
+    }
+    function canViewGroup(groupId) {
+      return groupOwner(groupId) || activeMember(groupId);
+    }
+    function canEditGroup(groupId) {
+      return groupOwner(groupId)
+        || (activeMember(groupId)
+          &amp;&amp; get(memberPath(groupId, request.auth.uid)).data.role in ['ADMIN', 'EDITOR']);
+    }
+    function canAdminGroup(groupId) {
+      return groupOwner(groupId)
+        || (activeMember(groupId)
+          &amp;&amp; get(memberPath(groupId, request.auth.uid)).data.role == 'ADMIN');
+    }
+    function basicNote(data) {
+      return data.keys().hasOnly([
+          'ownerUid', 'groupId', 'title', 'content', 'createdAt',
+          'updatedAt', 'version', 'deleted'
+        ])
+        &amp;&amp; data.keys().hasAll([
+          'ownerUid', 'groupId', 'title', 'content', 'createdAt',
+          'updatedAt', 'version', 'deleted'
+        ])
+        &amp;&amp; data.ownerUid is string &amp;&amp; data.title is string
+        &amp;&amp; data.title.size() &lt;= 120
+        &amp;&amp; data.content is string &amp;&amp; data.content.size() &gt; 0
+        &amp;&amp; data.content.size() &lt;= 30000
+        &amp;&amp; data.version is int &amp;&amp; data.version &gt;= 1
+        &amp;&amp; data.deleted is bool
+        &amp;&amp; data.createdAt is timestamp &amp;&amp; data.updatedAt is timestamp;
+    }
+    function safeNoteUpdate() {
+      // Deleted notes are tombstones: never resurrect or rewrite their
+      // former content through a forged version increment.
+      return resource.data.deleted == false
+        &amp;&amp; basicNote(request.resource.data)
+        &amp;&amp; request.resource.data.version == resource.data.version + 1
+        &amp;&amp; request.resource.data.ownerUid == resource.data.ownerUid
+        &amp;&amp; request.resource.data.groupId == resource.data.groupId
+        &amp;&amp; request.resource.data.createdAt == resource.data.createdAt
+        &amp;&amp; request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['title', 'content', 'updatedAt', 'version', 'deleted']);
+    }
+
+    // Firebase Auth UID, not caller-provided email, is the durable identity.
+    match /users/{ownerUid}/notes/{noteId} {
+      allow get, list: if googleUser() &amp;&amp; request.auth.uid == ownerUid;
+      allow create: if googleUser() &amp;&amp; request.auth.uid == ownerUid
+        &amp;&amp; basicNote(request.resource.data)
+        &amp;&amp; request.resource.data.ownerUid == ownerUid
+        &amp;&amp; request.resource.data.groupId == null
+        &amp;&amp; request.resource.data.version == 1
+        &amp;&amp; request.resource.data.deleted == false;
+      allow update: if googleUser() &amp;&amp; request.auth.uid == ownerUid
+        &amp;&amp; safeNoteUpdate();
+      allow delete: if googleUser() &amp;&amp; request.auth.uid == ownerUid;
+    }
+
+    // User-owned discovery POINTERS only: never expose groups globally.
+    // Pointer contains no group title or other members' details.
+    // The client must get the actual group document separately; revoked
+    // members receive permission-denied even when their stale pointer remains.
+    match /users/{ownerUid}/groupIndex/{groupId} {
+      allow get, list: if googleUser() &amp;&amp; request.auth.uid == ownerUid;
+      allow create: if googleUser() &amp;&amp; request.auth.uid == ownerUid
+        &amp;&amp; request.resource.data.keys().hasOnly(['uid','groupId','createdAt'])
+        &amp;&amp; request.resource.data.keys().hasAll(['uid','groupId','createdAt'])
+        &amp;&amp; request.resource.data.uid == ownerUid
+        &amp;&amp; request.resource.data.groupId == groupId
+        &amp;&amp; request.resource.data.createdAt is timestamp
+        &amp;&amp; (
+          canViewGroup(groupId)
+          // Allow creating the owner pointer atomically with a new group.
+          // Only the exact verified UID may own both records.
+          || getAfter(groupPath(groupId)).data.ownerUid == ownerUid
+        );
+      allow update: if false;
+      // A revoked person can clean up their own pointer, not group data.
+      allow delete: if googleUser() &amp;&amp; request.auth.uid == ownerUid;
+    }
+
+    match /groups/{groupId} {
+      allow get: if canViewGroup(groupId);
+      // Group discovery needs a separately designed, permission-checked index.
+      allow list: if false;
+      allow create: if googleUser()
+        &amp;&amp; request.resource.data.keys().hasOnly(['ownerUid','name','createdAt'])
+        &amp;&amp; request.resource.data.keys().hasAll(['ownerUid','name','createdAt'])
+        &amp;&amp; request.resource.data.ownerUid == request.auth.uid
+        &amp;&amp; request.resource.data.name is string
+        &amp;&amp; request.resource.data.name.size() &gt; 0
+        &amp;&amp; request.resource.data.name.size() &lt;= 120
+        &amp;&amp; request.resource.data.createdAt is timestamp;
+      allow update: if groupOwner(groupId)
+        &amp;&amp; request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        &amp;&amp; request.resource.data.name is string
+        &amp;&amp; request.resource.data.name.size() &gt; 0
+        &amp;&amp; request.resource.data.name.size() &lt;= 120;
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow get: if canAdminGroup(groupId)
+          || (googleUser() &amp;&amp; memberUid == request.auth.uid);
+        allow list: if canAdminGroup(groupId);
+        // The immutable group owner is implicitly ADMIN and cannot be revoked.
+        // Join is invitation-only, including when the caller is ADMIN.
+        // A group admin may INVITE but cannot directly insert a member by
+        // guessing UID. The Google-email holder must accept the invite in
+        // the same atomic batch as membership creation.
+        allow create: if memberUid != get(groupPath(groupId)).data.ownerUid
+          &amp;&amp; recipientMembershipRedemption(groupId, memberUid);
+        allow update: if (canAdminGroup(groupId)
+          &amp;&amp; memberUid != get(groupPath(groupId)).data.ownerUid
+          &amp;&amp; request.resource.data.uid == resource.data.uid
+          &amp;&amp; request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['role','status'])
+          &amp;&amp; request.resource.data.role in ['ADMIN','EDITOR','VIEWER']
+          &amp;&amp; request.resource.data.status in ['ACTIVE','REVOKED']
+          // Revoked membership may only be restored through a brand-new
+          // verified-email invitation, never by admin flipping the status.
+          &amp;&amp; (resource.data.status == 'ACTIVE'
+              || request.resource.data.status == 'REVOKED'))
+          || (memberUid != get(groupPath(groupId)).data.ownerUid
+            &amp;&amp; resource.data.status == 'REVOKED'
+            &amp;&amp; request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['role','status','invitationId'])
+            &amp;&amp; request.resource.data.invitationId != resource.data.get('invitationId', '')
+            &amp;&amp; recipientMembershipRedemption(groupId, memberUid));
+        allow delete: if false;
+      }
+
+      // Admin-only directory of sent invitations. Index is permanent but
+      // deliberately has no recipient note content or auth credential.
+      // Creating the index requires the corresponding real email invite
+      // to exist in the same committed server-side state.
+      match /sentInvites/{invitationId} {
+        allow get, list: if canAdminGroup(groupId);
+        allow create: if canAdminGroup(groupId)
+          &amp;&amp; request.resource.data.keys().hasOnly([
+            'groupId','recipientEmail','role','invitedBy','createdAt'])
+          &amp;&amp; request.resource.data.keys().hasAll([
+            'groupId','recipientEmail','role','invitedBy','createdAt'])
+          &amp;&amp; request.resource.data.groupId == groupId
+          &amp;&amp; request.resource.data.invitedBy == request.auth.uid
+          &amp;&amp; request.resource.data.recipientEmail is string
+          &amp;&amp; request.resource.data.recipientEmail.size() &lt;= 254
+          &amp;&amp; request.resource.data.role in ['ADMIN','EDITOR','VIEWER']
+          &amp;&amp; request.resource.data.createdAt is timestamp
+          &amp;&amp; getAfter(invitationPath(request.resource.data.recipientEmail,
+                            invitationId)).data.groupId == groupId
+          &amp;&amp; getAfter(invitationPath(request.resource.data.recipientEmail,
+                            invitationId)).data.recipientEmail
+               == request.resource.data.recipientEmail
+          &amp;&amp; getAfter(invitationPath(request.resource.data.recipientEmail,
+                            invitationId)).data.role == request.resource.data.role
+          &amp;&amp; getAfter(invitationPath(request.resource.data.recipientEmail,
+                            invitationId)).data.invitedBy == request.auth.uid
+          &amp;&amp; getAfter(invitationPath(request.resource.data.recipientEmail,
+                            invitationId)).data.status == 'PENDING';
+        allow update, delete: if false;
+      }
+
+      match /notes/{noteId} {
+        allow get, list: if canViewGroup(groupId);
+        allow create: if canEditGroup(groupId)
+          &amp;&amp; basicNote(request.resource.data)
+          &amp;&amp; request.resource.data.ownerUid == request.auth.uid
+          &amp;&amp; request.resource.data.groupId == groupId
+          &amp;&amp; request.resource.data.version == 1
+          &amp;&amp; request.resource.data.deleted == false;
+        // EDITOR may edit text but only ADMIN may soft-delete a shared
+        // article. The direct hard-delete rule below already is admin-only.
+        allow update: if canEditGroup(groupId) &amp;&amp; safeNoteUpdate()
+          &amp;&amp; (request.resource.data.deleted == resource.data.deleted
+              || canAdminGroup(groupId));
+        allow delete: if canAdminGroup(groupId);
+      }
+    }
+
+    // An invite can be created by group ADMIN for a recipient's verified
+    // Google email. Recipient may read ONLY their own exact inbox path.
+    // Acceptance MUST be in the same atomic Firestore write batch as joining.
+    match /inboxes/{recipientEmail}/invites/{invitationId} {
+      // A group's ADMIN can inspect a specific invitation already
+      // identified in its group-scoped sentInvites directory, but cannot
+      // enumerate a recipient's whole inbox or other groups' invites.
+      allow get: if verifiedGoogleEmail(recipientEmail)
+        || (googleUser() &amp;&amp; canAdminGroup(resource.data.groupId));
+      allow list: if verifiedGoogleEmail(recipientEmail);
+      allow create: if googleUser()
+        &amp;&amp; recipientEmail is string
+        &amp;&amp; recipientEmail.size() &lt;= 254
+        &amp;&amp; recipientEmail.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$')
+        &amp;&amp; request.resource.data.keys().hasOnly([
+          'groupId','recipientEmail','role','status','invitedBy'])
+        &amp;&amp; request.resource.data.keys().hasAll([
+          'groupId','recipientEmail','role','status','invitedBy'])
+        &amp;&amp; request.resource.data.recipientEmail == recipientEmail
+        &amp;&amp; request.resource.data.invitedBy == request.auth.uid
+        &amp;&amp; request.resource.data.role in ['ADMIN','EDITOR','VIEWER']
+        &amp;&amp; request.resource.data.status == 'PENDING'
+        &amp;&amp; canAdminGroup(request.resource.data.groupId);
+      allow update: if (
+        // Admin can cancel an unused invite; accepted invites stay consumed.
+        canAdminGroup(resource.data.groupId)
+        &amp;&amp; resource.data.status == 'PENDING'
+        &amp;&amp; request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status'])
+        &amp;&amp; request.resource.data.status == 'REVOKED'
+      ) || (
+        // No email self-assertion: Firebase-signed, verified Google email only.
+        verifiedGoogleEmail(recipientEmail)
+        &amp;&amp; resource.data.status == 'PENDING'
+        &amp;&amp; request.resource.data.status == 'ACCEPTED'
+        &amp;&amp; request.resource.data.acceptedUid == request.auth.uid
+        &amp;&amp; request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status','acceptedUid'])
+        // Must create / re-activate the exact matching UID membership atomically.
+        &amp;&amp; getAfter(memberPath(resource.data.groupId, request.auth.uid)).data.uid
+             == request.auth.uid
+        &amp;&amp; getAfter(memberPath(resource.data.groupId, request.auth.uid)).data.role
+             == resource.data.role
+        &amp;&amp; getAfter(memberPath(resource.data.groupId, request.auth.uid)).data.status
+             == 'ACTIVE'
+        &amp;&amp; getAfter(memberPath(resource.data.groupId, request.auth.uid)).data.invitationId
+             == invitationId
+      );
+      allow delete: if false;
+    }
+    // Only the verified, fixed owner UID may administer global access.
+    // A notebook ADMIN cannot authorize new CRM accounts.
+    match /approvedAccounts/{email} {
+      allow get, list: if accountOwner();
+      allow create: if accountOwner()
+        &amp;&amp; email is string &amp;&amp; email.size() &lt;= 254
+        &amp;&amp; email.matches('.*@.*[.].*')
+        &amp;&amp; email == email.lower()
+        &amp;&amp; request.resource.data.keys().hasOnly(['email','status','createdAt'])
+        &amp;&amp; request.resource.data.keys().hasAll(['email','status','createdAt'])
+        &amp;&amp; request.resource.data.email == email
+        &amp;&amp; request.resource.data.status == 'ACTIVE'
+        &amp;&amp; request.resource.data.createdAt is timestamp;
+      allow update: if accountOwner()
+        &amp;&amp; request.resource.data.email == resource.data.email
+        &amp;&amp; request.resource.data.createdAt == resource.data.createdAt
+        &amp;&amp; request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        &amp;&amp; request.resource.data.status in ['ACTIVE','REVOKED'];
+      allow delete: if accountOwner();
+    }
+    // No wildcard allowance: every other path must fail closed.
+  }
+}
+</textarea>
+<script type="module">
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+const $=id=>document.getElementById(id);
+if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
+const auth=getAuth(initializeApp(firebaseConfig)),provider=new GoogleAuthProvider();
+let currentUid=null;
+const reset=()=>{currentUid=null;$('confirm').checked=false;$('confirm').disabled=true;$('copy').disabled=true;$('preview').value='';};
+const say=s=>$('result').textContent=s;
+onAuthStateChanged(auth,async user=>{
+ reset();if(!user){$('identity').textContent='尚未登入。';say('請先登入並確認擁有者帳號。');return}
+ try{
+  const token=await getIdTokenResult(user);
+  if(user.emailVerified!==true||token.claims.firebase?.sign_in_provider!=='google.com'||!user.email||
+   !/^[A-Za-z0-9_-]{5,128}$/.test(user.uid)){await signOut(auth);say('無法確認已驗證的 Google 身分，請重新登入。');return}
+  currentUid=user.uid;$('identity').textContent='目前 Google 帳號：'+user.email+'（Email 已驗證）';
+  $('confirm').disabled=false;say('請確認這是你的唯一擁有者 Google 帳號。');
+ }catch(e){say('Google 身分確認失敗：'+(e.code||e.message))}
+});
+$('login').addEventListener('click',()=>{
+ setPersistence(auth,browserSessionPersistence).catch(e=>say('Session 設定失敗：'+(e.code||e.message)));
+ signInWithPopup(auth,provider).catch(e=>say('登入失敗：'+(e.code||e.message)));
+});
+$('logout').addEventListener('click',()=>signOut(auth).catch(e=>say('登出失敗：'+(e.code||e.message))));
+$('confirm').addEventListener('change',()=>{$('copy').disabled=!currentUid||!$('confirm').checked});
+$('copy').addEventListener('click',async()=>{
+ if(!currentUid||!$('confirm').checked)return;
+ const result=$('template').value.replaceAll('__OWNER_UID__',currentUid);
+ if(result.includes('__OWNER_UID__')||!result.includes('match /approvedAccounts/{email}')||!result.includes(currentUid)){say('規則產生驗證失敗，請勿發布。');return}
+ $('preview').value=result;
+ try{
+  if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(result)}
+  else{$('preview').focus();$('preview').select();if(!document.execCommand('copy'))throw Error('copy unavailable')}
+  say('已複製白名單安全規則！現在前往 Firebase Console 貼上並發布。');
+ }catch(e){$('preview').focus();$('preview').select();say('無法自動複製，已選取完整規則。請使用 iPhone「拷貝」。')}
+});
+</script></body></html>
