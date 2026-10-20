@@ -61,6 +61,7 @@ button:disabled{opacity:.45}button:focus-visible,input:focus-visible,textarea:fo
 <button id="cancel" type="button" class="secondary">放棄本機草稿</button>
 <button id="delete" type="button" class="danger" hidden>刪除記事</button>
 </div>
+<p id="operationProgress" class="muted" role="status" aria-live="polite">儲存與刪除各階段耗時會顯示在這裡（僅本機畫面，不上傳診斷資料）。</p>
 <p id="conflict" class="notice" hidden></p>
 <div id="conflictPanel" class="notice" hidden aria-live="polite">
  <h2>兩個版本需要你確認</h2>
@@ -93,6 +94,8 @@ import {conflictReview,buildSaveNewCopy,buildRemoteRestore} from './firebase-con
 const $=id=>document.getElementById(id);
 const node=(tag,value)=>{const e=document.createElement(tag);e.textContent=String(value??'');return e};
 const msg=text=>$('status').textContent=String(text);
+const operationProgress=text=>$('operationProgress').textContent=String(text);
+const seconds=ms=>(ms/1000).toFixed(1)+' 秒';
 let sdk=null,auth=null,db=null,notes=null,groups=null,account='',mode='PRIVATE';
 let selectedGroup=null,groupOptions=[],shown=[],active=null,pendingCreateId=null;
 let busy=false,ready=false,generation=0,editorDirty=false,revision=0;
@@ -261,6 +264,7 @@ async function execute(work){
    return;
   }
   msg(reason(e));
+  operationProgress('操作未完成：'+reason(e)+'。請勿反覆按儲存。');
  }finally{if(token===generation){busy=false;buttons();}}
 }
 async function loadGroups(){
@@ -460,15 +464,22 @@ $('saveCopy').addEventListener('click',()=>execute(async()=>{
 $('save').addEventListener('click',()=>execute(async()=>{
  const session=noteSession(),target=scope(),title=$('title').value,content=$('content').value;
  if(!active&&!pendingCreateId)pendingCreateId=session.service.newId(target);
- // Persist the exact create nonce/version BEFORE initiating cloud transaction.
- // Retrying after a lost ACK cannot silently create a second note.
+ // Preserve the existing local-first and server-ACK safety gates.
+ const start=Date.now();
+ operationProgress('儲存中：正在保存 iPhone 本機草稿，請勿重複按儲存。');
  await persistBeforeCloud();
+ const localMs=Date.now()-start;
  verifyNoteSession(session);
+ operationProgress('儲存中：本機草稿已保存（'+seconds(localMs)+'），正在等待 Firestore 交易回覆。');
  const result=active?
   await session.service.update({...target,noteId:active.id,expectedVersion:active.version,title,content}):
   await session.service.create({...target,noteId:pendingCreateId,title,content});
+ const cloudMs=Date.now()-start-localMs;
  verifyNoteSession(session);
+ operationProgress('雲端交易已確認（'+seconds(cloudMs)+'），正在重新讀取記事列表。');
  clearEditor();await loadNotes();
+ const reloadMs=Date.now()-start-localMs-cloudMs;
+ operationProgress('儲存完成｜本機 '+seconds(localMs)+'｜雲端 '+seconds(cloudMs)+'｜列表 '+seconds(reloadMs)+'｜總計 '+seconds(Date.now()-start));
  return (result.alreadyCreated?'已確認先前記事存在。':'已收到伺服器交易成功回覆。')+
    '目前版本：'+result.version;
 }));
@@ -476,11 +487,20 @@ $('delete').addEventListener('click',()=>{
  if(!active||!window.confirm('確定刪除此記事？將先標記刪除，不直接移除資料庫文件。'))return;
  execute(async()=>{
   const session=noteSession(),target=scope(),noteId=active.id,expectedVersion=active.version;
+  const start=Date.now();
+  operationProgress('刪除中：正在保存 iPhone 本機草稿，請勿重複按刪除。');
   await persistBeforeCloud();
+  const localMs=Date.now()-start;
   verifyNoteSession(session);
+  operationProgress('刪除中：本機已保存（'+seconds(localMs)+'），正在等待 Firestore 刪除標記交易。');
   await session.service.softDelete({...target,noteId,expectedVersion});
+  const cloudMs=Date.now()-start-localMs;
   verifyNoteSession(session);
-  clearEditor();await loadNotes();return '已由伺服器確認刪除標記。';
+  operationProgress('伺服器已確認刪除標記（'+seconds(cloudMs)+'），正在重新讀取列表。');
+  clearEditor();await loadNotes();
+  const reloadMs=Date.now()-start-localMs-cloudMs;
+  operationProgress('刪除完成｜本機 '+seconds(localMs)+'｜雲端 '+seconds(cloudMs)+'｜列表 '+seconds(reloadMs)+'｜總計 '+seconds(Date.now()-start));
+  return '已由伺服器確認刪除標記。';
  });
 });
 $('login').addEventListener('click',()=>{
