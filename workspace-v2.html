@@ -253,6 +253,127 @@ async function loadTasks(){
   root.append(box);
  }
 }
+function toggleInviteForm(open){
+ $('inviteForm').hidden=!open;
+ $('toggleInvite').setAttribute('aria-expanded',String(open));
+ $('toggleInvite').textContent=open?'收起邀請表單':'＋ 邀請新成員';
+}
+async function loadInvitePanel(){
+ if(!authenticated||!groups)return;
+ const s=session();
+ const all=await groups.listGroups();check(s);
+ inviteGroups=all.filter(g=>g.role==='ADMIN');
+ if(!inviteGroups.length){
+  inviteGroupId='';$('inviteManagement').hidden=true;inviteLoaded=true;return;
+ }
+ const found=inviteGroups.find(g=>g.id===inviteGroupId)||inviteGroups[0];
+ inviteGroupId=found.id;
+ const select=$('inviteGroup');select.replaceChildren();
+ for(const g of inviteGroups){
+  const opt=mk('option',g.name);opt.value=g.id;select.append(opt);
+ }
+ select.value=inviteGroupId;
+ $('inviteManagement').hidden=false;
+ await loadSentInvitations();
+ check(s);inviteLoaded=true;
+}
+async function loadSentInvitations(){
+ if(!authenticated||!groups||!inviteGroupId)return;
+ const s=session(),gid=inviteGroupId;
+ $('inviteStatus').textContent='正在重新核對已發出的邀請……';
+ if(await groups.myRole(gid)!=='ADMIN')throw Error('NOTEBOOK_ADMIN_REQUIRED');
+ check(s);
+ const sent=await groups.listSentInvites(gid);check(s);
+ if(gid!==inviteGroupId)return;
+ const root=$('sentInvites');root.replaceChildren();
+ if(!sent.length)root.append(mk('p','此群組尚未發出邀請。'));
+ for(const invite of sent){
+  const entry=mk('div');entry.className='line';
+  const name=mk('strong',invite.recipientEmail||'收件人未提供');
+  entry.append(name,mk('p','狀態：'+({PENDING:'待接受',ACCEPTED:'已接受',REVOKED:'已取消'}[invite.status]||invite.status)+
+    '｜權限：'+notebookRoleLabel(invite.role)));
+  root.append(entry);
+ }
+ $('inviteStatus').textContent='已核對 '+sent.length+' 筆邀請紀錄。尚未執行寫入。';
+ return sent;
+}
+async function loadReceivedInvitations(){
+ if(!authenticated||!groups)return;
+ const s=session(),inbox=await groups.listInbox();check(s);
+ const root=$('receivedInvites');root.replaceChildren();
+ const pending=inbox.filter(x=>x.status==='PENDING');
+ if(!pending.length)root.append(mk('p','目前沒有待接受的群組邀請。'));
+ for(const invitation of pending){
+  const entry=mk('div');entry.className='line';
+  entry.append(mk('strong','共用群組邀請'),
+    mk('p','權限：'+notebookRoleLabel(invitation.role)));
+  const accept=mk('button','接受邀請');accept.type='button';accept.className='alt';
+  accept.onclick=()=>run(async()=>{
+   if(!confirm('確認接受這個共用群組邀請？'))return;
+   accept.disabled=true;
+   try{
+    const result=await groups.acceptInvite(invitation);check(s);
+    if(!result.indexed)throw Error('INVITE_ACCEPTED_INDEX_PENDING');
+    await loadReceivedInvitations();check(s);
+    say('已完成加入群組；伺服器已確認。');
+    inviteLoaded=false;ownerLoadDone=false;
+   }finally{accept.disabled=false}
+  });
+  entry.append(accept);root.append(entry);
+ }
+ $('receivedInviteManagement').hidden=false;receivedLoaded=true;
+}
+$('inviteGroup').onchange=()=>run(async()=>{
+ inviteGroupId=$('inviteGroup').value;
+ toggleInviteForm(false);
+ await loadSentInvitations();
+});
+$('toggleInvite').onclick=()=>toggleInviteForm($('inviteForm').hidden);
+$('closeInvite').onclick=()=>toggleInviteForm(false);
+$('refreshSentInvites').onclick=()=>run(async()=>{
+ await loadSentInvitations();$('sendInvite').disabled=false;
+});
+$('refreshReceived').onclick=()=>run(loadReceivedInvitations);
+$('inviteForm').onsubmit=event=>{
+ event.preventDefault();
+ if(inviteSubmitting||!authenticated)return;
+ void run(async()=>{
+  const s=session(),groupId=inviteGroupId,
+   recipient=normalizedEmail($('inviteEmail').value),
+   role=$('inviteRole').value;
+  if(!inviteGroups.some(g=>g.id===groupId&&g.role==='ADMIN'))
+   throw Error('NOTEBOOK_ADMIN_REQUIRED');
+  if(!['VIEWER','EDITOR','ADMIN'].includes(role))throw Error('INVALID_ROLE');
+  if(auth?.currentUser?.email?.toLowerCase()===recipient)
+   throw Error('CANNOT_INVITE_SELF');
+  if(await groups.myRole(groupId)!=='ADMIN')throw Error('NOTEBOOK_ADMIN_REQUIRED');
+  check(s);
+  const current=await groups.listSentInvites(groupId);check(s);
+  if(current.some(x=>x.recipientEmail===recipient&&(x.status==='PENDING'||x.status==='ACCEPTED')))
+   throw Error('INVITATION_ALREADY_PENDING_OR_ACCEPTED');
+  if(!confirm('確定邀請 '+recipient+' 加入「'+
+    inviteGroups.find(g=>g.id===groupId)?.name+'」並授予 '+role+' 權限？\n不會自動寄送 Email。'))return;
+  inviteSubmitting=true;$('sendInvite').disabled=true;
+  $('inviteStatus').textContent='正在提交邀請到 Firestore，請勿重複點擊。';
+  try{
+   const sent=await groups.sendInvite(groupId,recipient,role);check(s);
+   if(!sent?.id)throw Error('INVITE_ACK_MISSING');
+   const verified=await groups.listSentInvites(groupId);check(s);
+   if(!verified.some(x=>x.id===sent.id&&x.recipientEmail===recipient&&x.role===role&&x.status==='PENDING'))
+    throw Error('INVITE_READBACK_UNCONFIRMED');
+   $('inviteEmail').value='';
+   toggleInviteForm(false);
+   await loadSentInvitations();check(s);
+   $('inviteStatus').textContent='邀請已由伺服器確認：'+recipient+'（'+role+'）。等待對方登入接受。';
+   say('邀請已成功建立；不會自動寄送 Email。');
+  }catch(err){
+   $('inviteStatus').textContent='邀請提交結果未確認：'+String(err?.code||err?.message||err)+
+     '。請先重新讀取邀請紀錄，避免重複發送。';
+   throw err;
+  }finally{inviteSubmitting=false}
+ });
+};
+
 async function loadOwnerManagement(){
  if(!authenticated||!ownerMembers)return;
  const s=session();
