@@ -421,8 +421,17 @@ async function loadOwnerRoster(){
    option.value=role;select.append(option);
   }
   select.value=member.role;
+  const pending=mk('p','目前角色：'+member.role);
+  pending.className='hint';
   const action=mk('button','儲存角色變更');
   action.className='alt';
+  action.disabled=true;
+  select.onchange=()=>{
+   const changed=select.value!==member.role;
+   pending.textContent=changed?'尚未儲存：目前 '+member.role+'，預計改為 '+select.value:'目前角色：'+member.role;
+   pending.className=changed?'warning':'hint';
+   action.disabled=!changed;
+  };
   action.onclick=()=>run(async()=>{
    const nextRole=select.value;
    if(nextRole===member.role){$('ownerStatus').textContent='沒有權限變更，不需儲存。';return}
@@ -446,7 +455,7 @@ async function loadOwnerRoster(){
     throw error;
    }finally{action.disabled=false;select.disabled=false}
   });
-  card.append(label,select,action);root.append(card);
+  card.append(label,select,pending,action);root.append(card);
  }
  $('ownerStatus').textContent='已從伺服器核對「'+result.group.name+'」：'+result.members.length+
     ' 位其他成員。未執行任何寫入。';
