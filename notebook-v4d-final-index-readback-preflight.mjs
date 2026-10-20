@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+const html=readFileSync('notebook-v4d-final-index-readback.html','utf8');
+const js=html.split('<script type="module">')[1]?.split('</script>')[0];
+assert.ok(js,'module script missing');
+assert.match(js,/v4d_test_efbbf2dced534cb5a6f1d117023fd069/);
+assert.match(js,/firebaseConfig.projectId!=='honbin-crm-notes-spark'/);
+assert.match(js,/getDocsFromServer\(collection\(db,'approvedAccounts'\)\)/);
+assert.match(js,/getDocFromServer\(pointer\)/);
+assert.match(js,/if\(first.exists\(\)\)/);
+assert.match(js,/if\(second.exists\(\)\)/);
+assert.match(js,/metadata.fromCache/);
+assert.match(js,/INDEX_ABSENT_SERVER_READBACK_PASS/);
+assert.ok(!/getDocFromServer\(doc\(db,'groups'/.test(js),'must not read forbidden deleted root');
+assert.ok(!/getDocsFromServer\(collection\(db,'groups'/.test(js),'must not list forbidden children');
+for(const forbidden of ['deleteDoc','setDoc','updateDoc','writeBatch','runTransaction','addDoc','deleteField'])
+ assert.ok(!new RegExp('\\b'+forbidden+'\\b').test(js),'write API prohibited: '+forbidden);
+const check=spawnSync(process.execPath,['--check','--input-type=module'],{input:js,encoding:'utf8'});
+assert.equal(check.status,0,check.stderr);
+console.log('V4D_FINAL_INDEX_READBACK_STATIC_PASS');
