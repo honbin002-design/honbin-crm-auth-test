@@ -6,7 +6,7 @@ const js=html.split('<script type="module">')[1]?.split('</script>')[0];
 assert.ok(js);
 for(const term of ["GROUP='D0iiTJNmLt5tIs64sTL6'","RECIPIENT='wind99vic@gmail.com'",
  "membership.data().role!=='VIEWER'","membership.data().status!=='ACTIVE'",
- "root.data().ownerUid===uid","if(!actor||!ready||busy||attempted)return",
+ "root.data().ownerUid===uid","if(!actor||!ready||!audited||busy||attempted)return",
  "liteGetDoc(ref)","await liteSetDoc(ref,{ownerUid:uid,groupId:GROUP,",
  "error?.code!=='permission-denied'","!writeRejected||after.exists()",
  "VIEWER_WRITE_DENIED_SERVER_PASS","$('probe').addEventListener('click',probe)","$('audit').addEventListener('click',audit)","liteGetDocs(liteCollection(liteDb,'groups',GROUP,'notes'))","!audited||busy||attempted","watchdog=setTimeout"])
