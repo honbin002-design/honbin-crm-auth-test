@@ -84,6 +84,27 @@ try{
  const profile=await other.doc('profiles/'+uidViewer).get();
  assert.equal(profile.data().nickname,'威');
  await assertFails(other.collection('profiles').get());
+ // Push endpoint keys are readable only by the owning account.
+ const device='pushSubscriptions/'+uidViewer+'/devices/iphone_1';
+ const subscription={
+  endpoint:'https://web.push.apple.com/synthetic_push_endpoint',
+  p256dh:'A'.repeat(65),auth:'B'.repeat(24),
+  createdAt:timestamp(),updatedAt:timestamp()
+ };
+ await assertSucceeds(viewer.doc(device).set(subscription));
+ await assertSucceeds(viewer.doc(device).get());
+ await assertFails(other.doc(device).get());
+ await assertFails(other.doc(device).set(subscription));
+ await assertFails(owner.doc(device).get());
+ await assertFails(viewer.doc('pushSubscriptions/'+uidViewer+'/devices/iphone_2')
+   .set({...subscription,endpoint:'https://attacker.example.test/collect'}));
+ await assertSucceeds(viewer.doc(device).update({
+  updatedAt:timestamp()
+ }));
+ await assertFails(viewer.doc(device).update({
+  createdAt:timestamp(),updatedAt:timestamp()
+ }));
+ await assertSucceeds(viewer.doc(device).delete());
  // The pre-existing note ACL is unchanged by the two new match blocks.
  const noteRef='groups/group_test/notes/synthetic_note';
  await assertSucceeds(owner.doc(noteRef).set({
