@@ -15,23 +15,26 @@
 <p>記事簿：<strong>測試共用記事</strong></p>
 <p>角色：<strong>VIEWER（唯讀）</strong></p>
 <button id="scan" disabled>第一步：唯讀核對伺服器身分</button>
-<button id="probe" disabled>第二步：嘗試一筆測試寫入（應被拒絕）</button>
+<button id="audit" disabled>第二步：唯讀核對先前嘗試有無留下測試記事</button>
+<button id="probe" disabled>第三步：單次測試寫入（應被伺服器拒絕）</button>
 <pre id="result" aria-live="polite">尚未核對；未嘗試寫入。</pre></section>
 <script type="module">
 import {firebaseConfig} from './firebase-web-config.mjs';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
 import {getAuth,GoogleAuthProvider,browserSessionPersistence,setPersistence,signInWithPopup,signOut,onAuthStateChanged,getIdTokenResult} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
-import {getFirestore,doc,getDocFromServer,setDoc,Timestamp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+import {getFirestore,doc,getDocFromServer} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+import {getFirestore as getFirestoreLite,doc as liteDoc,getDoc as liteGetDoc,collection as liteCollection,getDocs as liteGetDocs,setDoc as liteSetDoc,Timestamp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore-lite.js';
 const GROUP='D0iiTJNmLt5tIs64sTL6',NAME='測試共用記事',RECIPIENT='wind99vic@gmail.com';
 const $=id=>document.getElementById(id);
-let auth=null,db=null,actor=null,ready=false,busy=false,epoch=0,attempted=false;
+let auth=null,db=null,liteDb=null,actor=null,ready=false,audited=false,busy=false,epoch=0,attempted=false;
 function controls(){
  $('login').disabled=!auth||busy||!!auth.currentUser;
  $('logout').disabled=!auth||busy||!auth.currentUser;
  $('scan').disabled=!actor||busy;
- $('probe').disabled=!ready||busy||attempted;
+ $('audit').disabled=!actor||busy;
+ $('probe').disabled=!ready||!audited||busy||attempted;
 }
-function reset(){epoch++;actor=null;ready=false;attempted=false;$('result').textContent='尚未核對；未嘗試寫入。';controls()}
+function reset(){epoch++;actor=null;ready=false;audited=false;attempted=false;$('result').textContent='尚未核對；未嘗試寫入。';controls()}
 function guard(uid,e){if(e!==epoch||actor?.uid!==uid||auth.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')}
 async function identify(user){
  reset();
@@ -62,33 +65,61 @@ async function scan(){
  try{
   await preflight(uid,e);guard(uid,e);ready=true;
   $('result').textContent='伺服器前置權限核對：PASS\n目前身分：VIEWER\n記事簿：'+NAME+
-    '\n沒有執行寫入或刪除。\n如確認進行受控拒絕寫入驗收，可按第二個按鈕。';
+    '\n沒有執行寫入或刪除。\n請先按第二步唯讀核對有無上次寫入測試殘留。';
   $('status').textContent='唯讀核對 PASS；尚未測試伺服器拒絕寫入。';
  }catch(error){if(e===epoch){$('result').textContent='HOLD：'+String(error.code||error.message)+'\n寫入／刪除：0';$('status').textContent='驗收停止：不符合限定身份。'}}
  finally{if(e===epoch){busy=false;controls()}}
 }
+async function audit(){
+ if(!actor||busy)return;
+ const uid=actor.uid,e=epoch;busy=true;ready=false;audited=false;controls();
+ $('status').textContent='從 Firestore 伺服器唯讀核對先前測試是否有資料殘留……';
+ try{
+  await preflight(uid,e);guard(uid,e);
+  // Firestore Lite reads from backend rather than local offline-write cache.
+  const snap=await liteGetDocs(liteCollection(liteDb,'groups',GROUP,'notes'));guard(uid,e);
+  const ids=snap.docs.filter(x=>x.id.startsWith('viewer_deny_probe_')).map(x=>x.id);
+  $('result').textContent='伺服器唯讀復核完成\n記事簿：'+NAME+
+    '\n現有記事總數：'+snap.size+'\n先前測試命名的記事：'+ids.length+
+    (ids.length?'\n測試文件 ID：'+ids.join('，'):'')+
+    '\n本次新增／修改／刪除：0';
+  if(ids.length){
+   $('status').textContent='安全 HOLD：伺服器發現測試記事，不能繼續寫入；請傳畫面。';
+  }else{
+   audited=true;ready=true;
+   $('status').textContent='唯讀復核未發現測試記事；但不能證明上次寫入已被拒絕。可再選擇第三步單次測試。';
+  }
+ }catch(error){
+  if(e===epoch){$('result').textContent='HOLD：'+String(error.code||error.message)+
+   '\n伺服器核對未完成，本次沒有執行寫入。';$('status').textContent='安全 HOLD：請勿再嘗試寫入。'}
+ }finally{if(e===epoch){busy=false;controls()}}
+}
 async function probe(){
- if(!actor||!ready||busy||attempted)return;
- const uid=actor.uid,e=epoch;busy=true;ready=false;attempted=true;controls();
- $('status').textContent='重新核對 VIEWER 資格，然後執行一次測試寫入……';
- let ref=null,writeRejected=false;
+ if(!actor||!ready||!audited||busy||attempted)return;
+ const uid=actor.uid,e=epoch;busy=true;ready=false;audited=false;attempted=true;controls();
+ $('status').textContent='[1/4] 正在重新核對 VIEWER 權限……';
+ let ref=null,writeRejected=false,watchdog=null;
  try{
   await preflight(uid,e);guard(uid,e);
   const id='viewer_deny_probe_'+crypto.randomUUID().replaceAll('-','');
-  ref=doc(db,'groups',GROUP,'notes',id);
-  const before=await getDocFromServer(ref);guard(uid,e);
-  if(before.metadata.fromCache||before.exists())throw Error('PROBE_PATH_NOT_EMPTY');
+  ref=liteDoc(liteDb,'groups',GROUP,'notes',id);
+  $('status').textContent='[2/4] 正在檢查全新測試路徑……';
+  $('result').textContent='僅限這次嘗試的測試文件 ID：'+id+'\n尚未確認伺服器拒絕寫入。';
+  const before=await liteGetDoc(ref);guard(uid,e);
+  if(before.exists())throw Error('PROBE_PATH_NOT_EMPTY');
   const at=Timestamp.now();
   try{
-   await setDoc(ref,{ownerUid:uid,groupId:GROUP,title:'VIEWER 禁止寫入驗收',content:'純 TEST 資料；只用於驗證伺服器權限拒絕。',
+   $('status').textContent='[3/4] 正在執行一次伺服器測試寫入；等待 Firebase 最終回覆……';
+   watchdog=setTimeout(()=>{if(e===epoch&&busy){$('status').textContent='安全 HOLD：等待已超過 20 秒，不能判定寫入結果。請勿重新按寫入。';$('result').textContent+='\n已逾時但背景請求可能尚未結束；不要將此狀態視為 PASS。';}},20000);
+   await liteSetDoc(ref,{ownerUid:uid,groupId:GROUP,title:'VIEWER 禁止寫入驗收',content:'純 TEST 資料；只用於驗證伺服器權限拒絕。',
      createdAt:at,updatedAt:at,version:1,deleted:false});
   }catch(error){
    if(error?.code!=='permission-denied')throw error;
    writeRejected=true;
   }
   guard(uid,e);
-  const after=await getDocFromServer(ref);guard(uid,e);
-  if(after.metadata.fromCache)throw Error('SERVER_READBACK_REQUIRED');
+  $('status').textContent='[4/4] 伺服器正在複核該測試文件……';
+  const after=await liteGetDoc(ref);guard(uid,e);
   if(!writeRejected||after.exists()){
    $('result').textContent='FAIL：伺服器沒有拒絕這次 VIEWER 寫入，或測試記事已存在。\n測試文件 ID：'+id+
      '\n請立即停止。不得自行刪除；需管理者核對並處理。';
@@ -100,15 +131,16 @@ async function probe(){
   }
  }catch(error){if(e===epoch){$('result').textContent='HOLD：'+String(error.code||error.message)+
    '\n是否發生寫入尚未完整確認，請勿重按。';$('status').textContent='驗收停止；請傳畫面。'}}
- finally{if(e===epoch){busy=false;controls()}}
+ finally{if(watchdog!==null)clearTimeout(watchdog);if(e===epoch){busy=false;controls()}}
 }
 $('scan').addEventListener('click',scan);
+$('audit').addEventListener('click',audit);
 $('probe').addEventListener('click',probe);
 $('login').addEventListener('click',()=>{signInWithPopup(auth,new GoogleAuthProvider()).catch(e=>$('status').textContent='登入失敗：'+String(e.code||e.message))});
 $('logout').addEventListener('click',()=>signOut(auth).catch(e=>$('status').textContent=String(e.code||e.message)));
 async function start(){
  if(firebaseConfig.projectId!=='honbin-crm-notes-spark')throw Error('WRONG_FIREBASE_PROJECT');
- const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);liteDb=getFirestoreLite(app);
  await setPersistence(auth,browserSessionPersistence);
  onAuthStateChanged(auth,async user=>{try{await identify(user)}catch(error){reset();$('identity').textContent='尚未取得指定身分';$('status').textContent='身份驗證停止：'+String(error.code||error.message)}});controls();
 }
