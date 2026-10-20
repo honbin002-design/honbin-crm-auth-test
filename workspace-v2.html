@@ -76,7 +76,9 @@ import {noteService} from './firebase-note-service.mjs';
 import {groupService} from './firebase-group-service.mjs';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
-import {taskService} from './firebase-task-service.mjs';
+import {taskService,taskCanComplete} from './firebase-task-service.mjs';
+// Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
+const TASK_RULES_ENABLED=false;
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,drafts,uid='',epoch=0,groupItems=[],selected=null,items=[],current=null,pendingId=null,busy=false;
@@ -87,7 +89,9 @@ function session(){if(!uid||auth?.currentUser?.uid!==uid)throw Error('ACCOUNT_CH
 function check(s){if(s.uid!==uid||s.epoch!==epoch||auth?.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')}
 function nickKey(){return 'honbin-test-v2-nick:'+uid}
 function showNick(){const nick=localStorage.getItem(nickKey())||'';$('nickname').value=nick;$('who').textContent=nick||auth?.currentUser?.email?.split('@')[0]||'已登入'}
-function tab(name){for(const n of ['Notes','Tasks','Settings']){$('tab'+n).classList.toggle('active',n===name);$(n.toLowerCase()+'Panel').hidden=n!==name}}
+function tab(name){for(const n of ['Notes','Tasks','Settings']){$('tab'+n).classList.toggle('active',n===name);$(n.toLowerCase()+'Panel').hidden=n!==name}
+ if(name==='Tasks'&&TASK_RULES_ENABLED)void run(loadTasks);
+}
 function clearEditor(){$('noteEditor').hidden=true;current=null;pendingId=null;$('noteTitle').value='';$('noteContent').value=''}
 function draftSnap(){return {title:$('noteTitle').value,content:$('noteContent').value,active:current?{...current}:null,pendingCreateId:pendingId}}
 function saveDraft(){const c=context();if(!c||!drafts||!mayWrite()||$('noteEditor').hidden)return;void drafts.save(c,draftSnap()).catch(()=>say('本機草稿保存失敗，請先複製內容備份。'))}
@@ -134,6 +138,58 @@ async function loadGroups(){
  $('role').textContent=selected?'目前身分：'+notebookRoleLabel(selected.role):'尚未加入共用記事簿。';
  $('newNote').disabled=!mayWrite();$('taskScopeHint').textContent=selected?'目前共用記事簿：'+selected.name:'請先在設定中的進階管理頁加入共用記事簿。';
 }
+async function loadTasks(){
+ const s=session(),root=$('tasksList');root.replaceChildren();
+ if(!TASK_RULES_ENABLED||$('mode').value!=='SHARED'||!selected){
+  root.append(mk('p','請先選擇共用記事簿；任務功能須待 TEST 規則驗收。'));return;
+ }
+ const canPublish=['ADMIN','EDITOR'].includes(selected.role);
+ $('taskPublish').disabled=!canPublish;
+ const choices=$('taskAssignee');choices.replaceChildren();
+ const any=mk('option','所有成員皆可執行');any.value='';choices.append(any);
+ const self=mk('option','指派給我自己');self.value=uid;choices.append(self);
+ if(selected.role==='ADMIN'){
+  const members=await groups.listMembers(selected.id);check(s);
+  for(const m of members.filter(x=>x.status==='ACTIVE'&&x.uid!==uid)){
+   const name=await tasks.profile(m.uid).catch(()=>''),opt=mk('option',name||m.uid);
+   opt.value=m.uid;choices.append(opt);
+  }
+ }
+ const entries=await tasks.list(selected.id);check(s);
+ if(!entries.length)root.append(mk('p','目前沒有任務。'));
+ const nickCache=new Map();
+ async function displayName(id){
+  if(!id)return '所有成員';
+  if(id===uid)return localStorage.getItem(nickKey())||'我';
+  if(!nickCache.has(id))nickCache.set(id,await tasks.profile(id).catch(()=>''));
+  return nickCache.get(id)||'成員（'+id.slice(0,6)+'…）';
+ }
+ for(const item of entries){
+  const box=mk('div');box.className='line';
+  box.append(mk('strong',item.title));
+  if(item.description)box.append(mk('p',item.description));
+  box.append(mk('p','指派給：'+await displayName(item.assignedUid)));
+  if(item.dueDate)box.append(mk('small','截止日期：'+item.dueDate));
+  if(item.status==='DONE'){
+   box.append(mk('p','已完成｜'+await displayName(item.completedBy)+'｜'+
+    (item.completedAt?.toDate?.().toLocaleString('zh-TW')||'伺服器時間待確認')));
+   box.append(mk('p','回覆：'+(item.completionReply||'')));
+  }else if(taskCanComplete(item,uid)){
+   const reply=mk('textarea');reply.placeholder='輸入處理結果（必填）';reply.maxLength=3000;
+   const button=mk('button','回覆並完成');
+   button.onclick=()=>run(async()=>{
+    if(!reply.value.trim())throw Error('請先輸入處理結果');
+    if(!confirm('確定標記任務已完成？完成者與伺服器時間將被記錄，不能自行覆蓋。'))return;
+    button.disabled=true;
+    try{await tasks.complete({groupId:selected.id,taskId:item.id,reply:reply.value});check(s);
+      await loadTasks();say('已由伺服器確認任務完成。')}
+    finally{button.disabled=false}
+   });
+   box.append(reply,button);
+  }else box.append(mk('small','尚未完成｜此任務不是指派給你'));
+  root.append(box);
+ }
+}
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
@@ -161,7 +217,17 @@ $('saveNote').onclick=()=>run(async()=>{
  }finally{$('saveNote').disabled=false}
 });
 $('saveNick').onclick=()=>{if(!uid)return;const nick=$('nickname').value.trim();if(!nick||nick.length>24){say('請輸入 1～24 字的暱稱。');return}localStorage.setItem(nickKey(),nick);showNick();say('此手機的顯示暱稱已更新。跨手機同步尚未啟用。')};
-$('taskForm').onsubmit=e=>{e.preventDefault();say('任務發布尚未開放：需要先完成 TEST Firestore 權限部署與驗收。')};
+$('taskForm').onsubmit=e=>{e.preventDefault();
+ if(!TASK_RULES_ENABLED){say('任務發布尚未開放：需要先完成 TEST Firestore 權限部署與驗收。');return}
+ void run(async()=>{
+  if(!selected||!['ADMIN','EDITOR'].includes(selected.role))throw Error('沒有發布任務的權限');
+  const s=session();
+  await tasks.create({groupId:selected.id,title:$('taskTitle').value,
+   description:$('taskDetail').value,assignedUid:$('taskAssignee').value||null,
+   dueDate:$('taskDue').value});
+  check(s);$('taskForm').reset();await loadTasks();say('任務已發布，伺服器確認成功。');
+ });
+};
 $('login').onclick=()=>{if(!auth)return;sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider()).catch(e=>say(String(e?.code||e?.message||e)))};
 $('logout').onclick=()=>{if(auth)sdk.signOut(auth).catch(e=>say(String(e?.code||e?.message||e)))};
 async function start(){
