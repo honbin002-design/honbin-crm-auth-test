@@ -1,0 +1,32 @@
+name: TEST Firestore task and nickname emulator
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/firestore-task-emulator.yml'
+      - 'firebase.emulator.test.json'
+      - 'package.json'
+      - 'firestore-task-nickname-emulator-test.mjs'
+      - 'prepare-firestore-task-emulator-rules.mjs'
+      - 'firestore-task-nickname-offline-merge.mjs'
+      - 'firestore-tasks-v2-rules-REVIEW-ONLY.rules'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install local test dependencies (no deployment credentials)
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Build isolated rule fixture and run Firestore emulator
+        run: npm run test:firestore-acl
