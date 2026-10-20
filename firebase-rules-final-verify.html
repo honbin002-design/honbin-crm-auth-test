@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>HONBIN TEST｜Firebase 規則最後逐字核對</title>
+<style>
+*{box-sizing:border-box}
+body{max-width:780px;margin:0 auto;padding:18px 14px 90px;color:#20344b;background:#f5f7fb;font:17px/1.65 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif}
+h1{font-size:1.35rem}h2{font-size:1.08rem}
+section{background:white;border:1px solid #d7e2ef;border-radius:16px;padding:16px;margin:14px 0}
+textarea{font:13px/1.4 ui-monospace,monospace;border:1px solid #9fb2c8;border-radius:10px;width:100%;height:180px;padding:10px}
+button{min-height:48px;border:0;border-radius:12px;background:#225e9f;color:white;padding:10px 15px;font:inherit;font-weight:600}
+#result{padding:12px;background:#eef4fc;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.warning{background:#fff3da;padding:11px;border-radius:12px}
+small{color:#66758a}
+</style></head>
+<body>
+<h1>Firestore TEST 規則｜最後逐字核對</h1>
+<p>此工具僅用來核對準備發布的候選文字，<strong>不會修改 Firebase、不會送出貼入的內容、也不會保存你的 UID。</strong></p>
+<section><h2>貼上已複製的候選規則</h2>
+<textarea id="candidate" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="在此貼上 28,361 字元的完整候選規則"></textarea>
+<p><button id="verify" type="button">逐字核對候選內容</button></p>
+<p id="result" role="status" aria-live="polite">尚未核對。</p>
+</section>
+<section>
+<h2>驗收條件</h2>
+<p>我們會從同一個 TEST GitHub 儲存庫讀取歷史基準，將候選文字中原有的擁有者識別碼代入基準，再加上指定任務、公開暱稱與私人推播訂閱的三組規則。只有<strong>完整文字逐字相同</strong>，才會顯示 PASS。</p>
+<p class="warning">若顯示 HOLD，就不要發布。即使顯示 PASS，仍須確認 Firebase 畫面使用的專案是 <code>honbin-crm-notes-spark</code>、不是正式 CRM；Firebase 編輯器在正式發布時仍會執行自己的規則編譯檢查。</p>
+</section>
+<p><a href="./workspace-v2.html">返回記事與任務 TEST</a></p>
+<script type="module" src="./firebase-rules-final-verify.js"></script>
+</body></html>
