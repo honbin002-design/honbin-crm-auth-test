@@ -21,7 +21,6 @@ const already=mergeTestTaskAndNicknameRules(baseline,task).merged;
 const incremental=prepareTestPushCandidate(already,task,push);
 assert.equal(incremental.existingTaskAndNickname,true);
 assert.deepEqual(incremental.added,['pushSubscriptions/{subscriberUid}/devices/{deviceId}']);
-assert.ok(incremental.merged.includes(already));
 const marker=/\n    \/\/ BEGIN TEST PUSH SUBSCRIPTION ACL EXTENSION\n[\s\S]*?\n    \/\/ END TEST PUSH SUBSCRIPTION ACL EXTENSION\n  /;
 assert.equal(incremental.merged.replace(marker,''),already);
 assert.throws(()=>prepareTestPushCandidate(fresh.merged,task,push),
