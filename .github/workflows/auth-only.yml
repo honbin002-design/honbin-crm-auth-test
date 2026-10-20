@@ -56,6 +56,8 @@ jobs:
         run: node workspace-v2-preflight.mjs
       - name: Verify task assignment, single completion, and nickname client behavior
         run: node task-nickname-client-preflight.mjs
+      - name: Verify zero-cost iPhone Web Push PWA groundwork
+        run: node push-pwa-readiness-preflight.mjs
       - name: Verify offline-only exact two-match Firestore rules merge
         run: node firestore-task-nickname-merge-preflight.mjs
       - name: Verify owner-only settings member management and scoped Firestore transaction
