@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+const html=readFileSync('notebook-v4d-target-postcleanup-readback.html','utf8');
+const js=html.split('<script type="module">')[1]?.split('</script>')[0];
+assert.ok(js);
+assert.ok(js.includes('v4d_test_efbbf2dced534cb5a6f1d117023fd069'));
+assert.ok(js.includes('5e2bbde9fbc345e78068a8caeedbc7c9'));
+assert.ok(js.includes('DELETING'));
+assert.ok(js.includes('getDocsFromServer'));
+assert.ok(js.includes('getDocFromServer'));
+assert.ok(js.includes('notes.size!==0||members.size!==0||invites.size!==0'));
+assert.ok(!js.includes('deleteDoc('));
+assert.ok(!js.includes('updateDoc('));
+assert.ok(!js.includes('setDoc('));
+const p=spawnSync(process.execPath,['--check','--input-type=module'],{input:js,encoding:'utf8'});
+assert.equal(p.status,0,p.stderr);
+console.log('V4D_POSTCLEANUP_INDEPENDENT_READBACK_PASS 10');
