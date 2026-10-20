@@ -78,19 +78,39 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <div id="ownerMembers"></div>
    <p class="hint">權限：VIEWER 檢視者（記事唯讀）、EDITOR 編輯者、ADMIN 該記事簿管理員。最高擁有者帳號本身不可被降權。此處不提供停用帳號或不可逆的撤銷操作。</p>
   </div>
+  <div class="panel" id="inviteManagement" hidden>
+   <h2>邀請成員</h2>
+   <p class="hint">只顯示你具有管理員權限的共用群組。邀請不會自動寄 Email，對方以自己的 Google 帳號登入後，在下方接受邀請。</p>
+   <label for="inviteGroup">邀請加入哪個共用群組</label>
+   <select id="inviteGroup"></select>
+   <div class="row" style="margin-top:10px"><button id="toggleInvite" class="alt" type="button" aria-expanded="false" aria-controls="inviteForm">＋ 邀請新成員</button></div>
+   <form id="inviteForm" hidden>
+    <label for="inviteEmail">對方 Google Email</label><input id="inviteEmail" type="email" autocomplete="off" maxlength="254" required placeholder="例如：member@gmail.com">
+    <label for="inviteRole">授予權限</label>
+    <select id="inviteRole"><option value="VIEWER">檢視者 VIEWER（記事唯讀）</option><option value="EDITOR">編輯者 EDITOR</option><option value="ADMIN">管理員 ADMIN</option></select>
+    <div class="row" style="margin-top:12px"><button id="sendInvite" type="submit">送出邀請</button><button id="closeInvite" type="button" class="alt">取消</button></div>
+   </form>
+   <p id="inviteStatus" class="hint" role="status" aria-live="polite">未送出邀請。</p>
+   <button id="refreshSentInvites" class="alt" type="button">查看此群組邀請紀錄</button>
+   <div id="sentInvites"></div>
+  </div>
+  <div class="panel" id="receivedInviteManagement" hidden>
+   <div class="row" style="justify-content:space-between"><h2>收到的共用群組邀請</h2><button id="refreshReceived" class="alt" type="button">重新讀取</button></div>
+   <div id="receivedInvites"></div>
+  </div>
   <div class="panel"><h2>所有成員看到的暱稱</h2><p class="hint">例如：威、VIC。顯示暱稱不會取代伺服器留存的 Google UID。</p>
    <label for="nickname">我的公開暱稱</label><input id="nickname" maxlength="24" placeholder="輸入想讓其他成員看到的暱稱">
    <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱（待權限驗收）</button></div>
    <p id="nicknameHint" class="warning">不再使用「僅本機暱稱」。須完成 Firestore 共用個人檔案規則驗收後，才可讓所有成員跨裝置看到你的暱稱。</p>
   </div>
-  <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿、邀請成員及技術驗收放在進階頁，不占用日常畫面。</p>
+  <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿與工程驗收保留在進階頁；日常邀請、接受邀請和成員權限管理都在本設定頁完成。</p>
    <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a></div>
  </section>
 </main>
 <script type="module">
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
 import {noteService} from './firebase-note-service.mjs';
-import {groupService} from './firebase-group-service.mjs';
+import {groupService,normalizedEmail} from './firebase-group-service.mjs';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs';
@@ -102,6 +122,7 @@ const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
+let inviteGroups=[],inviteGroupId='',inviteLoaded=false,receivedLoaded=false,inviteSubmitting=false;
 const scope=()=>$('mode').value==='PRIVATE'?{mode:'PRIVATE'}:{mode:'SHARED',groupId:selected?.id};
 const context=()=>uid?{uid,mode:$('mode').value,groupId:$('mode').value==='SHARED'?selected?.id:null}:null;
 const mayWrite=()=>$('mode').value==='PRIVATE'||['ADMIN','EDITOR'].includes(selected?.role);
@@ -119,8 +140,12 @@ function tab(name){
   $(n.toLowerCase()+'Panel').hidden=n!==name;
  }
  if(name==='Tasks'&&authenticated)void run(async()=>{await loadGroups();await loadTasks()});
- if(name==='Settings'&&authenticated&&ownerMembers&&!ownerLoadDone)
-   void run(loadOwnerManagement);
+ if(name==='Settings'&&authenticated){
+  if(ownerMembers&&!ownerLoadDone)void run(loadOwnerManagement);
+  // Invitation controls have their own, independent refresh flow.
+  if(!inviteLoaded)void loadInvitePanel().catch(e=>say('讀取邀請管理失敗：'+String(e?.code||e?.message||e)));
+  if(!receivedLoaded)void loadReceivedInvitations().catch(e=>say('讀取收到的邀請失敗：'+String(e?.code||e?.message||e)));
+ }
 }
 function clearEditor(){$('noteEditor').hidden=true;current=null;pendingId=null;$('noteTitle').value='';$('noteContent').value=''}
 function draftSnap(){return {title:$('noteTitle').value,content:$('noteContent').value,active:current?{...current}:null,pendingCreateId:pendingId}}
@@ -402,6 +427,10 @@ async function start(){
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
   const generation=++epoch;uid='';authenticated=false;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;
+  inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
+  $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
+  $('receivedInvites').replaceChildren();$('sentInvites').replaceChildren();
+  $('inviteEmail').value='';$('inviteRole').value='VIEWER';$('inviteForm').hidden=true;
   $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();
   items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
