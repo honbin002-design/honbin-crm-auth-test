@@ -18,3 +18,5 @@ jobs:
         run: node auth-only-preflight.mjs
       - name: Verify notes preview is complete and Firestore stays HOLD
         run: node notes-preview-preflight.mjs
+      - name: Verify global owner Google approval UI
+        run: node approved-accounts-preflight.mjs
