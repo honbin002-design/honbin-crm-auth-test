@@ -104,8 +104,8 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   </div>
   <div class="panel"><h2>所有成員看到的暱稱</h2><p class="hint">例如：威、VIC。顯示暱稱不會取代伺服器留存的 Google UID。</p>
    <label for="nickname">我的公開暱稱</label><input id="nickname" maxlength="24" placeholder="輸入想讓其他成員看到的暱稱">
-   <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱（待權限驗收）</button></div>
-   <p id="nicknameHint" class="warning">不再使用「僅本機暱稱」。須完成 Firestore 共用個人檔案規則驗收後，才可讓所有成員跨裝置看到你的暱稱。</p>
+   <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱</button></div>
+   <p id="nicknameHint" class="hint">TEST 共用暱稱已開放：請輸入想讓群組成員看到的名稱（最多 24 字），按儲存後會向 Firestore 伺服器重新讀取核對。僅能修改你自己的暱稱，不會更動 Google 帳號或成員權限。</p>
   </div>
   <div class="panel" id="pushReadiness">
    <h2>iPhone 通知</h2>
@@ -142,7 +142,7 @@ import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebas
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=false;
-const PROFILE_RULES_ENABLED=false; // Shared nickname only; never fake a local-only save.
+const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
@@ -609,7 +609,7 @@ $('saveNick').onclick=()=>{
   if(!nick||nick.length>24)throw Error('暱稱必須為 1～24 字');
   const saved=await tasks.saveNickname(nick);
   check(s);sharedNickCache.set(uid,saved);$('who').textContent=saved;
-  say('共用暱稱已由伺服器確認：'+saved+'。所有有權讀取暱稱的成員可看到。');
+  say('共用暱稱已由 Firestore 伺服器重新讀取確認：'+saved+'。其他核准成員可使用這個暱稱辨識你。');
  });
 };
 $('taskForm').onsubmit=e=>{e.preventDefault();
@@ -738,7 +738,7 @@ async function start(){
    }
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
-   tab('Notes');say('已通過 TEST 帳號核准。共用任務與暱稱功能仍需伺服器規則驗收。');
+   tab('Notes');say('已通過 TEST 帳號核准。共用暱稱可以設定；指定任務仍等待線上寫入驗收。');
    try{await openPushDeepLink()}catch(error){say('通知連結開啟失敗：'+String(error?.code||error?.message||error))}
   }catch(e){
    if(generation!==epoch)return;uid='';authenticated=false;$('app').hidden=false;tab('Settings');
