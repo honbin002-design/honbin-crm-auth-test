@@ -1,5 +1,6 @@
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {mergeTestTaskAndNicknameRules} from './firestore-task-nickname-offline-merge.mjs';
+import {mergeTestPushRules} from './firestore-push-offline-merge.mjs';
 const html=readFileSync('firestore-notebook-hard-delete-v4d-deploy.html','utf8');
 const m=html.match(/<textarea id="template"[^>]*>([\s\S]*?)<\/textarea>/);
 if(!m)throw Error('MISSING_TEST_TEMPLATE');
@@ -7,5 +8,7 @@ const current=m[1].replaceAll('&amp;','&').replaceAll('&lt;','<').replaceAll('&g
 const extension=readFileSync('firestore-tasks-v2-rules-REVIEW-ONLY.rules','utf8');
 const next=mergeTestTaskAndNicknameRules(current,extension);
 mkdirSync('.test-rules',{recursive:true});
-writeFileSync('.test-rules/firestore.emulator.rules',next.merged);
+const push=readFileSync('firestore-push-subscriptions-REVIEW-ONLY.rules','utf8');
+const withPush=mergeTestPushRules(next.merged,push);
+writeFileSync('.test-rules/firestore.emulator.rules',withPush.merged);
 console.log('EMULATOR_FIXTURE_READY');
