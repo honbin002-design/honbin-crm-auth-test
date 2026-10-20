@@ -34,6 +34,10 @@ export function pushSubscriptionService({db,sdk,currentUid,registration,publicVa
   const json=subscription.toJSON();
   if(!json.endpoint||!json.keys?.p256dh||!json.keys?.auth)
    throw Error('PUSH_SUBSCRIPTION_INCOMPLETE');
+  const endpoint=new URL(json.endpoint);
+  if(endpoint.protocol!=='https:'||endpoint.hostname!=='web.push.apple.com'
+    ||endpoint.username||endpoint.password||endpoint.port)
+   throw Error('NON_APPLE_PUSH_ENDPOINT_REJECTED');
   const key=ref(user);
   const existing=await getDoc(key);
   if(uid()!==user)throw Error('ACCOUNT_CHANGED');
