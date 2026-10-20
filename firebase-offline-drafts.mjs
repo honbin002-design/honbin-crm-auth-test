@@ -38,6 +38,9 @@ export function makeDraftStore({factory,dbName=NAME}={}){
  if(!factory||typeof factory.open!=='function')throw Error('INDEXEDDB_UNAVAILABLE');
  let connection;
  const queues=new Map();
+ // Merge queued keystroke snapshots before they reach IndexedDB. A read or
+ // removal is an ordering barrier; no save may jump across that barrier.
+ const pendingSaves=new Map();
  function open(){
    if(connection)return connection;
    connection=new Promise((resolve,reject)=>{
@@ -76,29 +79,50 @@ export function makeDraftStore({factory,dbName=NAME}={}){
      }catch(err){reject(err)}
    });
  }
- async function save(context,snapshot){
+ function save(context,snapshot){
    const key=scopeKey(context);
    const clean=copySnapshot(snapshot);
    const scope={uid:context.uid,mode:context.mode,
      groupId:context.mode==='PRIVATE'?null:context.groupId};
-   return sequenced(key,()=>task('readwrite',store=>store.put({
-     key,scope,...clean,savedAt:Date.now()
-   }))).then(()=>true);
+   let pending=pendingSaves.get(key);
+   if(!pending){
+     pending={clean,scope,waiters:[]};
+     pendingSaves.set(key,pending);
+     // Queue the write only once. Later input updates the latest snapshot
+     // until the task actually starts. Every caller awaits a real commit.
+     const queued=sequenced(key,()=>{
+       if(pendingSaves.get(key)===pending)pendingSaves.delete(key);
+       return task('readwrite',store=>store.put({
+         key,scope:pending.scope,...pending.clean,savedAt:Date.now()
+       }));
+     });
+     queued.then(
+       ()=>{for(const w of pending.waiters)w.resolve(true)},
+       error=>{for(const w of pending.waiters)w.reject(error)}
+     );
+   }else{
+     pending.clean=clean;
+     pending.scope=scope;
+   }
+   return new Promise((resolve,reject)=>pending.waiters.push({resolve,reject}));
  }
  function read(context){
    const key=scopeKey(context);
+   // A read must not absorb a save that was invoked after this read.
+   pendingSaves.delete(key);
    return sequenced(key,async()=>{
      const raw=await task('readonly',store=>store.get(key));
      if(!raw)return null;
      if(raw.scope?.uid!==context.uid||raw.scope?.mode!==context.mode||
        raw.scope?.groupId!==(context.mode==='PRIVATE'?null:context.groupId))
        throw Error('CORRUPT_SCOPE');
-     // Allow only the whitelisted editor fields to leave IndexedDB.
      return copySnapshot(raw);
    });
  }
  function remove(context){
    const key=scopeKey(context);
+   // Invalidate coalescing across a removal so no older draft can reappear.
+   pendingSaves.delete(key);
    return sequenced(key,()=>task('readwrite',store=>store.delete(key))).then(()=>true);
  }
  return Object.freeze({save,read,remove});
