@@ -29,6 +29,12 @@ assert.match(page,/sdk\.getDocFromServer\(/);
 assert.match(page,/sdk\.getDocsFromServer\(/);
 assert.match(page,/groups\.listGroups\(\)/);
 assert.match(page,/尚未驗收寫入／越權拒絕／實際推播/);
+assert.match(page,/firestore-live-denial-probes\.mjs/);
+assert.match(page,/id="checkLiveDenials"/);
+assert.match(page,/id="liveDenialsStatus"/);
+assert.match(page,/verifyLiveReadDenials\(/);
+assert.match(page,/三項伺服器越權讀取拒絕 PASS/);
+
 
 assert.match(page,/if\(!authenticated&&name!=='Settings'\)/);
 assert.doesNotMatch(page,/localStorage\.setItem/);
