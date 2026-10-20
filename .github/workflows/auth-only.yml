@@ -50,3 +50,5 @@ jobs:
         run: node notebook-private-viewer-denial-preflight.mjs
       - name: Verify owner-scoped member role change has exact recipient and single write
         run: node notebook-member-role-owner-preflight.mjs
+      - name: Verify local draft write coalescing, barriers, and UID isolation
+        run: node firebase-offline-drafts-coalescing-preflight.mjs
