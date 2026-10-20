@@ -58,14 +58,40 @@ async function main(){
   return member.exists&&member.data().status==='ACTIVE'&&
     ['ADMIN','EDITOR','VIEWER'].includes(member.data().role);
  }
+ async function stillRelevant(event,uid){
+  const {kind,groupId,taskId,noteId}=event.payload;
+  const groupRef=db.collection('groups').doc(groupId);
+  if(kind==='SHARED_NOTE_CREATED'){
+   const snap=await groupRef.collection('notes').doc(noteId).get();
+   if(!snap.exists)return false;
+   const note=snap.data();
+   return note.groupId===groupId&&note.deleted!==true&&
+     note.ownerUid===event.actorUid&&note.ownerUid!==uid;
+  }
+  const snap=await groupRef.collection('tasks').doc(taskId).get();
+  if(!snap.exists)return false;
+  const task=snap.data();
+  if(kind==='TASK_ASSIGNED'){
+   return task.status==='OPEN'&&task.createdBy===event.actorUid&&
+     uid!==event.actorUid&&
+     (task.assignedUid===null||task.assignedUid===uid);
+  }
+  if(kind==='TASK_COMPLETED'){
+   return task.status==='DONE'&&task.completedBy===event.actorUid&&
+     task.createdBy===uid&&uid!==event.actorUid;
+  }
+  return false;
+ }
  async function sendEvent(event){
   for(const uid of event.recipients){
-   if(!await approved(uid)||!await stillMember(event.payload.groupId,uid))continue;
+   if(!await approved(uid)||!await stillMember(event.payload.groupId,uid)||
+      !await stillRelevant(event,uid))continue;
    const devices=await db.collection('pushSubscriptions').doc(uid)
     .collection('devices').get();
    for(const device of devices.docs){
     // Membership can be revoked while this job is processing other devices.
-    if(!await stillMember(event.payload.groupId,uid))break;
+    if(!await stillMember(event.payload.groupId,uid)||
+      !await stillRelevant(event,uid))break;
     const subscription=device.data();
     if(!appleEndpoint(subscription.endpoint)||!subscription.p256dh||
       !subscription.auth)continue;
