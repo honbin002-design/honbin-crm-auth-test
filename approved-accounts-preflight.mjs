@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const html=readFileSync('approved-accounts.html','utf8');
+assert.match(html,/honbin-crm-notes-spark/);
+assert.match(html,/getIdTokenResult\(user\)/);
+assert.match(html,/sign_in_provider==='google.com'/);
+assert.match(html,/user.emailVerified!==true/);
+assert.match(html,/getDocs\(collection\(db,'approvedAccounts'\)\)/);
+assert.match(html,/setDoc\(doc\(db,'approvedAccounts',email\)/);
+assert.match(html,/updateDoc\(doc\(db,'approvedAccounts',item.id\)/);
+assert.match(html,/window.confirm\(/);
+assert.match(html,/status:'ACTIVE'/);
+assert.match(html,/status:active\?'REVOKED':'ACTIVE'/);
+assert.match(html,/id="manage" hidden/);
+assert.doesNotMatch(html,/innerHTML|document\.write|insertAdjacentHTML/);
+console.log('OWNER_APPROVAL_UI_STATIC_PASS 12');
