@@ -1,35 +1,45 @@
 <!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
-<title>鴻繽｜記事與任務 TEST V2</title>
+<title>鴻繽｜記事與任務 TEST</title>
 <link rel="manifest" href="./workspace-manifest.webmanifest">
 <meta name="theme-color" content="#205a9a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="鴻繽記事">
 <style>
 :root{font:16px/1.55 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#20334d;background:#f5f7fb}
-*{box-sizing:border-box}body{max-width:720px;margin:auto;padding:14px 14px 90px}
+*{box-sizing:border-box}html{scroll-padding-top:18px}body{max-width:760px;margin:auto;padding:16px 14px calc(100px + env(safe-area-inset-bottom));overflow-x:hidden}
 header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
 h1{font-size:1.3rem;margin:0}h2{font-size:1.05rem;margin:0 0 12px}
-p{margin:8px 0}small,.hint{color:#5c6c80;font-size:.87rem}
-.panel{background:#fff;border:1px solid #d8e2ee;border-radius:16px;padding:16px;margin:12px 0}
+p{margin:8px 0}small,.hint{color:#52657b;font-size:.91rem;line-height:1.6}
+.panel{background:#fff;border:1px solid #d8e2ee;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 3px 16px rgba(25,53,83,.045)}
 button,input,textarea,select{font:inherit}button{border:0;background:#205a9a;color:#fff;border-radius:11px;min-height:45px;padding:10px 14px;font-weight:600}
-button.alt{background:#e7eff9;color:#205a9a}button:disabled{opacity:.5}
+button{cursor:pointer;min-width:44px;overflow-wrap:anywhere}button.alt{background:#e7eff9;color:#174c83}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #73a8e7;outline-offset:2px}
 input,textarea,select{width:100%;padding:11px;border:1px solid #9fafc2;border-radius:10px;background:#fff;min-height:46px}
-textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;margin:10px 0 5px}
+textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;margin:13px 0 5px}input,textarea{scroll-margin-bottom:45vh}
 .nav{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .nav button{background:#e7eff9;color:#24486c}.nav button.active{background:#205a9a;color:#fff}
 #message{margin-bottom:10px}#tasksPanel .panel .panel{border:0;background:#f4f7fb}
 .line{border-bottom:1px solid #e1e8f0;padding:12px 0}.line:last-child{border:0}
 .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .row button{flex:0 0 auto}.status{background:#eaf2fb;border-radius:11px;padding:11px;overflow-wrap:anywhere}
-.pill{display:inline-block;background:#e9f0f8;color:#2d5072;border-radius:30px;padding:3px 9px;font-size:.8rem}
-.note-content{white-space:pre-wrap;overflow-wrap:anywhere;color:#54667c;font-size:.9rem}
+.pill{display:inline-block;background:#e9f0f8;color:#2d5072;border-radius:30px;padding:3px 9px;font-size:.91rem}
+.note-content{white-space:pre-wrap;overflow-wrap:anywhere;color:#43566d;font-size:1rem}
 .warning{background:#fff5de;padding:11px;border-radius:10px}
 .task-section{margin-top:18px;border-top:1px solid #dbe5f0;padding-top:12px}
 .task-section h3{font-size:1rem;margin:0 0 8px;color:#205a9a}
 .task-section .line{padding:14px 0}
 .task-alert{background:#fff4df;border-radius:8px;padding:8px 10px;color:#7a4d00;font-weight:600}
+.task-card,.note-card{border:1px solid #dce5ef;border-radius:14px;padding:16px;margin:12px 0;background:#fff;overflow-wrap:anywhere}
+.task-card h4{font-size:1.08rem;line-height:1.4;margin:0 0 6px}.task-card p{margin:7px 0}.task-description{white-space:pre-wrap;color:#3f5268}
+.task-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 16px;margin:10px 0}.task-meta p{margin:3px 0}.task-meta strong{display:block;font-size:.88rem;color:#52657b}
+.task-card[data-category="overdue"]{border-left:5px solid #ad3838}.task-card[data-category="soon"]{border-left:5px solid #b46a0a}.task-card[data-category="pending"]{border-left:5px solid #7352a6}.task-card[data-category="done"]{border-left:5px solid #377957}
+.task-badge{display:inline-block;font-size:.91rem;font-weight:700;border-radius:20px;padding:5px 10px;background:#eaf2fb;color:#174c83;margin-bottom:8px}
+.task-card[data-category="overdue"] .task-badge{background:#fceaea;color:#8c2525}.task-card[data-category="soon"] .task-badge{background:#fff2dd;color:#805000}.task-card[data-category="pending"] .task-badge{background:#f0eafa;color:#5e398b}.task-card[data-category="done"] .task-badge{background:#e9f5ee;color:#286544}
+.review-card{background:#f5f8fc;border:1px solid #d8e2ee;border-radius:12px;padding:12px;margin:10px 0}.review-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.review-actions button{width:100%}.review-actions .reject{background:#fff;color:#8c2525;border:2px solid #b34b4b}
+.task-section{border-top:0}.task-section h3{padding:10px 12px;border-radius:10px;background:#edf3fa;color:#203d5b}.note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
+.back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
+@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
 [hidden]{display:none!important}
 </style></head><body>
 <header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
@@ -58,20 +68,17 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
  </section>
  <section id="tasksPanel" hidden>
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2><span class="pill">TEST 驗收中</span></div>
-   <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。目前開放 TEST V3 寫入驗收：所有有效群組成員可發布任務及申請延期；共用記事權限維持不變。</p>
+   <p class="hint">有效群組成員可發布及查看任務；執行人可回覆或申請延期。共用記事權限獨立維持。</p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
-   <div class="row" style="margin:12px 0">
-    <button id="verifyTaskV3Read" type="button" class="alt">核對新版延期紀錄讀取（不寫入）</button>
-   </div>
-   <p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對 TEST 伺服器的 V3 延期紀錄讀取權限。</p>
+   <details><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
    <div id="tasksList"></div>
-   <p class="hint">截止日前 3 天會在任務頁提示；目前尚未啟用 iPhone 背景推播。全員發布及延期審核目前進行 TEST 實際寫入驗收；僅供測試，請勿輸入正式資料。</p>
+   <p class="hint">截止日前 3 天會在任務頁提示。此為獨立 TEST，請勿輸入正式資料。</p>
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
-    <label for="taskTitle">任務名稱</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
-    <label for="taskDetail">任務說明</label><textarea id="taskDetail" maxlength="3000" placeholder="要處理的內容"></textarea>
-    <label for="taskAssignee">執行人</label><select id="taskAssignee"><option value="">所有成員皆可執行</option></select>
+    <label for="taskTitle">任務名稱（必填）</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
+    <label for="taskDetail">任務說明（選填）</label><textarea id="taskDetail" maxlength="3000" placeholder="要處理的內容"></textarea>
+    <label for="taskAssignee">執行人或所有成員</label><select id="taskAssignee"><option value="">所有成員皆可執行</option></select>
     <label for="taskExecuteDate">預定執行日期（選填）</label><input id="taskExecuteDate" type="date">
     <label for="taskDue">截止日期（選填）</label><input id="taskDue" type="date">
     <p class="hint">目前 TEST 任務保留紀錄，不提供刪除。請勿輸入敏感個資；發布前會再次確認。</p>
@@ -141,6 +148,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <p id="rulesOwnerLink" hidden><a href="./firestore-task-nickname-merge-review.html">共用暱稱／指定任務：TEST 規則安全核對工具</a></p></div>
  </section>
 </main>
+<button class="back-top alt" id="backTop" type="button" aria-label="回到頁首">↑ 頁首</button>
 <script type="module">
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
 import {noteService} from './firebase-note-service.mjs';
@@ -232,7 +240,7 @@ function renderNotes(){
  const visible=items.filter(x=>(x.title+' '+x.content).toLowerCase().includes(term));
  if(!visible.length){root.append(mk('p','目前沒有記事。'));return}
  for(const item of visible){
-  const line=mk('div');line.className='line';line.dataset.noteId=item.id;line.append(mk('strong',item.title));
+  const line=mk('article');line.className='note-card';line.dataset.noteId=item.id;line.append(mk('strong',item.title));
   if(PROFILE_RULES_ENABLED&&item.ownerUid){
    const author=sharedNickCache.get(item.ownerUid);
    line.append(mk('small','建立者：'+(author||'未設定暱稱')));
@@ -305,6 +313,7 @@ function dueDays(dueDate){
 }
 function taskCategory(item){
  if(item.status==='DONE')return 'done';
+ if(item.extensionPendingId)return 'pending';
  const days=dueDays(item.dueDate);
  if(days!==null&&days<0)return 'overdue';
  if(days!==null&&days<=3)return 'soon';
@@ -355,9 +364,10 @@ async function loadTasks(){
  const entries=await tasks.list(taskGroupId);check(s);
  if(!entries.length)root.append(mk('p','目前沒有任務。'));
  const categories=[
+  {key:'pending',label:'延期待審'},
   {key:'overdue',label:'未完成｜已逾期'},
   {key:'soon',label:'未完成｜即將到期（3 天內）'},
-  {key:'open',label:'未完成｜其他'},
+  {key:'open',label:'進行中'},
   {key:'done',label:'已完成｜歷史紀錄'}
  ];
  const sections=new Map();
@@ -380,20 +390,24 @@ async function loadTasks(){
    (email||'成員（UID '+id.slice(0,8)+'…）');
  }
  for(const item of entries){
-  const box=mk('div');box.className='line';box.dataset.taskId=item.id;
-  box.append(mk('strong',item.title));
-  if(item.description)box.append(mk('p',item.description));
-  box.append(mk('p','發布人：'+await displayName(item.createdBy)));
-  if(item.createdAt?.toDate)box.append(mk('small','發布時間：'+item.createdAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
-  box.append(mk('p','指派給：'+await displayName(item.assignedUid)));
+  const category=taskCategory(item),box=mk('article');box.className='task-card';box.dataset.taskId=item.id;box.dataset.category=category;
+  box.append(Object.assign(mk('span',({pending:'延期待審',overdue:'已逾期',soon:'即將到期',open:'進行中',done:'已完成'})[category]),{className:'task-badge'}));
+  box.append(mk('h4',item.title));
+  if(item.description){const description=mk('p',item.description);description.className='task-description';box.append(description)}
+  const meta=mk('div');meta.className='task-meta';
+  function field(label,value){const p=mk('p');p.append(mk('strong',label),mk('span',value));meta.append(p)}
+  field('發布人',await displayName(item.createdBy));
+  field('執行人',await displayName(item.assignedUid));
+  field('發布日期',item.createdAt?.toDate?.().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})||'伺服器時間待確認');
+  field('預定執行日期',item.executeDate||'未設定');
+  field('截止日期',item.dueDate||'未設定');
+  box.append(meta);
   const remaining=dueDays(item.dueDate);
   if(item.status!=='DONE'&&remaining!==null&&remaining<=3){
    const warning=remaining<0?'已逾期 '+Math.abs(remaining)+' 天':
     remaining===0?'今天到期':'距離截止還有 '+remaining+' 天';
    const alert=mk('p','到期提醒：'+warning);alert.className='task-alert';box.append(alert);
   }
-  if(item.executeDate)box.append(mk('p','預定執行：'+item.executeDate));
-  if(item.dueDate)box.append(mk('small','截止日期：'+item.dueDate));
   if(item.status==='DONE'){
    box.append(mk('p','已完成｜'+await displayName(item.completedBy)+'｜'+
     (item.completedAt?.toDate?.().toLocaleString('zh-TW')||'伺服器時間待確認')));
@@ -433,7 +447,8 @@ async function loadTasks(){
       notice.append(mk('p','延期申請人：'+await displayName(active.requestedBy)));
       if(active.requestedAt?.toDate)
        notice.append(mk('small','申請時間：'+active.requestedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
-      notice.append(mk('p','申請新截止日期：'+active.newDueDate));
+      notice.append(mk('p','原截止日期：'+item.dueDate));
+      notice.append(mk('p','申請人建議日期：'+active.newDueDate));
       notice.append(mk('p','延期原因：'+active.reason));
      }else notice.append(mk('p','延期申請人：伺服器紀錄尚未核對，請開啟延期紀錄確認。'));
     }catch(error){
@@ -449,7 +464,7 @@ async function loadTasks(){
     const reason=mk('textarea');reason.maxLength=1000;reason.required=true;
     reason.placeholder='請說明未能如期完成的原因';
     const dateLabel=mk('label','申請新的完成日期');
-    const newDate=mk('input');newDate.type='date';newDate.required=true;newDate.min=item.dueDate;
+    const newDate=mk('input');newDate.type='date';newDate.required=true;newDate.min=new Date(Date.parse(item.dueDate+'T00:00:00Z')+86400000).toISOString().slice(0,10);
     const send=mk('button','送出延期申請');send.type='submit';
     form.append(reasonLabel,reason,dateLabel,newDate,send);
     toggle.onclick=()=>{form.hidden=!form.hidden;toggle.textContent=form.hidden?'申請延期':'收起延期申請'};
@@ -479,6 +494,8 @@ async function loadTasks(){
       if(!requests.length)history.append(mk('p','尚無延期申請紀錄。'));
       for(const req of requests){
        const entry=mk('div');entry.className='line';
+       entry.className='review-card';
+       entry.append(mk('p','任務發布人：'+await displayName(item.createdBy)));
        entry.append(mk('p','延期申請人：'+await displayName(req.requestedBy)));
        if(req.requestedAt?.toDate)
         entry.append(mk('small','申請時間：'+req.requestedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
@@ -495,17 +512,17 @@ async function loadTasks(){
         const dateLabel=mk('label','發布人核准的最終完成日期（可修改申請日期）');
         const finalDate=mk('input');finalDate.type='date';
         finalDate.value=req.newDueDate;
-        finalDate.min=item.dueDate;
+        finalDate.min=new Date(Date.parse(item.dueDate+'T00:00:00Z')+86400000).toISOString().slice(0,10);
         finalDate.disabled=!TASK_V4_PUBLISHER_DATE_ENABLED;
         entry.append(dateLabel,finalDate);
         const note=mk('small',TASK_V4_PUBLISHER_DATE_ENABLED
          ?'必須晚於原截止日期 '+item.dueDate+'；核准後以這個日期為準，原申請日期保留在紀錄。'
          :'新版「發布人調整日期」尚待 TEST Firebase V4 規則發布；為避免直接套用申請日期，暫停核准。拒絕延期仍可使用。');
         entry.append(note);
-        const row=mk('div');row.className='row';
+        const row=mk('div');row.className='review-actions';
         for(const decision of ['APPROVED','REJECTED']){
          const action=mk('button',decision==='APPROVED'?'核准此日期':'拒絕延期');
-         action.type='button';if(decision==='REJECTED')action.className='alt';
+         action.type='button';if(decision==='REJECTED')action.className='reject';
          if(decision==='APPROVED'&&!TASK_V4_PUBLISHER_DATE_ENABLED)action.disabled=true;
          action.onclick=()=>run(async()=>{
           if(decision==='APPROVED'&&!TASK_V4_PUBLISHER_DATE_ENABLED)
@@ -776,6 +793,7 @@ $('ownerRefresh').onclick=()=>run(loadOwnerManagement);
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
+$('backTop').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
 function setTaskForm(open){
  $('taskForm').hidden=!open;
  $('toggleTaskForm').setAttribute('aria-expanded',String(open));
@@ -830,7 +848,8 @@ $('saveNote').onclick=()=>run(async()=>{
   clearEditor();await loadNotes();check(s);
   say('儲存成功，版本 '+result.version+'。');
   $('noteTiming').textContent='本機 '+(local/1000).toFixed(1)+' 秒｜雲端 '+(cloud/1000).toFixed(1)+' 秒｜總計 '+((Date.now()-t)/1000).toFixed(1)+' 秒';
- }finally{$('saveNote').disabled=false}
+ }catch(error){$('noteTiming').textContent='雲端儲存未確認；輸入內容仍在本機草稿，請檢查訊息後重試。';throw error}
+ finally{$('saveNote').disabled=false}
 });
 $('saveNick').onclick=()=>{
  if(!PROFILE_RULES_ENABLED){say('共用暱稱尚未啟用。需先通過 TEST Firestore 權限驗收。');return}
@@ -852,6 +871,9 @@ $('taskForm').onsubmit=e=>{e.preventDefault();
    description:$('taskDetail').value.trim(),assignedUid:$('taskAssignee').value||null,
    executeDate:$('taskExecuteDate').value,dueDate:$('taskDue').value
   };
+  if(!payload.title)throw Error('請填寫任務名稱');
+  if(payload.executeDate&&payload.dueDate&&payload.executeDate>payload.dueDate)
+   throw Error('截止日期不可早於預定執行日期');
   const fingerprint=JSON.stringify(payload);
   if(pendingTaskWrite&&pendingTaskWrite.fingerprint!==fingerprint)
    throw Error('上一次發布的伺服器結果尚未確認。請先核對任務列表或重新整理，不要改內容重試。');
