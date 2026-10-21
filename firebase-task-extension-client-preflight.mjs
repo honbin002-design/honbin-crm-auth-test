@@ -94,4 +94,16 @@ assert.equal(rejected.originalDueDate,'2026-10-25');
 assert.equal(rejected.effectiveDueDate,'2026-10-25');
 assert.equal(state.get(taskPath).dueDate,'2026-10-25');
 assert.equal(state.get(taskPath+'/extensionRequests/'+rejectedRequest.requestId).status,'REJECTED');
+// V5 opt-in stores original deadline without changing pre-deployment V4 writes.
+const originalPath='groups/group_test/tasks/task_original';
+state.set(originalPath,{status:'OPEN',createdBy:'publisher_user',
+ assignedUid:'executor_user',dueDate:'2026-10-23',extensionPendingId:null});
+uid='executor_user';
+const v5=taskExtensionService({db,sdk,currentUid:()=>uid,recordOriginalDueDate:true});
+const extended=await v5.request({groupId:'group_test',taskId:'task_original',
+ newDueDate:'2026-10-27',reason:'V5 original deadline audit'});
+assert.equal(state.get(originalPath).dueDate,'2026-10-23');
+const v5Request=state.get(originalPath+'/extensionRequests/'+extended.requestId);
+assert.equal(v5Request.originalDueDate,'2026-10-23');
+assert.equal(v5Request.newDueDate,'2026-10-27');
 console.log('TEST_TASK_V4_CLIENT_CONTRACT_PASS (IN_MEMORY_ONLY)');
