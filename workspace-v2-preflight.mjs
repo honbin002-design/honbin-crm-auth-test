@@ -12,7 +12,7 @@ assert.equal(syntax.status,0,syntax.stderr);
 assert.match(page,/firestoreReadyForRealData/);
 assert.match(page,/projectId!=='honbin-crm-notes-spark'/);
 assert.match(page,/taskPublish" disabled/);
-assert.match(page,/任務寫入與完成回覆尚未開放/);
+assert.match(page,/只有你明確按「發布」並確認才會寫入/);
 assert.match(page,/firebase-note-service\.mjs/);
 assert.match(page,/firebase-group-service\.mjs/);
 assert.match(page,/firebase-offline-drafts\.mjs/);
@@ -21,11 +21,11 @@ assert.match(page,/id="sharedNotes"/);
 assert.match(page,/id="taskGroup"/);
 assert.match(page,/id="taskExecuteDate"/);
 assert.match(page,/const PROFILE_RULES_ENABLED=true/);
-assert.match(page,/const TASK_RULES_ENABLED=false/);
+assert.match(page,/const TASK_RULES_ENABLED=true/);
 assert.match(page,/TEST 共用暱稱已開放/);
 assert.match(service,/getDocFromServer\(ref\)/);
 assert.match(service,/NICKNAME_SERVER_READBACK_MISMATCH/);
-assert.match(page,/const TASK_RULES_ENABLED=false/);
+assert.match(page,/const TASK_RULES_ENABLED=true/);
 assert.match(page,/id="checkLiveRules"/);
 assert.match(page,/id="liveRulesStatus"/);
 assert.match(page,/async function checkLiveRulesReadOnly\(\)/);
@@ -65,6 +65,15 @@ assert.match(rules,/request\.resource\.data\.executeDate/);
 assert.match(rules,/request\.auth\.uid == profileUid/);
 assert.match(service,/serverTimestamp\(\)/);
 assert.match(service,/taskCanComplete\(before,uid\)/);
+assert.match(page,/pendingTaskWrite/);
+assert.match(page,/fingerprint:|fingerprint,id:tasks\.newId/);
+assert.match(page,/任務暫時不能刪除/);
+assert.match(page,/\$\('toggleTaskForm'\)\.hidden=!canPublish/);
+assert.match(service,/TASK_CREATE_SERVER_READBACK_MISMATCH/);
+assert.match(service,/TASK_COMPLETE_SERVER_READBACK_MISMATCH/);
+assert.match(service,/TASK_ID_CONFLICT_STOP/);
+assert.match(service,/getDocsFromServer\(taskRef\(groupId\)\)/);
+
 
 // Guard review-only rule fragments against corruption/truncation and
 // accidentally publishing a noncompiling or duplicated match block.
