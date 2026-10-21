@@ -25,8 +25,8 @@ const task=(uid,assignee)=>({
  createdBy:uid,createdAt:timestamp(),completedBy:null,completedAt:null,
  completionReply:''
 });
-const request=(uid,newDueDate,reason)=>({
- requestedBy:uid,requestedAt:timestamp(),newDueDate,reason,
+const request=(uid,newDueDate,reason,originalDueDate='2026-10-30')=>({
+ requestedBy:uid,requestedAt:timestamp(),newDueDate,reason,originalDueDate,
  status:'PENDING',decidedBy:null,decidedAt:null
 });
 try{
@@ -53,6 +53,21 @@ try{
  await assertSucceeds(owner.doc(base+'assigned').set(task(uidOwner,uidViewer)));
  await assertFails(viewer.doc(base+'assigned').update({dueDate:'2026-11-05'}));
  await assertFails(other.doc(base+'assigned').update({extensionPendingId:'forged'}));
+ // V5 immutable original-deadline audit: client cannot omit or falsify.
+ await assertFails(viewer.runTransaction(async tx=>{
+  const parent=viewer.doc(base+'assigned'),child=viewer.doc(base+'assigned/extensionRequests/without_original');
+  await tx.get(parent);
+  const payload=request(uidViewer,'2026-11-05','Missing original');
+  delete payload.originalDueDate;
+  tx.update(parent,{extensionPendingId:'without_original'});
+  tx.set(child,payload);
+ }));
+ await assertFails(viewer.runTransaction(async tx=>{
+  const parent=viewer.doc(base+'assigned'),child=viewer.doc(base+'assigned/extensionRequests/forged_original');
+  await tx.get(parent);
+  tx.update(parent,{extensionPendingId:'forged_original'});
+  tx.set(child,request(uidViewer,'2026-11-05','Forged original','2026-10-29'));
+ }));
  await assertSucceeds(viewer.runTransaction(async tx=>{
   const parent=viewer.doc(base+'assigned'),child=viewer.doc(base+'assigned/extensionRequests/r1');
   await tx.get(parent);
@@ -61,6 +76,7 @@ try{
  }));
  const pending=await viewer.doc(base+'assigned/extensionRequests/r1').get();
  assert.equal(pending.data().status,'PENDING');
+ assert.equal(pending.data().originalDueDate,'2026-10-30');
  await assertFails(viewer.runTransaction(async tx=>{
   const parent=viewer.doc(base+'assigned'),child=viewer.doc(base+'assigned/extensionRequests/r_extra');
   await tx.get(parent);
@@ -102,6 +118,7 @@ try{
  }));
  assert.equal((await owner.doc(base+'assigned').get()).data().dueDate,'2026-11-02');
  assert.equal((await owner.doc(base+'assigned/extensionRequests/r1').get()).data().newDueDate,'2026-11-05');
+ assert.equal((await owner.doc(base+'assigned/extensionRequests/r1').get()).data().originalDueDate,'2026-10-30');
  assert.equal((await owner.doc(base+'assigned/extensionRequests/r1').get()).data().approvedDueDate,'2026-11-02');
  await assertFails(owner.doc(base+'assigned/extensionRequests/r1').delete());
  await assertFails(owner.doc(base+'assigned/extensionRequests/r1').update({reason:'rewritten'}));
@@ -109,7 +126,7 @@ try{
   const parent=viewer.doc(base+'assigned'),child=viewer.doc(base+'assigned/extensionRequests/r2');
   await tx.get(parent);
   tx.update(parent,{extensionPendingId:'r2'});
-  tx.set(child,request(uidViewer,'2026-11-10','Second request'));
+  tx.set(child,request(uidViewer,'2026-11-10','Second request','2026-11-02'));
  }));
  await assertSucceeds(owner.runTransaction(async tx=>{
   const parent=owner.doc(base+'assigned'),child=owner.doc(base+'assigned/extensionRequests/r2');
