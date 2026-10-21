@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test:firestore-acl": "node prepare-firestore-task-emulator-rules.mjs && firebase emulators:exec --config firebase.emulator.test.json --project demo-honbin-task-isolation --only firestore 'node firestore-task-nickname-emulator-test.mjs'",
-    "test:task-v3-emulator": "node prepare-firestore-task-v3-emulator-rules.mjs && firebase emulators:exec --config firebase.emulator.test.json --project demo-honbin-task-v3-extension --only firestore 'node firestore-task-v3-emulator-test.mjs'"
+    "test:task-v3-emulator": "node prepare-firestore-task-v3-emulator-rules.mjs && firebase emulators:exec --config firebase.emulator.test.json --project demo-honbin-task-v3-extension --only firestore 'node firestore-task-v3-emulator-test.mjs'",
+    "test:task-v4-emulator": "node prepare-firestore-task-v4-emulator-rules.mjs && firebase emulators:exec --config firebase.emulator.test.json --project demo-honbin-task-v4-publisher-date --only firestore 'node firestore-task-v4-emulator-test.mjs'"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "4.0.1",
