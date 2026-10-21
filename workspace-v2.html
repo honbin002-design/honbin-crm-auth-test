@@ -154,7 +154,8 @@ import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
 const TASK_V3_RULES_ENABLED=true; // Existing TEST V3 rules live.
-const TASK_V4_PUBLISHER_DATE_ENABLED=true; // Fail closed until V4 reviewed, published, and verified in live TEST.
+const TASK_V4_PUBLISHER_DATE_ENABLED=true; // Owner-published TEST V4, live publisher approval and cross-account readback PASS.
+const TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED=false; // Only turn on AFTER publishing/validating V5 TEST Rules; V4 creates must stay unchanged.
 const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
@@ -481,6 +482,7 @@ async function loadTasks(){
        entry.append(mk('p','延期申請人：'+await displayName(req.requestedBy)));
        if(req.requestedAt?.toDate)
         entry.append(mk('small','申請時間：'+req.requestedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
+       entry.append(mk('p','原截止日期：'+(req.originalDueDate||'舊紀錄未保存（不推測）')));
        entry.append(mk('p','申請新截止日：'+req.newDueDate));
        entry.append(mk('p','原因：'+req.reason));
        entry.append(mk('p','審核狀態：'+(
@@ -969,7 +971,8 @@ async function start(){
    uid=user.uid;
    notes=noteService({db,sdk,identity:{uid,emailVerified:true,providerId:'google.com'},currentUid:()=>auth.currentUser?.uid});
    groups=groupService({db,sdk,identity:user});tasks=taskService({db,sdk,currentUid:()=>auth.currentUser?.uid});
-   extensions=taskExtensionService({db,sdk,currentUid:()=>auth.currentUser?.uid});
+   extensions=taskExtensionService({db,sdk,currentUid:()=>auth.currentUser?.uid,
+    recordOriginalDueDate:TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED});
    $('mode').value='PRIVATE';$('groupWrap').hidden=true;
    $('privateNotes').classList.add('active');$('sharedNotes').classList.remove('active');
    // Verify server authorization before revealing any saved local identity or content.
