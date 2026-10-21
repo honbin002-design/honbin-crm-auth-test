@@ -290,12 +290,12 @@ async function loadTasks(){
  $('taskPublish').disabled=!canPublish;
  $('toggleTaskForm').hidden=!canPublish;
  if(!canPublish)setTaskForm(false);
+ let verifiedRoster=null; // Server-verified invitation email mapping for owner-visible task history.
  const choices=$('taskAssignee');choices.replaceChildren();
  const any=mk('option','所有成員皆可執行');any.value='';choices.append(any);
  const self=mk('option','指派給我自己');self.value=uid;choices.append(self);
  if(taskSelected.role==='ADMIN'){
   const members=await groups.listMembers(taskGroupId);check(s);
-  let verifiedRoster=null;
   if(ownerMembers){
    // Highest-account owner: verify the member-to-email invitation link from
    // Firestore before presenting a person as an assignable target.
@@ -324,8 +324,14 @@ async function loadTasks(){
  if(!entries.length)root.append(mk('p','目前沒有任務。'));
  async function displayName(id){
   if(!id)return '所有成員';
-  if(id===uid)return $('who').textContent==='待設定暱稱'?'未設定暱稱':$('who').textContent;
-  return (await nicknameFor(id).catch(()=>''))||'未設定暱稱';
+  const name=await nicknameFor(id).catch(()=>'');check(s);
+  if(id===uid){
+   const email=auth?.currentUser?.email||'';
+   return name?(email?name+'（'+email+'）':name):(email||'本人（UID '+id.slice(0,8)+'…）');
+  }
+  const email=verifiedRoster?.get(id)||'';
+  return name?(email?name+'（'+email+'）':name):
+   (email||'成員（UID '+id.slice(0,8)+'…）');
  }
  for(const item of entries){
   const box=mk('div');box.className='line';box.dataset.taskId=item.id;
