@@ -58,7 +58,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
  </section>
  <section id="tasksPanel" hidden>
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2><span class="pill">TEST 驗收中</span></div>
-   <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。V3 權限驗收完成後，所有成員皆可發布任務及申請延期。</p>
+   <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。目前開放 TEST V3 寫入驗收：所有有效群組成員可發布任務及申請延期；共用記事權限維持不變。</p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
    <div class="row" style="margin:12px 0">
@@ -66,7 +66,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    </div>
    <p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對 TEST 伺服器的 V3 延期紀錄讀取權限。</p>
    <div id="tasksList"></div>
-   <p class="hint">截止日前 3 天會在任務頁提示；目前尚未啟用 iPhone 背景推播。全員發布及延期核准須待 TEST 伺服器權限正式驗收。</p>
+   <p class="hint">截止日前 3 天會在任務頁提示；目前尚未啟用 iPhone 背景推播。全員發布及延期審核目前進行 TEST 實際寫入驗收；僅供測試，請勿輸入正式資料。</p>
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
     <label for="taskTitle">任務名稱</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
@@ -153,7 +153,7 @@ import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebas
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
-const TASK_V3_RULES_ENABLED=false; // Fail-closed: enable only AFTER TEST server ACL publish/readback + denial tests.
+const TASK_V3_RULES_ENABLED=true; // TEST ONLY: emulator PASS + owner live extension-path READ PASS; actual writes still pending user acceptance.
 const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
@@ -315,7 +315,7 @@ async function loadTasks(){
   root.append(mk('p',!taskSelected?'請先加入一個多人共用群組。':'任務讀取與發布尚未開放，等待 TEST 伺服器規則驗收。'));return;
  }
  const taskGroupId=taskSelected.id;
- // Fail closed until reviewed V3 Rules are published and server-denial verified.
+ // TEST V3: emulator denial PASS and live extension readback PASS; actual writes subject to Firestore ACL.
  const canPublish=TASK_V3_RULES_ENABLED || ['ADMIN','EDITOR'].includes(taskSelected.role);
  $('taskPublish').disabled=!canPublish;
  $('toggleTaskForm').hidden=!canPublish;
@@ -791,7 +791,7 @@ $('saveNick').onclick=()=>{
 $('taskForm').onsubmit=e=>{e.preventDefault();
  if(!TASK_RULES_ENABLED){say('指定任務尚未開放。');return}
  void run(async()=>{
-  if(!taskSelected||!['ADMIN','EDITOR'].includes(taskSelected.role))
+  if(!taskSelected||!(TASK_V3_RULES_ENABLED||['ADMIN','EDITOR'].includes(taskSelected.role)))
    throw Error('沒有發布任務的權限');
   const s=session(),payload={
    groupId:taskSelected.id,title:$('taskTitle').value.trim(),
