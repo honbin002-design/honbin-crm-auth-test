@@ -163,11 +163,11 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 <button class="back-top alt" id="backTop" type="button" aria-label="回到頁首">↑ 頁首</button>
 <script type="module">
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
-import {noteService} from './firebase-note-service.mjs';
+import {noteService} from './firebase-note-service.mjs?v=20261021-paging';
 import {groupService,normalizedEmail} from './firebase-group-service.mjs';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
-import {taskService,taskCanComplete} from './firebase-task-service.mjs';
+import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
 import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
@@ -420,8 +420,9 @@ async function loadTasks({reset=true,reuse=false}={}){
    (email||'成員（UID '+id.slice(0,8)+'…）');
  }
  for(const item of page.items){
-  const publisher=await displayName(item.createdBy),executor=await displayName(item.assignedUid);
-  const fields={publisher,executor,content:item.title+' '+(item.description||'')};
+  const publisher=await displayName(item.createdBy),executor=(await displayName(item.assignedUid))+
+   (item.completedBy?' '+await displayName(item.completedBy):'');
+  const fields={publisher,executor,content:item.title+' '+(item.description||'')+' '+(item.completionReply||'')};
   if(search&&!String(searchField==='all'?Object.values(fields).join(' '):fields[searchField]).toLocaleLowerCase('zh-Hant').includes(search))continue;
   entries.push(item);
  }
