@@ -8,6 +8,11 @@ let credential;
 try{credential=JSON.parse(raw)}catch{throw Error('INVALID_TEST_CREDENTIAL_JSON_STOP')}
 if(credential.project_id!==projectId||credential.client_email!==accountEmail)
  throw Error('WRONG_TEST_SERVICE_ACCOUNT_STOP');
+// Report only the class of credential failure. Never print any key material.
+if(credential.type!=='service_account'||typeof credential.private_key!=='string'||!credential.private_key.includes('-----BEGIN PRIVATE KEY-----'))
+ throw Error('TEST_SERVICE_ACCOUNT_PRIVATE_KEY_MISSING_STOP');
+if(!credential.private_key.includes('\n')&&credential.private_key.includes('\\n'))
+ throw Error('TEST_PRIVATE_KEY_NEWLINES_DOUBLE_ESCAPED_STOP');
 const {default:admin}=await import('firebase-admin');
 try{admin.initializeApp({credential:admin.credential.cert(credential),projectId})}
 catch{throw Error('INVALID_TEST_CREDENTIAL_STOP')}
