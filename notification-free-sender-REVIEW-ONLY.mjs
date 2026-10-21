@@ -134,14 +134,16 @@ async function main(){
    throw Error('PUSH_CURSOR_ACTIVATION_CHANGED_STOP');
   let query=db.collectionGroup(stream.collection)
    .where(stream.field,'>=',admin.firestore.Timestamp.fromMillis(activation))
-   .orderBy(stream.field,'asc').limit(40);
+   .orderBy(stream.field,'asc')
+   .orderBy(admin.firestore.FieldPath.documentId(),'asc').limit(40);
   if(last.exists){
-   const path=last.data().path;
-   if(typeof path!=='string'||!/^groups\/[A-Za-z0-9_-]+\/(tasks|notes)\/[A-Za-z0-9_-]+$/.test(path))
-    throw Error('INVALID_PUSH_CURSOR_PATH');
-   const previous=await db.doc(path).get();
-   if(!previous.exists)throw Error('PUSH_CURSOR_DOCUMENT_MISSING_STOP');
-   query=query.startAfter(previous);
+   const {path,time}=last.data();
+   if(typeof path!=='string'||!/^groups\/[A-Za-z0-9_-]+\/(tasks|notes)\/[A-Za-z0-9_-]+$/.test(path)||
+      typeof time?.toMillis!=='function'||time.toMillis()<activation)
+    throw Error('INVALID_PUSH_CURSOR_STOP');
+   // Store the ordered values. A later deletion of the processed document
+   // must not strand the cursor or force a scan of the historical backlog.
+   query=query.startAfter(time,db.doc(path));
   }
   const batch=await query.get();
   for(const doc of batch.docs){
@@ -160,8 +162,11 @@ async function main(){
     }
     if(event)await sendEvent(event);
    }
+   const time=doc.get(stream.field);
+   if(typeof time?.toMillis!=='function'||time.toMillis()<activation)
+    throw Error('INVALID_EVENT_TIME_STOP');
    await checkpoint.set({activation:process.env.TEST_PUSH_START_ISO,
-    path:doc.ref.path,scannedAt:admin.firestore.FieldValue.serverTimestamp()});
+    path:doc.ref.path,time,scannedAt:admin.firestore.FieldValue.serverTimestamp()});
   }
  }
  console.log('TEST_PUSH_SENDER_FINISHED_WITHOUT_EXPOSING_RECIPIENT_DATA');
