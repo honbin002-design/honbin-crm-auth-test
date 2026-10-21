@@ -23,6 +23,21 @@ export function taskService({db,sdk,currentUid}){
   return result.docs.map(d=>({id:d.id,...d.data()}))
     .sort((a,b)=>(b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0));
  }
+ async function listPage(groupId,{status='OPEN',cursor=null,size=10}={}){
+  if(!['OPEN','DONE'].includes(status)||!Number.isSafeInteger(size)||size<1||size>25)
+   throw Error('INVALID_TASK_PAGE');
+  const uid=actor(),{query,where,orderBy,documentId,limit,startAfter}=sdk;
+  if(![query,where,orderBy,documentId,limit,startAfter].every(f=>typeof f==='function'))
+   throw Error('TASK_PAGING_SDK_REQUIRED');
+  const clauses=[where('status','==',status),orderBy(documentId(),'desc')];
+  if(cursor)clauses.push(startAfter(cursor));
+  clauses.push(limit(size+1));
+  const result=await getDocsFromServer(query(taskRef(groupId),...clauses));
+  if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
+  const shown=result.docs.slice(0,size);
+  return {items:shown.map(d=>({id:d.id,...d.data()})),
+   cursor:shown.at(-1)||null,hasMore:result.docs.length>size};
+ }
  async function create({groupId,taskId,title,description='',assignedUid=null,executeDate='',dueDate=''}){
   const uid=actor(),name=text(title,120,'TASK_TITLE');
   const detail=String(description||'').trim();
@@ -96,5 +111,5 @@ export function taskService({db,sdk,currentUid}){
     throw Error('NICKNAME_SERVER_READBACK_MISMATCH');
   return name;
  }
- return Object.freeze({newId,list,create,complete,profile,saveNickname});
+ return Object.freeze({newId,list,listPage,create,complete,profile,saveNickname});
 }
