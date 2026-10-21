@@ -37,7 +37,7 @@ export function upgradeTaskAclV3(current,v2,v3){
  const next=findBlock(v3,marker);
  if(normalize(original.block)!==normalize(expected.block))
   throw Error('CURRENT_TASK_ACL_DIFFERS_FROM_REVIEWED_V2_STOP');
- if(!next.block.includes('extensionHistory')||!next.block.includes('allow create: if canViewGroup(groupId)'))
+ if(!next.block.includes('extensionRequests')||!next.block.includes('allow create: if canViewGroup(groupId)'))
   throw Error('V3_CANDIDATE_INVALID');
  const merged=current.slice(0,original.start)+next.block+current.slice(original.end);
  if(merged.replace(next.block,()=>original.block)!==current)throw Error('ORIGINAL_RULES_NOT_PRESERVED');
