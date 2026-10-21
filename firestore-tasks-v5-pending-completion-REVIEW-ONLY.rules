@@ -1,0 +1,166 @@
+// REVIEW ONLY - NOT DEPLOYED. V5 task-completion while extension PENDING guard, independent TEST only.
+// Extension requests are separate immutable audit documents, approved/rejected
+// only by original publisher in an atomic two-document transaction.
+// Must compile in Firebase emulator and pass server denial tests before publishing.
+match /tasks/{taskId} {
+  allow get, list: if canViewGroup(groupId);
+  // Any approved ACTIVE member, including VIEWER, may publish group tasks.
+  allow create: if canViewGroup(groupId)
+    && request.resource.data.keys().hasAll([
+      'title','description','assignedUid','executeDate','dueDate','status',
+      'createdBy','createdAt','completedBy','completedAt','completionReply'
+    ])
+    && request.resource.data.keys().hasOnly([
+      'title','description','assignedUid','executeDate','dueDate','status',
+      'createdBy','createdAt','completedBy','completedAt','completionReply'
+    ])
+    && request.resource.data.title is string
+    && request.resource.data.title.size() >= 1
+    && request.resource.data.title.size() <= 120
+    && request.resource.data.description is string
+    && request.resource.data.description.size() <= 3000
+    && request.resource.data.executeDate is string
+    && request.resource.data.executeDate.size() <= 10
+    && (request.resource.data.executeDate == ''
+      || request.resource.data.executeDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+    && request.resource.data.dueDate is string
+    && request.resource.data.dueDate.size() <= 10
+    && (request.resource.data.dueDate == ''
+      || request.resource.data.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+    && (request.resource.data.assignedUid == null
+      || (request.resource.data.assignedUid is string
+        && (request.resource.data.assignedUid
+            == get(groupPath(groupId)).data.ownerUid
+          || (exists(memberPath(groupId, request.resource.data.assignedUid))
+            && get(memberPath(groupId, request.resource.data.assignedUid)).data.status == 'ACTIVE'))))
+    && request.resource.data.status == 'OPEN'
+    && request.resource.data.createdBy == request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.completedBy == null
+    && request.resource.data.completedAt == null
+    && request.resource.data.completionReply == '';
+
+  // All ACTIVE members, including VIEWER, may complete ONLY an assigned-to-
+  // them or unassigned task. One transition OPEN->DONE; no second overwrite.
+  // Original task fields and assignee must remain immutable.
+  allow update: if canViewGroup(groupId)
+    && resource.data.status == 'OPEN'
+    // Safety: an unresolved publisher review must never become orphaned by
+    // somebody completing the task first. The UI already blocks this; enforce
+    // the same invariant against direct Firestore clients.
+    && resource.data.get('extensionPendingId', null) == null
+    && (resource.data.assignedUid == null
+      || resource.data.assignedUid == request.auth.uid)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      'status','completedBy','completedAt','completionReply'
+    ])
+    && request.resource.data.status == 'DONE'
+    && request.resource.data.completedBy == request.auth.uid
+    && request.resource.data.completedAt == request.time
+    && request.resource.data.completionReply is string
+    && request.resource.data.completionReply.size() >= 1
+    && request.resource.data.completionReply.size() <= 3000;
+
+  function taskPath() {
+    return /databases/$(database)/documents/groups/$(groupId)/tasks/$(taskId);
+  }
+  function extensionPath(id) {
+    return /databases/$(database)/documents/groups/$(groupId)/tasks/$(taskId)/extensionRequests/$(id);
+  }
+
+  // Atomic two-document extension REQUEST. Effective dueDate stays unchanged.
+  allow update: if canViewGroup(groupId)
+    && resource.data.status == 'OPEN'
+    && resource.data.dueDate is string
+    && resource.data.dueDate != ''
+    && (resource.data.assignedUid == null
+      || resource.data.assignedUid == request.auth.uid)
+    && resource.data.get('extensionPendingId', null) == null
+    && request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly(['extensionPendingId'])
+    && request.resource.data.extensionPendingId is string
+    && request.resource.data.extensionPendingId.size() >= 1
+    && request.resource.data.extensionPendingId.size() <= 150
+    && !exists(extensionPath(request.resource.data.extensionPendingId))
+    && getAfter(extensionPath(request.resource.data.extensionPendingId)).data.status == 'PENDING'
+    && getAfter(extensionPath(request.resource.data.extensionPendingId)).data.requestedBy == request.auth.uid
+    && getAfter(extensionPath(request.resource.data.extensionPendingId)).data.requestedAt == request.time;
+
+  // Atomic two-document publisher DECISION. Direct deadline edits denied.
+  allow update: if canViewGroup(groupId)
+    && resource.data.status == 'OPEN'
+    && resource.data.createdBy == request.auth.uid
+    && resource.data.get('extensionPendingId', null) is string
+    && request.resource.data.get('extensionPendingId', null) == null
+    && request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly(['dueDate','extensionPendingId'])
+    && get(extensionPath(resource.data.extensionPendingId)).data.status == 'PENDING'
+    && getAfter(extensionPath(resource.data.extensionPendingId)).data.decidedBy == request.auth.uid
+    && getAfter(extensionPath(resource.data.extensionPendingId)).data.decidedAt == request.time
+    && (
+      (getAfter(extensionPath(resource.data.extensionPendingId)).data.status == 'APPROVED'
+        && request.resource.data.dueDate ==
+          getAfter(extensionPath(resource.data.extensionPendingId)).data.approvedDueDate)
+      ||
+      (getAfter(extensionPath(resource.data.extensionPendingId)).data.status == 'REJECTED'
+        && request.resource.data.dueDate == resource.data.dueDate)
+    );
+
+  // Every request is a separate retained audit document, never deletable.
+  match /extensionRequests/{requestId} {
+    allow get, list: if canViewGroup(groupId);
+    allow create: if canViewGroup(groupId)
+      && get(taskPath()).data.status == 'OPEN'
+      && get(taskPath()).data.dueDate is string
+      && get(taskPath()).data.dueDate != ''
+      && get(taskPath()).data.get('extensionPendingId', null) == null
+      && (get(taskPath()).data.assignedUid == null
+        || get(taskPath()).data.assignedUid == request.auth.uid)
+      && getAfter(taskPath()).data.extensionPendingId == requestId
+      && request.resource.data.keys().hasAll([
+        'requestedBy','requestedAt','reason','newDueDate','status',
+        'decidedBy','decidedAt'
+      ])
+      && request.resource.data.keys().hasOnly([
+        'requestedBy','requestedAt','reason','newDueDate','status',
+        'decidedBy','decidedAt'
+      ])
+      && request.resource.data.requestedBy == request.auth.uid
+      && request.resource.data.requestedAt == request.time
+      && request.resource.data.reason is string
+      && request.resource.data.reason.size() >= 1
+      && request.resource.data.reason.size() <= 1000
+      && request.resource.data.newDueDate is string
+      && request.resource.data.newDueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+      && request.resource.data.newDueDate > get(taskPath()).data.dueDate
+      && request.resource.data.status == 'PENDING'
+      && request.resource.data.decidedBy == null
+      && request.resource.data.decidedAt == null;
+
+    allow update: if canViewGroup(groupId)
+      && get(taskPath()).data.status == 'OPEN'
+      && get(taskPath()).data.createdBy == request.auth.uid
+      && get(taskPath()).data.extensionPendingId == requestId
+      && getAfter(taskPath()).data.get('extensionPendingId', null) == null
+      && resource.data.status == 'PENDING'
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['status','decidedBy','decidedAt','approvedDueDate'])
+      && request.resource.data.status in ['APPROVED','REJECTED']
+      && request.resource.data.decidedBy == request.auth.uid
+      && request.resource.data.decidedAt == request.time
+      && (
+        (request.resource.data.status == 'APPROVED'
+          && request.resource.data.keys().hasAll(['approvedDueDate'])
+          && request.resource.data.approvedDueDate is string
+          && request.resource.data.approvedDueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.approvedDueDate > get(taskPath()).data.dueDate
+          && getAfter(taskPath()).data.dueDate == request.resource.data.approvedDueDate)
+        ||
+        (request.resource.data.status == 'REJECTED'
+          && !request.resource.data.keys().hasAny(['approvedDueDate'])
+          && getAfter(taskPath()).data.dueDate == get(taskPath()).data.dueDate)
+      );
+    allow delete: if false;
+  }
+  allow delete: if false;
+}
