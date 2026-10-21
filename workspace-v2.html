@@ -58,11 +58,11 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
  </section>
  <section id="tasksPanel" hidden>
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2><span class="pill">TEST 驗收中</span></div>
-   <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。</p>
+   <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。V3 權限驗收完成後，所有成員皆可發布任務及申請延期。</p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
    <div id="tasksList"></div>
-   <p class="hint">截止日前 3 天會在任務頁提示；目前尚未啟用 iPhone 背景推播。所有成員發布與延期核准需要先通過 TEST 伺服器權限驗收。</p>
+   <p class="hint">截止日前 3 天會在任務頁提示；目前尚未啟用 iPhone 背景推播。全員發布及延期核准須待 TEST 伺服器權限正式驗收。</p>
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
     <label for="taskTitle">任務名稱</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
@@ -144,14 +144,16 @@ import {groupService,normalizedEmail} from './firebase-group-service.mjs';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs';
+import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
-const TASK_RULES_ENABLED=true; // TEST opt-in task publication after emulator + live read/denial PASS.
+const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
+const TASK_V3_RULES_ENABLED=false; // Fail-closed: enable only AFTER TEST server ACL publish/readback + denial tests.
 const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
-let auth,db,sdk,notes,groups,tasks,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
+let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
 let pendingTaskWrite=null;
 const sharedNickCache=new Map();
@@ -309,9 +311,8 @@ async function loadTasks(){
   root.append(mk('p',!taskSelected?'請先加入一個多人共用群組。':'任務讀取與發布尚未開放，等待 TEST 伺服器規則驗收。'));return;
  }
  const taskGroupId=taskSelected.id;
- // Existing deployed TEST Rules still prohibit VIEWER task creation.
- // Do not offer a misleading publish button until the server ACL is verified.
- const canPublish=['ADMIN','EDITOR'].includes(taskSelected.role);
+ // Fail closed until reviewed V3 Rules are published and server-denial verified.
+ const canPublish=TASK_V3_RULES_ENABLED || ['ADMIN','EDITOR'].includes(taskSelected.role);
  $('taskPublish').disabled=!canPublish;
  $('toggleTaskForm').hidden=!canPublish;
  if(!canPublish)setTaskForm(false);
@@ -343,8 +344,8 @@ async function loadTasks(){
   }
   if(blocked)$('taskScopeHint').textContent+='｜'+blocked+' 位成員身分未核對，暫停指派。';
  }
- if(taskSelected.role==='EDITOR')
-  $('taskScopeHint').textContent+='｜編輯者目前可指派自己或所有成員；指定其他成員請由管理員操作。';
+ if(taskSelected.role!=='ADMIN')
+  $('taskScopeHint').textContent+='｜非管理員可發布給自己或所有成員；指定其他成員請由管理員操作。';
  const entries=await tasks.list(taskGroupId);check(s);
  if(!entries.length)root.append(mk('p','目前沒有任務。'));
  const categories=[
@@ -404,6 +405,83 @@ async function loadTasks(){
    });
    box.append(reply,button);
   }else box.append(mk('small','尚未完成｜此任務不是指派給你'));
+  if(TASK_V3_RULES_ENABLED&&extensions){
+   const canExecute=item.status==='OPEN'&&taskCanComplete(item,uid);
+   const pending=item.status==='OPEN'&&!!item.extensionPendingId;
+   if(pending){
+    const notice=mk('p','延期申請待發布人審核；原截止日期仍有效。');
+    notice.className='task-alert';box.append(notice);
+   }
+   if(canExecute&&item.dueDate&&!pending){
+    const toggle=mk('button','申請延期');toggle.className='alt';toggle.type='button';
+    const form=mk('form');form.hidden=true;
+    const reasonLabel=mk('label','延期原因（必填）');
+    const reason=mk('textarea');reason.maxLength=1000;reason.required=true;
+    reason.placeholder='請說明未能如期完成的原因';
+    const dateLabel=mk('label','申請新的完成日期');
+    const newDate=mk('input');newDate.type='date';newDate.required=true;newDate.min=item.dueDate;
+    const send=mk('button','送出延期申請');send.type='submit';
+    form.append(reasonLabel,reason,dateLabel,newDate,send);
+    toggle.onclick=()=>{form.hidden=!form.hidden;toggle.textContent=form.hidden?'申請延期':'收起延期申請'};
+    form.onsubmit=event=>{event.preventDefault();run(async()=>{
+     if(!reason.value.trim()||!newDate.value||newDate.value<=item.dueDate)
+      throw Error('請填寫原因，並選擇晚於原截止日的新日期');
+     if(!confirm('送出延期申請？原截止日期維持不變，需由發布人核准。'))return;
+     send.disabled=true;
+     try{
+      await extensions.request({groupId:taskGroupId,taskId:item.id,
+       reason:reason.value,newDueDate:newDate.value});check(s);
+      await loadTasks();say('延期申請已由 TEST 伺服器確認，等待發布人審核。');
+     }finally{send.disabled=false}
+    })};
+    box.append(toggle,form);
+   }
+   if(item.dueDate||pending){
+    const historyButton=mk('button',pending&&item.createdBy===uid?'審核延期申請':'查看延期紀錄');
+    historyButton.type='button';historyButton.className='alt';
+    const history=mk('div');history.hidden=true;
+    historyButton.onclick=()=>run(async()=>{
+     if(!history.hidden){history.hidden=true;historyButton.textContent=pending&&item.createdBy===uid?'審核延期申請':'查看延期紀錄';return}
+     historyButton.disabled=true;
+     try{
+      history.replaceChildren();
+      const requests=await extensions.list({groupId:taskGroupId,taskId:item.id});check(s);
+      if(!requests.length)history.append(mk('p','尚無延期申請紀錄。'));
+      for(const req of requests){
+       const entry=mk('div');entry.className='line';
+       entry.append(mk('p','申請人：'+await displayName(req.requestedBy)));
+       entry.append(mk('p','申請新截止日：'+req.newDueDate));
+       entry.append(mk('p','原因：'+req.reason));
+       entry.append(mk('p','審核狀態：'+(
+        req.status==='PENDING'?'待審核':req.status==='APPROVED'?'已核准':'已拒絕')));
+       if(req.decidedAt?.toDate)entry.append(mk('small','審核時間：'+req.decidedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
+       if(req.status==='PENDING'&&item.createdBy===uid&&
+          item.status==='OPEN'&&item.extensionPendingId===req.id){
+        const row=mk('div');row.className='row';
+        for(const decision of ['APPROVED','REJECTED']){
+         const action=mk('button',decision==='APPROVED'?'核准延期':'拒絕延期');
+         action.type='button';if(decision==='REJECTED')action.className='alt';
+         action.onclick=()=>run(async()=>{
+          if(!confirm((decision==='APPROVED'?'核准':'拒絕')+'延期申請？審核結果會保留紀錄。'))return;
+          action.disabled=true;
+          try{
+           await extensions.decide({groupId:taskGroupId,taskId:item.id,
+            requestId:req.id,decision});check(s);
+           await loadTasks();say('延期審核結果已由 TEST 伺服器確認。');
+          }finally{action.disabled=false}
+         });
+         row.append(action);
+        }
+        entry.append(row);
+       }
+       history.append(entry);
+      }
+      history.hidden=false;historyButton.textContent='收起延期紀錄';
+     }finally{historyButton.disabled=false}
+    });
+    box.append(historyButton,history);
+   }
+  }
   (sections.get(taskCategory(item))||root).append(box);
  }
 }
@@ -799,7 +877,7 @@ async function start(){
  try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
-  const generation=++epoch;uid='';authenticated=false;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
+  const generation=++epoch;uid='';authenticated=false;extensions=null;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
   inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
   $('receivedInvites').replaceChildren();$('sentInvites').replaceChildren();
@@ -818,6 +896,7 @@ async function start(){
    uid=user.uid;
    notes=noteService({db,sdk,identity:{uid,emailVerified:true,providerId:'google.com'},currentUid:()=>auth.currentUser?.uid});
    groups=groupService({db,sdk,identity:user});tasks=taskService({db,sdk,currentUid:()=>auth.currentUser?.uid});
+   extensions=taskExtensionService({db,sdk,currentUid:()=>auth.currentUser?.uid});
    $('mode').value='PRIVATE';$('groupWrap').hidden=true;
    $('privateNotes').classList.add('active');$('sharedNotes').classList.remove('active');
    // Verify server authorization before revealing any saved local identity or content.
