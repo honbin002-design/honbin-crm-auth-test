@@ -23,6 +23,7 @@ assert.match(result.merged,/extensionPending/);
 assert.match(result.merged,/extensionRequests/);
 assert.match(result.merged,/resource\.data\.createdBy == request\.auth\.uid/);
 assert.match(result.merged,/approvedDueDate/);
+assert.match(result.merged,/originalDueDate == get\(taskPath\(\)\)\.data\.dueDate/);
 assert.match(result.merged,/resource\.data\.get\('extensionPendingId', null\) == null/);
 assert.match(result.merged,/request\.resource\.data\.dueDate == resource\.data\.dueDate/);
 assert.equal((result.merged.match(/match \/tasks\/\{taskId\}/g)||[]).length,1);
