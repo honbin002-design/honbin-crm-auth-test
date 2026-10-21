@@ -30,7 +30,10 @@ assert.match(page,/發布人：/);
 assert.match(page,/到期提醒：/);
 // V3 UI must remain inert until the TEST Firebase Rules are actually published
 // and live server-positive and server-denial tests have been recorded.
-assert.match(page,/const TASK_V3_RULES_ENABLED=false/);
+assert.match(page,/const TASK_V3_RULES_ENABLED=true/);
+assert.match(page,/!taskSelected\|\|!\(TASK_V3_RULES_ENABLED\|\|\['ADMIN','EDITOR'\]/);
+assert.match(page,/const canPublish=TASK_V3_RULES_ENABLED/);
+assert.match(page,/TEST 實際寫入驗收/);
 assert.match(page,/taskExtensionService\(\{db,sdk,currentUid:/);
 assert.match(page,/TASK_V3_RULES_ENABLED&&extensions/);
 assert.match(page,/extensions\.request\(\{/);
