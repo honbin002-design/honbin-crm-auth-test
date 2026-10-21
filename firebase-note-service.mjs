@@ -59,6 +59,21 @@ export function noteService({db,sdk,identity,currentUid}){
       .filter(n=>!n.deleted&&(!query||`${n.title}\n${n.content}`.toLocaleLowerCase('zh-Hant').includes(query)))
       .sort((a,b)=>(b.updatedAt?.toMillis?.()||0)-(a.updatedAt?.toMillis?.()||0));
   }
+  async function listPage({mode,groupId,cursor=null,size=10}){
+    if(!Number.isSafeInteger(size)||size<1||size>25)throw Error('INVALID_NOTE_PAGE');
+    const target=scope(mode,groupId);
+    const {query,orderBy,limit,startAfter}=sdk;
+    if(![query,orderBy,limit,startAfter].every(f=>typeof f==='function'))
+      throw Error('NOTE_PAGING_SDK_REQUIRED');
+    const clauses=[orderBy('updatedAt','desc')];
+    if(cursor)clauses.push(startAfter(cursor));
+    clauses.push(limit(size+1));
+    const result=await getDocs(query(collectionRef(target),...clauses));
+    verifySession();
+    const shown=result.docs.slice(0,size);
+    return {items:shown.map(serialize).filter(n=>!n.deleted),
+      cursor:shown.at(-1)||null,hasMore:result.docs.length>size};
+  }
   async function create({mode,groupId,noteId,title,content}){
     const target=scope(mode,groupId),ref=noteRef(target,noteId);
     const payload=textBody(title,content);
@@ -103,5 +118,5 @@ export function noteService({db,sdk,identity,currentUid}){
   }
   const update=options=>write({...options,remove:false});
   const softDelete=options=>write({...options,remove:true});
-  return Object.freeze({newId,list,create,update,softDelete});
+  return Object.freeze({newId,list,listPage,create,update,softDelete});
 }
