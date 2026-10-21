@@ -413,8 +413,26 @@ async function loadTasks(){
    const canExecute=item.status==='OPEN'&&taskCanComplete(item,uid);
    const pending=item.status==='OPEN'&&!!item.extensionPendingId;
    if(pending){
-    const notice=mk('p','延期申請待發布人審核；原截止日期仍有效。');
-    notice.className='task-alert';box.append(notice);
+    const notice=mk('div');notice.className='task-alert';
+    notice.append(mk('strong','延期申請待發布人審核；原截止日期仍有效。'));
+    // Show the actual applicant from the server-stored extension request,
+    // not the task assignee or the current viewer. Open-to-all tasks can
+    // be extended by any ACTIVE member, so these identities may differ.
+    try{
+     const requests=await extensions.list({groupId:taskGroupId,taskId:item.id});check(s);
+     const active=requests.find(req=>req.id===item.extensionPendingId&&req.status==='PENDING');
+     if(active){
+      notice.append(mk('p','延期申請人：'+await displayName(active.requestedBy)));
+      if(active.requestedAt?.toDate)
+       notice.append(mk('small','申請時間：'+active.requestedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
+      notice.append(mk('p','申請新截止日期：'+active.newDueDate));
+      notice.append(mk('p','延期原因：'+active.reason));
+     }else notice.append(mk('p','延期申請人：伺服器紀錄尚未核對，請開啟延期紀錄確認。'));
+    }catch(error){
+     check(s);
+     notice.append(mk('p','延期申請資料暫時無法讀取；請點「查看延期紀錄」重試。'));
+    }
+    box.append(notice);
    }
    if(canExecute&&item.dueDate&&!pending){
     const toggle=mk('button','申請延期');toggle.className='alt';toggle.type='button';
@@ -453,7 +471,9 @@ async function loadTasks(){
       if(!requests.length)history.append(mk('p','尚無延期申請紀錄。'));
       for(const req of requests){
        const entry=mk('div');entry.className='line';
-       entry.append(mk('p','申請人：'+await displayName(req.requestedBy)));
+       entry.append(mk('p','延期申請人：'+await displayName(req.requestedBy)));
+       if(req.requestedAt?.toDate)
+        entry.append(mk('small','申請時間：'+req.requestedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
        entry.append(mk('p','申請新截止日：'+req.newDueDate));
        entry.append(mk('p','原因：'+req.reason));
        entry.append(mk('p','審核狀態：'+(
