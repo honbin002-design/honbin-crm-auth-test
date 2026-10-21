@@ -28,6 +28,19 @@ assert.match(page,/已完成｜歷史紀錄/);
 assert.match(page,/未完成｜即將到期/);
 assert.match(page,/發布人：/);
 assert.match(page,/到期提醒：/);
+// V3 UI must remain inert until the TEST Firebase Rules are actually published
+// and live server-positive and server-denial tests have been recorded.
+assert.match(page,/const TASK_V3_RULES_ENABLED=false/);
+assert.match(page,/taskExtensionService\(\{db,sdk,currentUid:/);
+assert.match(page,/TASK_V3_RULES_ENABLED&&extensions/);
+assert.match(page,/extensions\.request\(\{/);
+assert.match(page,/extensions\.decide\(\{/);
+assert.match(page,/extensions\.list\(\{/);
+assert.match(page,/延期申請待發布人審核/);
+assert.match(page,/核准延期/);
+assert.match(page,/拒絕延期/);
+assert.match(page,/發布人：/);
+assert.match(page,/taskCanComplete\(item,uid\)/);
 assert.match(page,/const TASK_RULES_ENABLED=true/);
 assert.match(page,/ownerMembers\.roster\(taskGroupId\)/);
 assert.match(page,/verifiedRoster=new Map/);
