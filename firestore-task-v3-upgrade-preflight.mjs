@@ -15,7 +15,7 @@ assert.equal(result.exactOtherRulesPreserved,true);
 assert.equal(result.notDeployed,true);
 assert.match(result.merged,/allow create: if canViewGroup\(groupId\)/);
 assert.match(result.merged,/extensionPending/);
-assert.match(result.merged,/extensionHistory/);
+assert.match(result.merged,/extensionRequests/);
 assert.match(result.merged,/resource\.data\.createdBy == request\.auth\.uid/);
 assert.match(result.merged,/request\.resource\.data\.dueDate == resource\.data\.dueDate/);
 assert.equal((result.merged.match(/match \/tasks\/\{taskId\}/g)||[]).length,1);
