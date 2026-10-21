@@ -26,6 +26,10 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .pill{display:inline-block;background:#e9f0f8;color:#2d5072;border-radius:30px;padding:3px 9px;font-size:.8rem}
 .note-content{white-space:pre-wrap;overflow-wrap:anywhere;color:#54667c;font-size:.9rem}
 .warning{background:#fff5de;padding:11px;border-radius:10px}
+.task-section{margin-top:18px;border-top:1px solid #dbe5f0;padding-top:12px}
+.task-section h3{font-size:1rem;margin:0 0 8px;color:#205a9a}
+.task-section .line{padding:14px 0}
+.task-alert{background:#fff4df;border-radius:8px;padding:8px 10px;color:#7a4d00;font-weight:600}
 [hidden]{display:none!important}
 </style></head><body>
 <header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
@@ -58,6 +62,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
    <div id="tasksList"></div>
+   <p class="hint">截止日前 3 天會在任務頁提示；目前尚未啟用 iPhone 背景推播。所有成員發布與延期核准需要先通過 TEST 伺服器權限驗收。</p>
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
     <label for="taskTitle">任務名稱</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
@@ -279,6 +284,24 @@ async function loadGroups(){
  $('taskScopeHint').textContent=taskSelected?'目前任務群組：'+taskSelected.name+'｜你的身分：'+notebookRoleLabel(taskSelected.role):'目前沒有可使用的多人群組，請到設定中的進階管理加入。';
  $('newNote').disabled=!mayWrite();
 }
+function taipeiDateKey(){
+ const parts=Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const get=type=>parts.find(p=>p.type===type)?.value||'';
+ return get('year')+'-'+get('month')+'-'+get('day');
+}
+function dueDays(dueDate){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(dueDate||''))return null;
+ const today=taipeiDateKey();
+ const stamp=value=>Date.UTC(Number(value.slice(0,4)),Number(value.slice(5,7))-1,Number(value.slice(8,10)));
+ return Math.round((stamp(dueDate)-stamp(today))/86400000);
+}
+function taskCategory(item){
+ if(item.status==='DONE')return 'done';
+ const days=dueDays(item.dueDate);
+ if(days!==null&&days<0)return 'overdue';
+ if(days!==null&&days<=3)return 'soon';
+ return 'open';
+}
 async function loadTasks(){
  const s=session(),root=$('tasksList');root.replaceChildren();
  $('taskPublish').disabled=true;
@@ -286,6 +309,8 @@ async function loadTasks(){
   root.append(mk('p',!taskSelected?'請先加入一個多人共用群組。':'任務讀取與發布尚未開放，等待 TEST 伺服器規則驗收。'));return;
  }
  const taskGroupId=taskSelected.id;
+ // Existing deployed TEST Rules still prohibit VIEWER task creation.
+ // Do not offer a misleading publish button until the server ACL is verified.
  const canPublish=['ADMIN','EDITOR'].includes(taskSelected.role);
  $('taskPublish').disabled=!canPublish;
  $('toggleTaskForm').hidden=!canPublish;
@@ -322,6 +347,20 @@ async function loadTasks(){
   $('taskScopeHint').textContent+='｜編輯者目前可指派自己或所有成員；指定其他成員請由管理員操作。';
  const entries=await tasks.list(taskGroupId);check(s);
  if(!entries.length)root.append(mk('p','目前沒有任務。'));
+ const categories=[
+  {key:'overdue',label:'未完成｜已逾期'},
+  {key:'soon',label:'未完成｜即將到期（3 天內）'},
+  {key:'open',label:'未完成｜其他'},
+  {key:'done',label:'已完成｜歷史紀錄'}
+ ];
+ const sections=new Map();
+ for(const category of categories){
+  const matching=entries.filter(item=>taskCategory(item)===category.key);
+  if(!matching.length)continue;
+  const section=mk('section');section.className='task-section';
+  section.append(mk('h3',category.label+'（'+matching.length+'）'));
+  root.append(section);sections.set(category.key,section);
+ }
  async function displayName(id){
   if(!id)return '所有成員';
   const name=await nicknameFor(id).catch(()=>'');check(s);
@@ -337,7 +376,15 @@ async function loadTasks(){
   const box=mk('div');box.className='line';box.dataset.taskId=item.id;
   box.append(mk('strong',item.title));
   if(item.description)box.append(mk('p',item.description));
+  box.append(mk('p','發布人：'+await displayName(item.createdBy)));
+  if(item.createdAt?.toDate)box.append(mk('small','發布時間：'+item.createdAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
   box.append(mk('p','指派給：'+await displayName(item.assignedUid)));
+  const remaining=dueDays(item.dueDate);
+  if(item.status!=='DONE'&&remaining!==null&&remaining<=3){
+   const warning=remaining<0?'已逾期 '+Math.abs(remaining)+' 天':
+    remaining===0?'今天到期':'距離截止還有 '+remaining+' 天';
+   const alert=mk('p','到期提醒：'+warning);alert.className='task-alert';box.append(alert);
+  }
   if(item.executeDate)box.append(mk('p','預定執行：'+item.executeDate));
   if(item.dueDate)box.append(mk('small','截止日期：'+item.dueDate));
   if(item.status==='DONE'){
@@ -357,7 +404,7 @@ async function loadTasks(){
    });
    box.append(reply,button);
   }else box.append(mk('small','尚未完成｜此任務不是指派給你'));
-  root.append(box);
+  (sections.get(taskCategory(item))||root).append(box);
  }
 }
 function toggleInviteForm(open){
