@@ -1,0 +1,31 @@
+name: TEST task V3 Firestore emulator ACL
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore-task-v3-*.mjs'
+      - 'firestore-task-v3-*.html'
+      - 'firestore-tasks-v3-all-members-extension-REVIEW-ONLY.rules'
+      - 'prepare-firestore-task-v3-emulator-rules.mjs'
+      - 'package.json'
+      - '.github/workflows/task-v3-emulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firestore-v3-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run synthetic Firestore V3 ACL and rejection tests
+        run: npm run test:task-v3-emulator
