@@ -40,7 +40,7 @@ export function upgradeTaskAclV3(current,v2,v3){
  if(!next.block.includes('extensionHistory')||!next.block.includes('allow create: if canViewGroup(groupId)'))
   throw Error('V3_CANDIDATE_INVALID');
  const merged=current.slice(0,original.start)+next.block+current.slice(original.end);
- if(merged.replace(next.block,original.block)!==current)throw Error('ORIGINAL_RULES_NOT_PRESERVED');
+ if(merged.replace(next.block,()=>original.block)!==current)throw Error('ORIGINAL_RULES_NOT_PRESERVED');
  return Object.freeze({merged,exactOtherRulesPreserved:true,
   originalBytes:current.length,candidateBytes:merged.length,
   replaced:['groups/{groupId}/tasks/{taskId}'],notDeployed:true});
