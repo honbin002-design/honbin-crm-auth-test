@@ -11,10 +11,22 @@ const syntax=spawnSync(process.execPath,['--input-type=module','--check'],{input
 assert.equal(syntax.status,0,syntax.stderr);
 assert.match(page,/firestoreReadyForRealData/);
 assert.match(page,/projectId!=='honbin-crm-notes-spark'/);
+assert.match(page,/await authSdk\.setPersistence\(auth,authSdk\.browserLocalPersistence\)/);
+assert.doesNotMatch(page,/browserSessionPersistence/);
+assert.match(page,/sdk\.signOut\(auth\)/);
+assert.match(page,/關閉再開啟也可自動登入/);
+for(const path of ['notes-preview.html','groups-preview.html']){
+ const companion=readFileSync(path,'utf8');
+ assert.match(companion,/await authSdk\.setPersistence\(auth,authSdk\.browserLocalPersistence\)/);
+ assert.doesNotMatch(companion,/browserSessionPersistence/);
+}
 assert.match(page,/taskPublish" disabled/);
 assert.match(page,/只有你明確按「發布」並確認才會寫入/);
 assert.match(page,/firebase-note-service\.mjs/);
 assert.match(page,/firebase-group-service\.mjs/);
+assert.match(page,/sdk\.getDocFromServer\(sdk\.doc\(db,'groups',group\.id,'tasks',itemId\)\)/);
+assert.match(page,/sdk\.getDocFromServer\(sdk\.doc\(db,'groups',group\.id,'notes',itemId\)\)/);
+assert.match(page,/loadTasks\(\{focusItem:/);
 assert.match(page,/firebase-offline-drafts\.mjs/);
 assert.match(page,/id="privateNotes"/);
 assert.match(page,/id="sharedNotes"/);
