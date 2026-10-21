@@ -45,7 +45,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .list-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.list-tabs button{background:#e7eff9;color:#24486c}.list-tabs button.active{background:#205a9a;color:#fff}.list-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}.list-controls label{margin:3px 0}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0}.pager button{flex:0 0 auto}.pager span{text-align:center;color:#52657b}.task-card .task-title-button{margin-bottom:0}
 .note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
 .back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
-@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta,.list-controls{grid-template-columns:1fr}.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
+@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.list-controls,.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.list-controls>div{min-width:0}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
 [hidden]{display:none!important}
 </style></head><body>
 <header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
@@ -81,10 +81,10 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <div class="list-tabs" role="group" aria-label="任務狀態"><button id="taskOpenTab" type="button" class="active" aria-pressed="true">進行中</button><button id="taskDoneTab" type="button" aria-pressed="false">已完成</button></div>
    <div class="list-controls"><div><label for="taskSearchField">搜尋條件</label><select id="taskSearchField"><option value="all">全部欄位</option><option value="publisher">發布人</option><option value="executor">執行人</option><option value="content">任務名稱與內容</option></select></div><div><label for="taskSearch">搜尋任務</label><input id="taskSearch" type="search" placeholder="輸入名稱或關鍵字"></div></div>
    <button id="taskSearchButton" class="alt" type="button" style="margin-top:10px">搜尋目前批次</button>
-   <p class="hint">每批最多 10 筆；點任務標題看詳情與操作。搜尋目前批次，按「下一批」繼續查找更舊資料。</p>
-   <details><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
    <div id="tasksList"></div>
    <div class="pager"><button class="alt" id="taskPrev" type="button">上一批</button><span id="taskPageStatus" role="status">第 1 批</span><button class="alt" id="taskNext" type="button">下一批</button></div>
+   <p class="hint">每批最多 10 筆；點任務標題看詳情與操作。搜尋目前批次，按「下一批」繼續查找更舊資料。</p>
+   <details><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
    <p class="hint">截止日前 3 天會在任務頁提示。此為獨立 TEST，請勿輸入正式資料。</p>
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
