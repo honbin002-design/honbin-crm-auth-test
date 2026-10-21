@@ -19,6 +19,9 @@ assert.throws(()=>mergeTestPushRules(push.merged,
  /SUBSCRIPTION_RULE_ALREADY_EXISTS/);
 const worker=readFileSync('notification-free-sender-REVIEW-ONLY.mjs','utf8');
 const workflow=readFileSync('.github/workflows/push-sender-review.yml','utf8');
+const runtime=JSON.parse(readFileSync('package.json','utf8'));
+assert.equal(runtime.dependencies['firebase-admin'],'14.5.0');
+assert.equal(runtime.dependencies['web-push'],'3.6.7');
 assert.match(worker,/TEST_PUSH_SEND_ENABLED/);
 assert.match(worker,/EXPLICITLY_APPROVED/);
 assert.match(worker,/honbin-crm-notes-spark/);
