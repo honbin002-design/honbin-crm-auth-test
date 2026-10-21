@@ -295,10 +295,28 @@ async function loadTasks(){
  const self=mk('option','指派給我自己');self.value=uid;choices.append(self);
  if(taskSelected.role==='ADMIN'){
   const members=await groups.listMembers(taskGroupId);check(s);
-  for(const m of members.filter(x=>x.status==='ACTIVE'&&x.uid!==uid)){
-   const name=await nicknameFor(m.uid).catch(()=>''),opt=mk('option',name||'未設定暱稱（成員）');
-   opt.value=m.uid;choices.append(opt);
+  let verifiedRoster=null;
+  if(ownerMembers){
+   // Highest-account owner: verify the member-to-email invitation link from
+   // Firestore before presenting a person as an assignable target.
+   const result=await ownerMembers.roster(taskGroupId);check(s);
+   verifiedRoster=new Map(result.members.filter(m=>m.editable&&m.status==='ACTIVE'&&m.email)
+    .map(m=>[m.uid,m.email]));
   }
+  let blocked=0;
+  for(const m of members.filter(x=>x.status==='ACTIVE'&&x.uid!==uid)){
+   const verifiedEmail=verifiedRoster?.get(m.uid)||'';
+   const name=await nicknameFor(m.uid).catch(()=>'');check(s);
+   const opt=mk('option',verifiedEmail
+    ?(name?name+'（'+verifiedEmail+'）':verifiedEmail)
+    :name?name+'（UID '+m.uid.slice(0,8)+'…，待核對）'
+     :'帳號待核對（UID '+m.uid.slice(0,8)+'…）');
+   opt.value=m.uid;
+   // Fail closed: never let the owner assign to an unidentified member.
+   if(ownerMembers&&!verifiedEmail){opt.disabled=true;blocked++}
+   choices.append(opt);
+  }
+  if(blocked)$('taskScopeHint').textContent+='｜'+blocked+' 位成員身分未核對，暫停指派。';
  }
  if(taskSelected.role==='EDITOR')
   $('taskScopeHint').textContent+='｜編輯者目前可指派自己或所有成員；指定其他成員請由管理員操作。';
