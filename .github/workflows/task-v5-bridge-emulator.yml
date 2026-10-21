@@ -1,0 +1,32 @@
+name: TEST task V5 bridge Firestore emulator ACL
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore-tasks-v5-bridge-REVIEW-ONLY.rules'
+      - 'prepare-firestore-task-v5-bridge-emulator-rules.mjs'
+      - 'firestore-task-v5-bridge-emulator-test.mjs'
+      - 'firestore-task-v5-bridge-upgrade-review.html'
+      - '.github/workflows/task-v5-bridge-emulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firestore-v5-bridge-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify V4-to-bridge candidate with synthetic local fixture
+        run: node --input-type=module -e "import {readFileSync as r} from 'node:fs';import {mergeTestTaskAndNicknameRules as m} from './firestore-task-nickname-offline-merge.mjs';import {upgradeTaskAclV3 as v3} from './firestore-task-v3-exact-upgrade.mjs';import {upgradeTaskAclV4 as v4} from './firestore-task-v4-exact-upgrade.mjs';import {upgradeTaskAclV5 as v5} from './firestore-task-v5-exact-upgrade.mjs';const h=r('firestore-notebook-hard-delete-v4d-deploy.html','utf8').match(/<textarea id=\"template\"[^>]*>([\\s\\S]*?)<\\/textarea>/)[1].replaceAll('&amp;','&').replaceAll('&lt;','<').replaceAll('&gt;','>').replaceAll('__OWNER_UID__','synthetic_owner');const a=r('firestore-tasks-v2-rules-REVIEW-ONLY.rules','utf8'),b=r('firestore-tasks-v3-all-members-extension-REVIEW-ONLY.rules','utf8'),c=r('firestore-tasks-v4-publisher-deadline-REVIEW-ONLY.rules','utf8'),d=r('firestore-tasks-v5-bridge-REVIEW-ONLY.rules','utf8');const base=v4(v3(m(h,a).merged,a,b).merged,b,c).merged;const result=v5(base,c,d);if(!result.exactOtherRulesPreserved||!result.notDeployed)throw Error('BAD_EXACT_BRIDGE');console.log('BRIDGE_EXACT_MERGE_PASS')"
+      - name: Run synthetic Firestore bridge ACL, legacy writes, forged audits and pending completion rejection
+        run: node prepare-firestore-task-v5-bridge-emulator-rules.mjs && npx firebase emulators:exec --config firebase.emulator.test.json --project demo-honbin-task-v5-pending-gate --only firestore 'node firestore-task-v5-bridge-emulator-test.mjs'
