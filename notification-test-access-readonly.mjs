@@ -13,13 +13,16 @@ if(credential.type!=='service_account'||typeof credential.private_key!=='string'
  throw Error('TEST_SERVICE_ACCOUNT_PRIVATE_KEY_MISSING_STOP');
 if(!credential.private_key.includes('\n')&&credential.private_key.includes('\\n'))
  throw Error('TEST_PRIVATE_KEY_NEWLINES_DOUBLE_ESCAPED_STOP');
-const {default:admin}=await import('firebase-admin');
-try{admin.initializeApp({credential:admin.credential.cert(credential),projectId})}
+const [{initializeApp,cert,deleteApp},{getAuth},{getFirestore,Timestamp,FieldPath}]=await Promise.all([
+ import('firebase-admin/app'),import('firebase-admin/auth'),import('firebase-admin/firestore')
+]);
+let app;
+try{app=initializeApp({credential:cert(credential),projectId})}
 catch{throw Error('INVALID_TEST_CREDENTIAL_STOP')}
-const db=admin.firestore();
+const db=getFirestore(app);
 // A single Auth page verifies that the dedicated role can read identities.
 // Neither the account identity nor record content is printed.
-try{await admin.auth().listUsers(1)}
+try{await getAuth(app).listUsers(1)}
 catch{throw Error('TEST_AUTH_READ_FAILED_STOP')}
 console.log('TEST_AUTH_READ_OK');
 const streams=[
@@ -30,9 +33,9 @@ const streams=[
 for(const [label,collection,field] of streams){
  try{
   await db.collectionGroup(collection)
-   .where(field,'>=',admin.firestore.Timestamp.fromMillis(0))
+   .where(field,'>=',Timestamp.fromMillis(0))
    .orderBy(field,'asc')
-   .orderBy(admin.firestore.FieldPath.documentId(),'asc')
+   .orderBy(FieldPath.documentId(),'asc')
    .limit(1).get();
   console.log(`TEST_${label}_QUERY_OK`);
  }catch(error){
@@ -41,4 +44,4 @@ for(const [label,collection,field] of streams){
   process.exitCode=1;
  }
 }
-await admin.app().delete();
+await deleteApp(app);
