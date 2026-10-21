@@ -163,7 +163,7 @@ import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
 const TASK_V3_RULES_ENABLED=true; // Existing TEST V3 rules live.
 const TASK_V4_PUBLISHER_DATE_ENABLED=true; // Owner-published TEST V4, live publisher approval and cross-account readback PASS.
-const TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED=false; // Only turn on AFTER publishing/validating V5 TEST Rules; V4 creates must stay unchanged.
+const TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED=true; // TEST V5 compatibility rules published and legacy request verified on 2026-10-21.
 const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
