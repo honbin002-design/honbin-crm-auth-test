@@ -37,9 +37,14 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .task-badge{display:inline-block;font-size:.91rem;font-weight:700;border-radius:20px;padding:5px 10px;background:#eaf2fb;color:#174c83;margin-bottom:8px}
 .task-card[data-category="overdue"] .task-badge{background:#fceaea;color:#8c2525}.task-card[data-category="soon"] .task-badge{background:#fff2dd;color:#805000}.task-card[data-category="pending"] .task-badge{background:#f0eafa;color:#5e398b}.task-card[data-category="done"] .task-badge{background:#e9f5ee;color:#286544}
 .review-card{background:#f5f8fc;border:1px solid #d8e2ee;border-radius:12px;padding:12px;margin:10px 0}.review-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.review-actions button{width:100%}.review-actions .reject{background:#fff;color:#8c2525;border:2px solid #b34b4b}
-.task-section{border-top:0}.task-section h3{padding:10px 12px;border-radius:10px;background:#edf3fa;color:#203d5b}.note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
+.task-section{border-top:0}.task-section h3{padding:12px 14px;border-radius:11px;background:#edf3fa;color:#203d5b;border-left:5px solid #205a9a}
+.task-section[data-category="overdue"] h3{background:#fceaea;color:#842828;border-color:#ad3838}.task-section[data-category="soon"] h3{background:#fff2dd;color:#805000;border-color:#b46a0a}.task-section[data-category="pending"] h3{background:#f0eafa;color:#593681;border-color:#7352a6}.task-section[data-category="done"] h3{background:#e9f5ee;color:#286544;border-color:#377957}
+.task-card{box-shadow:0 3px 12px #20334d0d}.task-card[data-category="overdue"]{background:#fffafa}.task-card[data-category="soon"]{background:#fffdf8}.task-card[data-category="pending"]{background:#fcfaff}.task-card[data-category="done"]{background:#fbfefc}
+.task-title-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;padding:5px 0;text-align:left;color:#173d61;background:transparent;font-size:1.08rem;line-height:1.45}.task-title-button::after{content:'＋';font-size:1.35rem;color:#286544;flex:none}.task-title-button[aria-expanded="true"]::after{content:'−'}.task-title-button:hover{color:#0c5796}
+.task-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;margin:8px 0}.task-summary p{margin:0}.task-summary strong{display:block;color:#52657b;font-size:.9rem}.task-detail-panel{margin-top:14px;padding-top:12px;border-top:1px solid #d8e5de}.task-open-hint{color:#426454;font-size:.94rem;margin:2px 0 0}
+.note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
 .back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
-@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
+@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta,.task-summary{grid-template-columns:1fr}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
 [hidden]{display:none!important}
 </style></head><body>
 <header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
@@ -375,6 +380,7 @@ async function loadTasks(){
   const matching=entries.filter(item=>taskCategory(item)===category.key);
   if(!matching.length)continue;
   const section=mk('section');section.className='task-section';
+  section.dataset.category=category.key;
   section.append(mk('h3',category.label+'（'+matching.length+'）'));
   root.append(section);sections.set(category.key,section);
  }
@@ -391,9 +397,22 @@ async function loadTasks(){
  }
  for(const item of entries){
   const category=taskCategory(item),box=mk('article');box.className='task-card';box.dataset.taskId=item.id;box.dataset.category=category;
+  const done=item.status==='DONE',detail=mk('div'),body=done?detail:box;
   box.append(Object.assign(mk('span',({pending:'延期待審',overdue:'已逾期',soon:'即將到期',open:'進行中',done:'已完成'})[category]),{className:'task-badge'}));
-  box.append(mk('h4',item.title));
-  if(item.description){const description=mk('p',item.description);description.className='task-description';box.append(description)}
+  if(done){
+   const heading=mk('h4'),title=mk('button',item.title);title.type='button';title.className='task-title-button';
+   title.setAttribute('aria-expanded','false');detail.id='task-detail-'+item.id;detail.className='task-detail-panel';detail.hidden=true;
+   title.setAttribute('aria-controls',detail.id);
+   title.onclick=()=>{detail.hidden=!detail.hidden;title.setAttribute('aria-expanded',String(!detail.hidden))};
+   heading.append(title);box.append(heading);
+   const summary=mk('div');summary.className='task-summary';
+   for(const [label,value] of [['建立者',await displayName(item.createdBy)],['完成者',await displayName(item.completedBy)]]){
+    const p=mk('p');p.append(mk('strong',label),mk('span',value));summary.append(p);
+   }
+   box.append(summary);
+   const hint=mk('p','點選任務標題，查看完整內容與歷史紀錄。');hint.className='task-open-hint';box.append(hint);
+  }else box.append(mk('h4',item.title));
+  if(item.description){const description=mk('p',item.description);description.className='task-description';body.append(description)}
   const meta=mk('div');meta.className='task-meta';
   function field(label,value){const p=mk('p');p.append(mk('strong',label),mk('span',value));meta.append(p)}
   field('發布人',await displayName(item.createdBy));
@@ -401,23 +420,23 @@ async function loadTasks(){
   field('發布日期',item.createdAt?.toDate?.().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})||'伺服器時間待確認');
   field('預定執行日期',item.executeDate||'未設定');
   field('截止日期',item.dueDate||'未設定');
-  box.append(meta);
+  body.append(meta);
   const remaining=dueDays(item.dueDate);
   if(item.status!=='DONE'&&remaining!==null&&remaining<=3){
    const warning=remaining<0?'已逾期 '+Math.abs(remaining)+' 天':
     remaining===0?'今天到期':'距離截止還有 '+remaining+' 天';
-   const alert=mk('p','到期提醒：'+warning);alert.className='task-alert';box.append(alert);
+   const alert=mk('p','到期提醒：'+warning);alert.className='task-alert';body.append(alert);
   }
   if(item.status==='DONE'){
-   box.append(mk('p','已完成｜'+await displayName(item.completedBy)+'｜'+
+   body.append(mk('p','已完成｜'+await displayName(item.completedBy)+'｜'+
     (item.completedAt?.toDate?.().toLocaleString('zh-TW')||'伺服器時間待確認')));
-   box.append(mk('p','回覆：'+(item.completionReply||'')));
+   body.append(mk('p','回覆：'+(item.completionReply||'')));
   }else if(item.extensionPendingId){
    // Prevent completing a task with an unresolved extension: the V4
    // publisher-decision ACL requires OPEN and an orphaned PENDING request
    // would otherwise be impossible to approve or reject.
    const waiting=mk('p','延期申請尚待發布人審核，請先處理延期再完成任務。');
-   waiting.className='task-alert';box.append(waiting);
+   waiting.className='task-alert';body.append(waiting);
   }else if(taskCanComplete(item,uid)){
    const replyLabel=mk('label','處理結果（必填）');
    const reply=mk('textarea');reply.id='reply-'+item.id;replyLabel.htmlFor=reply.id;reply.placeholder='輸入處理結果';reply.maxLength=3000;
@@ -430,8 +449,8 @@ async function loadTasks(){
       await loadTasks();say('已由伺服器確認任務完成。')}
     finally{button.disabled=false}
    });
-   box.append(replyLabel,reply,button);
-  }else box.append(mk('small','尚未完成｜此任務不是指派給你'));
+   body.append(replyLabel,reply,button);
+  }else body.append(mk('small','尚未完成｜此任務不是指派給你'));
   if(TASK_V3_RULES_ENABLED&&extensions){
    const canExecute=item.status==='OPEN'&&taskCanComplete(item,uid);
    const pending=item.status==='OPEN'&&!!item.extensionPendingId;
@@ -456,7 +475,7 @@ async function loadTasks(){
      check(s);
      notice.append(mk('p','延期申請資料暫時無法讀取；請點「查看延期紀錄」重試。'));
     }
-    box.append(notice);
+    body.append(notice);
    }
    if(canExecute&&item.dueDate&&!pending){
     const toggle=mk('button','申請延期');toggle.className='alt';toggle.type='button';
@@ -482,7 +501,7 @@ async function loadTasks(){
       await loadTasks();say('延期申請已由 TEST 伺服器確認，等待發布人審核。');
      }finally{send.disabled=false}
     })};
-    box.append(toggle,form);
+    body.append(toggle,form);
    }
    if(item.dueDate||pending){
     const historyButton=mk('button',pending&&item.createdBy===uid?'審核延期申請':'查看延期紀錄');
@@ -558,9 +577,10 @@ async function loadTasks(){
       history.hidden=false;historyButton.textContent='收起延期紀錄';
      }finally{historyButton.disabled=false}
     });
-    box.append(historyButton,history);
+    body.append(historyButton,history);
    }
   }
+  if(done)box.append(detail);
   (sections.get(taskCategory(item))||root).append(box);
  }
 }
