@@ -27,6 +27,12 @@ assert.match(page,/verifiedRoster=new Map/);
 assert.match(page,/m\.editable&&m\.status==='ACTIVE'&&m\.email/);
 assert.match(page,/if\(ownerMembers&&!verifiedEmail\)\{opt\.disabled=true/);
 assert.doesNotMatch(page,/name\|\|'未設定暱稱（成員）'/);
+assert.match(page,/let verifiedRoster=null; \/\/ Server-verified invitation email mapping/);
+assert.match(page,/verifiedRoster\?\.get\(id\)/);
+assert.match(page,/auth\?\.currentUser\?\.email/);
+assert.match(page,/成員（UID /);
+assert.doesNotMatch(page,/return \(await nicknameFor\(id\)\.catch\(\(\)=>''\)\)\|\|'未設定暱稱'/);
+
 
 assert.match(page,/TEST 共用暱稱已開放/);
 assert.match(service,/getDocFromServer\(ref\)/);
