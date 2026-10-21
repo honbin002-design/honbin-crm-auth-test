@@ -31,6 +31,12 @@ assert.match(page,/到期提醒：/);
 // V3 UI must remain inert until the TEST Firebase Rules are actually published
 // and live server-positive and server-denial tests have been recorded.
 assert.match(page,/const TASK_V3_RULES_ENABLED=true/);
+assert.match(page,/const TASK_V4_PUBLISHER_DATE_ENABLED=false/);
+assert.match(page,/if\(decision==='APPROVED'&&!TASK_V4_PUBLISHER_DATE_ENABLED\)action\.disabled=true/);
+assert.match(page,/finalDate\.value=req\.newDueDate/);
+assert.match(page,/發布人核准的最終完成日期/);
+assert.match(page,/approvedDueDate=decision==='APPROVED'\?finalDate\.value:undefined/);
+assert.match(page,/發布人核准完成日期：/);
 assert.match(page,/!taskSelected\|\|!\(TASK_V3_RULES_ENABLED\|\|\['ADMIN','EDITOR'\]/);
 assert.match(page,/const canPublish=TASK_V3_RULES_ENABLED/);
 assert.match(page,/TEST 實際寫入驗收/);
