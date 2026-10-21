@@ -56,6 +56,8 @@ jobs:
         run: node workspace-v2-preflight.mjs
       - name: Verify task assignment, single completion, and nickname client behavior
         run: node task-nickname-client-preflight.mjs
+      - name: Verify V4 publisher-date decisions, rejection and idempotent replay without real data
+        run: node firebase-task-extension-client-preflight.mjs
       - name: Verify zero-cost iPhone Web Push PWA groundwork
         run: node push-pwa-readiness-preflight.mjs
       - name: Verify scoped notification recipients and privacy
