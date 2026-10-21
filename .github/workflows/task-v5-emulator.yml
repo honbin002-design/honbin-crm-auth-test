@@ -1,0 +1,39 @@
+name: TEST task V5 Firestore emulator ACL
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore-task-v5-*.mjs'
+      - 'firestore-task-v5-*.html'
+      - 'firestore-tasks-v5-pending-completion-REVIEW-ONLY.rules'
+      - 'prepare-firestore-task-v5-emulator-rules.mjs'
+      - 'firebase-task-extension-service.mjs'
+      - 'firebase-task-service.mjs'
+      - 'firebase-task-v5-service-preflight.mjs'
+      - 'workspace-v2.html'
+      - 'package.json'
+      - '.github/workflows/task-v5-emulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firestore-v5-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify exact V3-to-V5 ACL replacement (offline)
+        run: node firestore-task-v5-upgrade-preflight.mjs
+      - name: Verify V5 publisher decision service with synthetic test
+        run: node firebase-task-v5-service-preflight.mjs
+      - name: Run synthetic Firestore V5 ACL and rejection tests
+        run: npm run test:task-v5-emulator
