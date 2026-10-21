@@ -22,6 +22,12 @@ assert.match(page,/id="taskGroup"/);
 assert.match(page,/id="taskExecuteDate"/);
 assert.match(page,/const PROFILE_RULES_ENABLED=true/);
 assert.match(page,/const TASK_RULES_ENABLED=true/);
+assert.match(page,/ownerMembers\.roster\(taskGroupId\)/);
+assert.match(page,/verifiedRoster=new Map/);
+assert.match(page,/m\.editable&&m\.status==='ACTIVE'&&m\.email/);
+assert.match(page,/if\(ownerMembers&&!verifiedEmail\)\{opt\.disabled=true/);
+assert.doesNotMatch(page,/name\|\|'未設定暱稱（成員）'/);
+
 assert.match(page,/TEST 共用暱稱已開放/);
 assert.match(service,/getDocFromServer\(ref\)/);
 assert.match(service,/NICKNAME_SERVER_READBACK_MISMATCH/);
