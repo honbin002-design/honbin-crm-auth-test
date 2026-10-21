@@ -526,7 +526,7 @@ async function start(){
  const authSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js');
  const fsSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js');
  sdk={...authSdk,...fsSdk};const app=appSdk.initializeApp(firebaseConfig);
- auth=authSdk.getAuth(app);await authSdk.setPersistence(auth,authSdk.browserSessionPersistence);
+ auth=authSdk.getAuth(app);await authSdk.setPersistence(auth,authSdk.browserLocalPersistence);
  db=fsSdk.getFirestore(app);
  try{draftStore=makeDraftStore({factory:window.indexedDB})}catch{draftStore=null}
  ready=true;
