@@ -43,9 +43,13 @@ export function taskExtensionService({db,sdk,currentUid}){
    throw Error('EXTENSION_REQUEST_SERVER_READBACK_MISMATCH');
   return {requestId:ref.id};
  }
- async function decide({groupId,taskId,requestId,decision}){
+ async function decide({groupId,taskId,requestId,decision,approvedDueDate}){
   const uid=actor();
   if(!['APPROVED','REJECTED'].includes(decision))throw Error('INVALID_EXTENSION_DECISION');
+  if(decision==='APPROVED'&&(!date.test(approvedDueDate||'')))
+   throw Error('APPROVED_DUE_DATE_REQUIRED');
+  if(decision==='REJECTED'&&approvedDueDate!==undefined)
+   throw Error('REJECTED_MUST_NOT_SET_APPROVED_DATE');
   const task=parent(groupId,taskId),ref=doc(requests(groupId,taskId),valid(requestId,'REQUEST_ID'));
   await runTransaction(db,async tx=>{
    const [taskSnap,reqSnap]=await Promise.all([tx.get(task),tx.get(ref)]);
@@ -55,9 +59,12 @@ export function taskExtensionService({db,sdk,currentUid}){
    if(before.status!=='OPEN'||before.createdBy!==uid||
       before.extensionPendingId!==requestId||req.status!=='PENDING')
     throw Error('EXTENSION_DECISION_NOT_ALLOWED');
+   if(decision==='APPROVED'&&approvedDueDate<=before.dueDate)
+    throw Error('APPROVED_DATE_MUST_BE_AFTER_ORIGINAL_DEADLINE');
    tx.update(task,{extensionPendingId:null,
-    ...(decision==='APPROVED'?{dueDate:req.newDueDate}:{})});
-   tx.update(ref,{status:decision,decidedBy:uid,decidedAt:serverTimestamp()});
+    ...(decision==='APPROVED'?{dueDate:approvedDueDate}:{})});
+   tx.update(ref,{status:decision,decidedBy:uid,decidedAt:serverTimestamp(),
+    ...(decision==='APPROVED'?{approvedDueDate}:{})});
   });
   if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
   const [taskRead,reqRead]=await Promise.all([getDocFromServer(task),getDocFromServer(ref)]);
@@ -65,7 +72,9 @@ export function taskExtensionService({db,sdk,currentUid}){
   if(!taskRead.exists()||taskRead.data().extensionPendingId!==null||
      !reqRead.exists()||reqRead.data().status!==decision||reqRead.data().decidedBy!==uid||
      !reqRead.data().decidedAt||
-     (decision==='APPROVED'&&taskRead.data().dueDate!==reqRead.data().newDueDate))
+     (decision==='APPROVED'&&(
+       taskRead.data().dueDate!==approvedDueDate||
+       reqRead.data().approvedDueDate!==approvedDueDate)))
    throw Error('EXTENSION_DECISION_SERVER_READBACK_MISMATCH');
   return {requestId,decision};
  }
