@@ -45,10 +45,12 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .list-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.list-tabs button{background:#e7eff9;color:#24486c}.list-tabs button.active{background:#205a9a;color:#fff}.list-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}.list-controls label{margin:3px 0}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0}.pager button{flex:0 0 auto}.pager span{text-align:center;color:#52657b}.task-card .task-title-button{margin-bottom:0}
 .note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
 .back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
+.crm-return{display:inline-flex;align-items:center;min-height:44px;padding:8px 12px;border-radius:10px;background:#e7eff9;color:#174c83;font-weight:650;text-decoration:none}
 @media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.list-controls,.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.list-controls>div{min-width:0}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
 [hidden]{display:none!important}
 </style></head><body>
-<header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
+<header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜資料與原 CRM 分開保存</small></div><span class="pill" id="who">未登入</span></header>
+<a class="crm-return" href="/-hongbin-personal-crm-beta/">← 返回鴻繽 CRM</a>
 <div id="message" class="status" role="status" aria-live="polite">準備中……</div>
 <main id="app">
  <div class="panel"><div class="nav">
