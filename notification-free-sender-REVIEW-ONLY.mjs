@@ -36,6 +36,9 @@ async function main(){
  webpush.setVapidDetails(process.env.TEST_PUSH_CONTACT,
   process.env.TEST_VAPID_PUBLIC_KEY,process.env.TEST_VAPID_PRIVATE_KEY);
  const accountCache=new Map();
+ // Stop before an unexpectedly large group/device set can consume the Spark
+ // daily quota. The cursor is only advanced after a whole event completes.
+ let deliveriesThisRun=0;
  async function approved(uid){
   if(accountCache.has(uid))return accountCache.get(uid);
   let ok=false;
@@ -74,8 +77,10 @@ async function main(){
    if(!await approved(uid)||!await stillMember(event.payload.groupId,uid)||
       !await stillRelevant(event,uid))continue;
    const devices=await db.collection('pushSubscriptions').doc(uid)
-    .collection('devices').get();
+    .collection('devices').limit(4).get();
+   if(devices.size>3)throw Error('PUSH_DEVICE_LIMIT_STOP');
    for(const device of devices.docs){
+    if(deliveriesThisRun>=30)throw Error('PUSH_RUN_DELIVERY_BUDGET_STOP');
     // Membership can be revoked while this job is processing other devices.
     if(!await stillMember(event.payload.groupId,uid)||
       !await stillRelevant(event,uid))break;
@@ -97,6 +102,7 @@ async function main(){
      return true;
     });
     if(!claimed)continue;
+    deliveriesThisRun++;
     try{
      await webpush.sendNotification({
       endpoint:subscription.endpoint,
@@ -153,8 +159,9 @@ async function main(){
    const live=await groupRef.get();
    if(live.exists){
     const group={id:groupRef.id,...live.data()};
-    const members=(await groupRef.collection('members').get())
-     .docs.map(d=>({uid:d.id,...d.data()}));
+    const memberBatch=await groupRef.collection('members').limit(31).get();
+    if(memberBatch.size>30)throw Error('PUSH_GROUP_MEMBER_LIMIT_STOP');
+    const members=memberBatch.docs.map(d=>({uid:d.id,...d.data()}));
     let event;
     try{event=routeNotification({kind:stream.kind,group,members,
       itemId:doc.id,record:doc.data()})}catch{
