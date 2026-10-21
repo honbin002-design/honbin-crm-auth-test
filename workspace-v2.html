@@ -398,12 +398,13 @@ async function loadTasks(){
  for(const item of entries){
   const category=taskCategory(item),box=mk('article');box.className='task-card';box.dataset.taskId=item.id;box.dataset.category=category;
   const done=item.status==='DONE',detail=mk('div'),body=done?detail:box;
+  let openDoneHistory=()=>{};
   box.append(Object.assign(mk('span',({pending:'延期待審',overdue:'已逾期',soon:'即將到期',open:'進行中',done:'已完成'})[category]),{className:'task-badge'}));
   if(done){
    const heading=mk('h4'),title=mk('button',item.title);title.type='button';title.className='task-title-button';
    title.setAttribute('aria-expanded','false');detail.id='task-detail-'+item.id;detail.className='task-detail-panel';detail.hidden=true;
    title.setAttribute('aria-controls',detail.id);
-   title.onclick=()=>{detail.hidden=!detail.hidden;title.setAttribute('aria-expanded',String(!detail.hidden))};
+   title.onclick=()=>{detail.hidden=!detail.hidden;title.setAttribute('aria-expanded',String(!detail.hidden));if(!detail.hidden)openDoneHistory()};
    heading.append(title);box.append(heading);
    const summary=mk('div');summary.className='task-summary';
    for(const [label,value] of [['建立者',await displayName(item.createdBy)],['完成者',await displayName(item.completedBy)]]){
@@ -577,6 +578,7 @@ async function loadTasks(){
       history.hidden=false;historyButton.textContent='收起延期紀錄';
      }finally{historyButton.disabled=false}
     });
+    if(done)openDoneHistory=()=>{if(history.hidden)historyButton.click()};
     body.append(historyButton,history);
    }
   }
