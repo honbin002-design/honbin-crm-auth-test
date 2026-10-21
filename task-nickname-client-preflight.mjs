@@ -13,7 +13,7 @@ const sdk={
    }
    return {path:parts.join('/')};
   },
-  getDocs:async ref=>({docs:[...database.entries()].filter(([p])=>p.startsWith(ref.path+'/'))
+  getDocsFromServer:async ref=>({docs:[...database.entries()].filter(([p])=>p.startsWith(ref.path+'/'))
     .map(([path,value])=>({id:path.split('/').at(-1),data:()=>({...value})}))}),
   serverTimestamp:timestamp,
   async getDoc(ref){return {exists:()=>database.has(ref.path),data:()=>database.get(ref.path)}},
@@ -23,10 +23,11 @@ const sdk={
    const staging=[];
    const result=await callback({
     get:async ref=>({exists:()=>database.has(ref.path),data:()=>({...database.get(ref.path)})}),
-    update:(ref,change)=>staging.push({path:ref.path,change})
+    update:(ref,change)=>staging.push({path:ref.path,change,op:'update'}),
+    set:(ref,change)=>staging.push({path:ref.path,change,op:'set'})
    });
    for(const update of staging){
-    writes.push({op:'update',...update});
+    writes.push({op:update.op,path:update.path,...(update.op==='set'?{data:update.change}:{change:update.change})});
     database.set(update.path,{...database.get(update.path),...update.change});
    }
    return result;
@@ -41,6 +42,15 @@ signed=owner;await service.create({groupId:'group_test',title:'任務 A',
  assignedUid:viewer,executeDate:'2026-10-21',dueDate:'2026-10-30'});
 const created=writes.at(-1);assert.equal(created.data.assignedUid,viewer);
 assert.equal(created.data.executeDate,'2026-10-21');
+assert.equal(created.op,'set');
+const createdRef=created.path.split('/').at(-1);
+const retry=await service.create({groupId:'group_test',taskId:createdRef,title:'任務 A',
+ assignedUid:viewer,executeDate:'2026-10-21',dueDate:'2026-10-30'});
+assert.equal(retry.alreadyCreated,true);
+assert.equal(writes.length,1,'retry must not duplicate task');
+await assert.rejects(service.create({groupId:'group_test',taskId:createdRef,
+ title:'任務 B',assignedUid:viewer}),/TASK_ID_CONFLICT_STOP/);
+assert.equal(writes.length,1,'conflicting retry must not mutate task');
 await assert.rejects(service.create({groupId:'group_test',title:'測試',
  executeDate:'2026-10-31',dueDate:'2026-10-30'}),/EXECUTE_DATE_AFTER_DEADLINE/);
 assert.equal(writes.length,1);
