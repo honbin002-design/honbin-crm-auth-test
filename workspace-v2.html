@@ -619,14 +619,32 @@ $('saveNick').onclick=()=>{
  });
 };
 $('taskForm').onsubmit=e=>{e.preventDefault();
- if(!TASK_RULES_ENABLED){say('任務發布尚未開放：需要先完成 TEST Firestore 權限部署與驗收。');return}
+ if(!TASK_RULES_ENABLED){say('指定任務尚未開放。');return}
  void run(async()=>{
-  if(!taskSelected||!['ADMIN','EDITOR'].includes(taskSelected.role))throw Error('沒有發布任務的權限');
-  const s=session();
-  await tasks.create({groupId:taskSelected.id,title:$('taskTitle').value,
-   description:$('taskDetail').value,assignedUid:$('taskAssignee').value||null,
-   executeDate:$('taskExecuteDate').value,dueDate:$('taskDue').value});
-  check(s);$('taskForm').reset();setTaskForm(false);await loadTasks();say('任務已發布，伺服器確認成功。');
+  if(!taskSelected||!['ADMIN','EDITOR'].includes(taskSelected.role))
+   throw Error('沒有發布任務的權限');
+  const s=session(),payload={
+   groupId:taskSelected.id,title:$('taskTitle').value.trim(),
+   description:$('taskDetail').value.trim(),assignedUid:$('taskAssignee').value||null,
+   executeDate:$('taskExecuteDate').value,dueDate:$('taskDue').value
+  };
+  const fingerprint=JSON.stringify(payload);
+  if(pendingTaskWrite&&pendingTaskWrite.fingerprint!==fingerprint)
+   throw Error('上一次發布的伺服器結果尚未確認。請先核對任務列表或重新整理，不要改內容重試。');
+  if(!pendingTaskWrite){
+   if(!confirm('確定發布到 TEST 群組「'+taskSelected.name+'」？\n任務暫時不能刪除，請確認不含敏感個資。'))
+    return;
+   pendingTaskWrite={fingerprint,id:tasks.newId(payload.groupId)};
+  }
+  $('taskPublish').disabled=true;
+  try{
+   const result=await tasks.create({...payload,taskId:pendingTaskWrite.id});
+   check(s);pendingTaskWrite=null;
+   $('taskForm').reset();setTaskForm(false);
+   await loadTasks();check(s);
+   say(result.alreadyCreated?'已由伺服器確認原任務存在，未重複建立。':
+    '任務已發布，並由 Firestore 伺服器重新讀取確認。');
+  }finally{$('taskPublish').disabled=false}
  });
 };
 async function checkPushReadiness(){
