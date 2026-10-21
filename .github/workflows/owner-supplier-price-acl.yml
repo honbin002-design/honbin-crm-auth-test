@@ -1,0 +1,28 @@
+name: Owner-only supplier price ACL emulator
+on:
+  push:
+    paths:
+      - 'firestore-owner-supplier-price-REVIEW-ONLY.rules'
+      - 'prepare-owner-supplier-price-emulator-rules.mjs'
+      - 'owner-supplier-price-emulator-test.mjs'
+      - '.github/workflows/owner-supplier-price-acl.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'honbin002-design/honbin-crm-auth-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: node prepare-owner-supplier-price-emulator-rules.mjs
+      - run: npx firebase emulators:exec --config firebase.emulator.owner-price.json --project demo-honbin-owner-price --only firestore 'node owner-supplier-price-emulator-test.mjs'
