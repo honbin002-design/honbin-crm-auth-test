@@ -22,8 +22,11 @@ assert.equal((result.merged.match(/match \/tasks\/\{taskId\}/g)||[]).length,1);
 assert.equal((result.merged.match(/match \/notes\/\{noteId\}/g)||[]).length,1);
 assert.equal((result.merged.match(/match \/profiles\/\{profileUid\}/g)||[]).length,1);
 assert.throws(()=>upgradeTaskAclV3(result.merged,v2,v3),/CURRENT_TASK_ACL_DIFFERS/);
-assert.throws(()=>upgradeTaskAclV3(current.replace(
- 'allow create: if canEditGroup(groupId)','allow create: if true'),v2,v3),
+const taskStart=current.indexOf('match /tasks/{taskId} {');
+assert.ok(taskStart>0);
+const tampered=current.slice(0,taskStart)+current.slice(taskStart).replace(
+ 'allow create: if canEditGroup(groupId)','allow create: if true');
+assert.throws(()=>upgradeTaskAclV3(tampered,v2,v3),
  /CURRENT_TASK_ACL_DIFFERS/);
 assert.throws(()=>upgradeTaskAclV3(base,v2,v3),/REQUIRED_EXISTING_ACL_MISSING/);
 console.log('TASK_V3_EXACT_REPLACEMENT_OFFLINE_PASS (NOT FIREBASE COMPILATION OR LIVE ACL TEST)');
