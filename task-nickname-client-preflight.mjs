@@ -56,6 +56,19 @@ await assert.rejects(service.create({groupId:'group_test',title:'測試',
 assert.equal(writes.length,1);
 assert.equal(taskCanComplete(open(viewer),other),false);
 signed=viewer;
+// A pending extension must block completion client-side even before V5 server
+// rules are released; never orphan a publisher approval request.
+const pendingPath='groups/group_test/tasks/pending_extension';
+const pendingTask={...open(viewer),extensionPendingId:'request_1'};
+assert.equal(taskCanComplete(pendingTask,viewer),false);
+assert.equal(taskCanComplete(pendingTask,owner),false);
+database.set(pendingPath,pendingTask);
+const beforePendingWrites=writes.length;
+await assert.rejects(service.complete({
+ groupId:'group_test',taskId:'pending_extension',reply:'不應完成'
+}),/TASK_NOT_ASSIGNED_OR_ALREADY_DONE/);
+assert.equal(writes.length,beforePendingWrites,'pending extension must never write completion');
+assert.equal(database.get(pendingPath).status,'OPEN');
 const taskPath='groups/group_test/tasks/test_task';
 database.set(taskPath,open(viewer));
 const first=await service.complete({groupId:'group_test',taskId:'test_task',reply:'已完成'});
