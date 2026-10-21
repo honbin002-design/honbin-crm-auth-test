@@ -185,7 +185,7 @@ let pendingTaskWrite=null;
 const sharedNickCache=new Map();
 let inviteGroups=[],inviteGroupId='',inviteLoaded=false,receivedLoaded=false,inviteSubmitting=false;
 let notePageIndex=0,noteCursors=[null],noteHasMore=false;
-let taskStatus='OPEN',taskPageIndex=0,taskCursors={OPEN:[null],DONE:[null]},taskHasMore=false,taskPageData=null;
+let taskStatus='OPEN',taskPageIndex=0,taskCursors={OPEN:[null],DONE:[null]},taskHasMore=false,taskPageData=null,taskFocused=false,focusedNote=false;
 const scope=()=>$('mode').value==='PRIVATE'?{mode:'PRIVATE'}:{mode:'SHARED',groupId:selected?.id};
 const context=()=>uid?{uid,mode:$('mode').value,groupId:$('mode').value==='SHARED'?selected?.id:null}:null;
 const mayWrite=()=>$('mode').value==='PRIVATE'||['ADMIN','EDITOR'].includes(selected?.role);
@@ -239,6 +239,7 @@ function openEditor(item=null){
  $('noteEditor').hidden=false;$('noteEditor').scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function loadNotes({reset=true}={}){
+ focusedNote=false;
  const s=session(),sc=scope();if(sc.mode==='SHARED'&&!selected){$('notesList').textContent='尚未加入共用記事簿。';return}
  if(reset){notePageIndex=0;noteCursors=[null]}
  const page=await notes.listPage({...sc,cursor:noteCursors[notePageIndex],size:10});check(s);
@@ -283,17 +284,26 @@ async function openPushDeepLink(){
  const group=groupItems.find(x=>x.id===groupId);
  if(!group){say('通知所屬群組已無法存取，請檢查成員權限。');return false}
  if(target==='Tasks'){
+  const snap=await sdk.getDocFromServer(sdk.doc(db,'groups',group.id,'tasks',itemId));check(s);
+  if(!snap.exists()||!['OPEN','DONE'].includes(snap.data().status)){
+   say('通知指定的任務已不存在或目前無法讀取。');return false
+  }
+  taskStatus=snap.data().status;$('taskSearch').value='';
   taskSelected=group;$('taskGroup').value=group.id;
-  tab('Tasks',{skipTaskLoad:true});await loadTasks();check(s);
+  tab('Tasks',{skipTaskLoad:true});await loadTasks({focusItem:{id:snap.id,...snap.data()}});check(s);
   const row=[...$('tasksList').querySelectorAll('[data-task-id]')]
     .find(e=>e.dataset.taskId===itemId);
-  if(row){row.scrollIntoView({block:'start'});say('已開啟通知指定的任務。')}
+  if(row){row.querySelector('.task-title-button')?.click();row.scrollIntoView({block:'start'});say('已開啟通知指定的任務。')}
   else say('任務已不存在或目前無法讀取。');
  }else{
+  const snap=await sdk.getDocFromServer(sdk.doc(db,'groups',group.id,'notes',itemId));check(s);
+  if(!snap.exists()||snap.data().deleted){say('通知指定的記事已不存在或目前無法讀取。');return false}
   selected=group;$('mode').value='SHARED';$('groupWrap').hidden=false;
   $('privateNotes').classList.remove('active');$('sharedNotes').classList.add('active');
   $('group').value=group.id;$('role').textContent='目前身分：'+notebookRoleLabel(group.role);
-  tab('Notes');await loadNotes();check(s);
+  $('search').value='';tab('Notes');focusedNote=true;items=[{id:snap.id,...snap.data()}];
+  $('notePrev').disabled=true;$('noteNext').disabled=true;
+  $('notePageStatus').textContent='通知指定記事｜點「共用記事」返回列表';renderNotes();check(s);
   const row=[...$('notesList').querySelectorAll('[data-note-id]')]
     .find(e=>e.dataset.noteId===itemId);
   if(row){
@@ -337,7 +347,8 @@ function taskCategory(item){
  if(days!==null&&days<=3)return 'soon';
  return 'open';
 }
-async function loadTasks({reset=true,reuse=false}={}){
+async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
+ taskFocused=!!focusItem;
  const s=session(),root=$('tasksList');root.replaceChildren();
  if(reset){taskPageIndex=0;taskCursors[taskStatus]=[null];taskPageData=null}
  $('taskOpenTab').classList.toggle('active',taskStatus==='OPEN');$('taskDoneTab').classList.toggle('active',taskStatus==='DONE');
@@ -382,12 +393,14 @@ async function loadTasks({reset=true,reuse=false}={}){
  }
  if(taskSelected.role!=='ADMIN')
   $('taskScopeHint').textContent+='｜非管理員可發布給自己或所有成員；指定其他成員請由管理員操作。';
- const page=reuse&&taskPageData?.groupId===taskGroupId&&taskPageData.status===taskStatus&&taskPageData.index===taskPageIndex
-  ?taskPageData.page:await tasks.listPage(taskGroupId,{status:taskStatus,cursor:taskCursors[taskStatus][taskPageIndex],size:10});check(s);
- taskPageData={groupId:taskGroupId,status:taskStatus,index:taskPageIndex,page};
+ const page=focusItem?{items:[focusItem],cursor:null,hasMore:false}:
+  reuse&&taskPageData?.groupId===taskGroupId&&taskPageData.status===taskStatus&&taskPageData.index===taskPageIndex
+   ?taskPageData.page:await tasks.listPage(taskGroupId,{status:taskStatus,cursor:taskCursors[taskStatus][taskPageIndex],size:10});check(s);
+ taskPageData=focusItem?null:{groupId:taskGroupId,status:taskStatus,index:taskPageIndex,page};
  taskHasMore=page.hasMore;taskCursors[taskStatus][taskPageIndex+1]=page.cursor;
- $('taskPrev').disabled=taskPageIndex===0;$('taskNext').disabled=!taskHasMore;
- $('taskPageStatus').textContent=(taskStatus==='OPEN'?'進行中':'已完成')+'｜第 '+(taskPageIndex+1)+' 批｜每批最多 10 筆';
+ $('taskPrev').disabled=!!focusItem||taskPageIndex===0;$('taskNext').disabled=!!focusItem||!taskHasMore;
+ $('taskPageStatus').textContent=focusItem?'通知指定任務｜返回列表請點上方狀態頁籤':
+  (taskStatus==='OPEN'?'進行中':'已完成')+'｜第 '+(taskPageIndex+1)+' 批｜每批最多 10 筆';
  const search=$('taskSearch').value.trim().toLocaleLowerCase('zh-Hant'),searchField=$('taskSearchField').value;
  const entries=[];
  const categories=[
@@ -872,7 +885,7 @@ $('toggleTaskForm').onclick=()=>{
 $('cancelTaskForm').onclick=()=>setTaskForm(false);
 async function changeNoteMode(mode){
  if(!authenticated)return;
- if($('mode').value===mode)return;
+ if($('mode').value===mode){if(focusedNote)await run(reload);return}
  if(!$('noteEditor').hidden&&($('noteTitle').value||$('noteContent').value)&&
    !confirm('要切換記事範圍嗎？本機草稿會保留在原本記事範圍。'))return;
  $('mode').value=mode;
@@ -896,7 +909,7 @@ $('search').oninput=renderNotes;
 $('notePrev').onclick=()=>run(async()=>{if(notePageIndex>0){notePageIndex--;await loadNotes({reset:false})}});
 $('noteNext').onclick=()=>run(async()=>{if(noteHasMore){notePageIndex++;await loadNotes({reset:false})}});
 for(const [id,status] of [['taskOpenTab','OPEN'],['taskDoneTab','DONE']])$(id).onclick=()=>run(async()=>{
- if(taskStatus===status)return;taskStatus=status;taskPageIndex=0;taskPageData=null;await loadTasks({reset:false});
+ if(taskStatus===status&&!taskFocused)return;taskStatus=status;taskPageIndex=0;taskPageData=null;await loadTasks({reset:false});
 });
 $('taskPrev').onclick=()=>run(async()=>{if(taskPageIndex>0){taskPageIndex--;taskPageData=null;await loadTasks({reset:false})}});
 $('taskNext').onclick=()=>run(async()=>{if(taskHasMore){taskPageIndex++;taskPageData=null;await loadTasks({reset:false})}});
