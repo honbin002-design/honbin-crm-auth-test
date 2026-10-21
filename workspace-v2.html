@@ -397,6 +397,12 @@ async function loadTasks(){
    box.append(mk('p','已完成｜'+await displayName(item.completedBy)+'｜'+
     (item.completedAt?.toDate?.().toLocaleString('zh-TW')||'伺服器時間待確認')));
    box.append(mk('p','回覆：'+(item.completionReply||'')));
+  }else if(item.extensionPendingId){
+   // Prevent completing a task with an unresolved extension: the V4
+   // publisher-decision ACL requires OPEN and an orphaned PENDING request
+   // would otherwise be impossible to approve or reject.
+   const waiting=mk('p','延期申請尚待發布人審核，請先處理延期再完成任務。');
+   waiting.className='task-alert';box.append(waiting);
   }else if(taskCanComplete(item,uid)){
    const reply=mk('textarea');reply.placeholder='輸入處理結果（必填）';reply.maxLength=3000;
    const button=mk('button','回覆並完成');
@@ -480,6 +486,7 @@ async function loadTasks(){
        entry.append(mk('p','審核狀態：'+(
         req.status==='PENDING'?'待審核':req.status==='APPROVED'?'已核准':'已拒絕')));
        if(req.status==='APPROVED')entry.append(mk('p','發布人核准完成日期：'+(req.approvedDueDate||req.newDueDate)+'（'+(req.approvedDueDate?'發布人決定':'舊版沿用申請日期')+'）'));
+       if(req.decidedBy)entry.append(mk('p','延期審核人：'+await displayName(req.decidedBy)));
        if(req.decidedAt?.toDate)entry.append(mk('small','審核時間：'+req.decidedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
        if(req.status==='PENDING'&&item.createdBy===uid&&
           item.status==='OPEN'&&item.extensionPendingId===req.id){
