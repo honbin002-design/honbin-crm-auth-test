@@ -9,7 +9,7 @@ on:
       - 'prepare-firestore-task-v5-emulator-rules.mjs'
       - 'firebase-task-extension-service.mjs'
       - 'firebase-task-service.mjs'
-      - 'firebase-task-v5-service-preflight.mjs'
+      - 'firebase-task-extension-client-preflight.mjs'
       - 'workspace-v2.html'
       - 'package.json'
       - '.github/workflows/task-v5-emulator.yml'
@@ -33,7 +33,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Verify exact V3-to-V5 ACL replacement (offline)
         run: node firestore-task-v5-upgrade-preflight.mjs
-      - name: Verify V5 publisher decision service with synthetic test
-        run: node firebase-task-v5-service-preflight.mjs
+      - name: Verify extension request/decision client contract with synthetic state
+        run: node firebase-task-extension-client-preflight.mjs
       - name: Run synthetic Firestore V5 ACL and rejection tests
         run: npm run test:task-v5-emulator
