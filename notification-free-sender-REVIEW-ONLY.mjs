@@ -86,9 +86,10 @@ async function main(){
     const claimed=await db.runTransaction(async tx=>{
      const prior=await tx.get(receipt);
      const data=prior.exists?prior.data():null;
-     if(data?.status==='SENT'||(data?.status==='SENDING'&&
-       now()-(tsMillis(data.claimedAt))<20*60*1000))return false;
-     if((data?.attempts||0)>=3)return false;
+     if(data?.status==='SENT')return false;
+     if(data?.status==='SENDING'&&now()-(tsMillis(data.claimedAt))<20*60*1000)
+      throw Error('PUSH_DELIVERY_IN_PROGRESS_STOP');
+     if((data?.attempts||0)>=3)throw Error('PUSH_DELIVERY_RETRIES_EXHAUSTED');
      tx.set(receipt,{status:'SENDING',eventId:event.eventId,
       recipientUid:uid,deviceId:device.id,claimedAt:admin.firestore.Timestamp.now(),
       attempts:(data?.attempts||0)+1});
@@ -112,38 +113,55 @@ async function main(){
      }
      // Do not log endpoint, keys, user email, private message or response body.
      console.error('TEST_PUSH_DELIVERY_FAILED',status||'network');
+     if(status!==404&&status!==410)throw Error('RETRYABLE_PUSH_DELIVERY_FAILED');
     }
    }
   }
  }
- const groups=await db.collection('groups').get();
- for(const groupDoc of groups.docs){
-  const group={id:groupDoc.id,...groupDoc.data()};
-  if(!group.ownerUid)continue;
-  const members=(await groupDoc.ref.collection('members').get())
-   .docs.map(d=>({uid:d.id,...d.data()}));
-  const [tasks,notes]=await Promise.all([
-   groupDoc.ref.collection('tasks').get(),groupDoc.ref.collection('notes').get()
-  ]);
-  for(const doc of tasks.docs){
-   const task=doc.data();
-   if(doc.createTime?.toMillis()>=activation){
-    try{await sendEvent(routeNotification({
-     kind:'TASK_ASSIGNED',group,members,itemId:doc.id,record:task
-    }))}catch{console.error('TEST_PUSH_ROUTING_SKIP_TASK_CREATE')}
-   }
-   if(tsMillis(task.completedAt)>=activation){
-    try{await sendEvent(routeNotification({
-     kind:'TASK_COMPLETED',group,members,itemId:doc.id,record:task
-    }))}catch{console.error('TEST_PUSH_ROUTING_SKIP_TASK_DONE')}
-   }
+ // Three global streams read only new records. The saved document cursor
+ // prevents every scheduled run from rereading all historical notes/tasks.
+ // At most 40 events per stream are processed in a run; backlog rolls forward
+ // on the next run. Collection-group indexes must be reviewed before enabling.
+ const streams=[
+  {kind:'TASK_ASSIGNED',collection:'tasks',field:'createdAt'},
+  {kind:'TASK_COMPLETED',collection:'tasks',field:'completedAt'},
+  {kind:'SHARED_NOTE_CREATED',collection:'notes',field:'createdAt'}
+ ];
+ for(const stream of streams){
+  const checkpoint=db.collection('notificationSenderCursors').doc(stream.kind);
+  const last=await checkpoint.get();
+  if(last.exists&&last.data().activation!==process.env.TEST_PUSH_START_ISO)
+   throw Error('PUSH_CURSOR_ACTIVATION_CHANGED_STOP');
+  let query=db.collectionGroup(stream.collection)
+   .where(stream.field,'>=',admin.firestore.Timestamp.fromMillis(activation))
+   .orderBy(stream.field,'asc').limit(40);
+  if(last.exists){
+   const path=last.data().path;
+   if(typeof path!=='string'||!/^groups\/[A-Za-z0-9_-]+\/(tasks|notes)\/[A-Za-z0-9_-]+$/.test(path))
+    throw Error('INVALID_PUSH_CURSOR_PATH');
+   const previous=await db.doc(path).get();
+   if(!previous.exists)throw Error('PUSH_CURSOR_DOCUMENT_MISSING_STOP');
+   query=query.startAfter(previous);
   }
-  for(const doc of notes.docs){
-   const note=doc.data();
-   if(doc.createTime?.toMillis()<activation||note.deleted===true)continue;
-   try{await sendEvent(routeNotification({
-    kind:'SHARED_NOTE_CREATED',group,members,itemId:doc.id,record:note
-   }))}catch{console.error('TEST_PUSH_ROUTING_SKIP_SHARED_NOTE')}
+  const batch=await query.get();
+  for(const doc of batch.docs){
+   const groupRef=doc.ref.parent.parent;
+   if(!groupRef||groupRef.parent.id!=='groups')throw Error('INVALID_EVENT_PATH');
+   const live=await groupRef.get();
+   if(live.exists){
+    const group={id:groupRef.id,...live.data()};
+    const members=(await groupRef.collection('members').get())
+     .docs.map(d=>({uid:d.id,...d.data()}));
+    let event;
+    try{event=routeNotification({kind:stream.kind,group,members,
+      itemId:doc.id,record:doc.data()})}catch{
+     // Invalid/deleted state has no recipient; retain no private payload.
+     console.error('TEST_PUSH_EVENT_SKIPPED',stream.kind);
+    }
+    if(event)await sendEvent(event);
+   }
+   await checkpoint.set({activation:process.env.TEST_PUSH_START_ISO,
+    path:doc.ref.path,scannedAt:admin.firestore.FieldValue.serverTimestamp()});
   }
  }
  console.log('TEST_PUSH_SENDER_FINISHED_WITHOUT_EXPOSING_RECIPIENT_DATA');
