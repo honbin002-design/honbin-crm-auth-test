@@ -10,6 +10,7 @@ const env=await initializeTestEnvironment({projectId,firestore:{rules,host:'127.
 const claims=email=>({email,email_verified:true,firebase:{sign_in_provider:'google.com'}});
 const owner=env.authenticatedContext(ownerUid,claims('honbin002@gmail.com')).firestore();
 const other=env.authenticatedContext('OtherExistingAccount',claims('member@example.com')).firestore();
+const forgedEmail=env.authenticatedContext(ownerUid,claims('member@example.com')).firestore();
 const outsider=env.unauthenticatedContext().firestore();
 const id='a'.repeat(64),path=`ownerSupplierPrices/${ownerUid}/entries/${id}`;
 const entry={supplierName:'虛構供應商',partNo:'S-1',productName:'虛構品',unit:'KG',price:100,sourceFileId:'synthetic',updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
@@ -18,6 +19,7 @@ try{
   await c.firestore().doc('approvedAccounts/member@example.com').set({email:'member@example.com',status:'ACTIVE',createdAt:firebase.firestore.Timestamp.now()});
  });
  await assertFails(other.doc(path).get());
+ await assertFails(forgedEmail.doc(path).get());
  await assertFails(outsider.doc(path).get());
  await assertFails(other.doc(path).set(entry));
  await assertFails(owner.doc(`ownerSupplierPrices/OtherExistingAccount/entries/${id}`).set(entry));
@@ -28,5 +30,5 @@ try{
  await assertSucceeds(owner.collection(`ownerSupplierPrices/${ownerUid}/entries`).get());
  await assertFails(other.collection(`ownerSupplierPrices/${ownerUid}/entries`).get());
  await assertSucceeds(owner.doc(path).delete());
- console.log('OWNER_SUPPLIER_PRICE_ACL_PASS 11');
+ console.log('OWNER_SUPPLIER_PRICE_ACL_PASS 12');
 }finally{await env.cleanup()}
