@@ -41,6 +41,13 @@ try{
   }
  });
  await assertSucceeds(viewer.doc(base+'viewer_created').set(task(uidViewer,uidViewer)));
+ await assertSucceeds(viewer.collection('groups/group_test/tasks').get());
+ await assertFails(outsider.collection('groups/group_test/tasks').get());
+ await assertFails(viewer.doc(base+'forged_publisher').set(task(uidOwner,uidViewer)));
+ await assertFails(viewer.doc(base+'fake_done').set({
+  ...task(uidViewer,uidViewer),status:'DONE',completedBy:uidViewer
+ }));
+ await assertFails(viewer.doc(base+'invalid_assignee').set(task(uidViewer,'uid_outside')));
  await assertFails(outsider.doc(base+'outside').set(task('uid_outside',null)));
  await assertFails(viewer.doc('groups/group_test/notes/forbidden').set({title:'forbidden'}));
  await assertSucceeds(owner.doc(base+'assigned').set(task(uidOwner,uidViewer)));
@@ -54,6 +61,14 @@ try{
  }));
  const pending=await viewer.doc(base+'assigned/extensionRequests/r1').get();
  assert.equal(pending.data().status,'PENDING');
+ await assertFails(viewer.runTransaction(async tx=>{
+  const parent=viewer.doc(base+'assigned'),child=viewer.doc(base+'assigned/extensionRequests/r_extra');
+  await tx.get(parent);
+  tx.update(parent,{extensionPendingId:'r_extra'});
+  tx.set(child,request(uidViewer,'2026-11-09','duplicate while pending'));
+ }));
+ await assertFails(viewer.doc(base+'assigned/extensionRequests/r1').update({reason:'tampered'}));
+ await assertFails(other.doc(base+'assigned/extensionRequests/r1').delete());
  assert.equal((await owner.doc(base+'assigned').get()).data().dueDate,'2026-10-30');
  await assertFails(viewer.doc(base+'assigned').update({dueDate:'2026-11-05'}));
  await assertFails(other.doc(base+'assigned/extensionRequests/r1').update({
@@ -82,6 +97,10 @@ try{
  }));
  assert.equal((await owner.doc(base+'assigned').get()).data().dueDate,'2026-11-05');
  assert.equal((await owner.doc(base+'assigned/extensionRequests/r1').get()).data().status,'APPROVED');
+ await assertFails(owner.doc(base+'assigned/extensionRequests/r1').update({
+  status:'REJECTED',decidedBy:uidOwner,decidedAt:timestamp()
+ }));
+ await assertFails(viewer.doc(base+'assigned').update({createdBy:uidViewer}));
  assert.equal((await owner.doc(base+'assigned/extensionRequests/r2').get()).data().status,'REJECTED');
  console.log('TASK_V3_EMULATOR_ALL_MEMBER_AND_EXTENSION_PASS');
 }finally{await env.cleanup()}
