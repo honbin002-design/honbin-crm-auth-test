@@ -905,6 +905,7 @@ $('group').onchange=()=>run(async()=>{
 });
 $('taskGroup').onchange=()=>run(async()=>{
  taskSelected=groupItems.find(g=>g.id===$('taskGroup').value)||null;
+ $('taskScopeHint').textContent=taskSelected?'目前任務群組：'+taskSelected.name+'｜你的身分：'+notebookRoleLabel(taskSelected.role):'目前沒有可使用的多人群組。';
  await loadTasks();
  say(taskSelected?'已切換任務群組：'+taskSelected.name:'尚未選擇任務群組。');
 });
