@@ -5,6 +5,7 @@ const valid=(v,name)=>{if(typeof v!=='string'||!ID.test(v))throw Error('INVALID_
 const text=(v,max,name)=>{const s=String(v||'').trim();if(!s||s.length>max)throw Error('INVALID_'+name);return s};
 export function taskCanComplete(task,uid){
  return Boolean(task&&task.status==='OPEN'&&uid&&
+   task.extensionPendingId==null&&
    (task.assignedUid===null||task.assignedUid===uid));
 }
 export function taskService({db,sdk,currentUid}){
