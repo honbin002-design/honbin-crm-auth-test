@@ -107,6 +107,7 @@ match /tasks/{taskId} {
     );
 
   // Every request is a separate retained audit document, never deletable.
+  // V5 preserves the exact original due date in the immutable request audit.
   match /extensionRequests/{requestId} {
     allow get, list: if canViewGroup(groupId);
     allow create: if canViewGroup(groupId)
@@ -118,11 +119,11 @@ match /tasks/{taskId} {
         || get(taskPath()).data.assignedUid == request.auth.uid)
       && getAfter(taskPath()).data.extensionPendingId == requestId
       && request.resource.data.keys().hasAll([
-        'requestedBy','requestedAt','reason','newDueDate','status',
+        'requestedBy','requestedAt','reason','newDueDate','originalDueDate','status',
         'decidedBy','decidedAt'
       ])
       && request.resource.data.keys().hasOnly([
-        'requestedBy','requestedAt','reason','newDueDate','status',
+        'requestedBy','requestedAt','reason','newDueDate','originalDueDate','status',
         'decidedBy','decidedAt'
       ])
       && request.resource.data.requestedBy == request.auth.uid
@@ -133,6 +134,7 @@ match /tasks/{taskId} {
       && request.resource.data.newDueDate is string
       && request.resource.data.newDueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
       && request.resource.data.newDueDate > get(taskPath()).data.dueDate
+      && request.resource.data.originalDueDate == get(taskPath()).data.dueDate
       && request.resource.data.status == 'PENDING'
       && request.resource.data.decidedBy == null
       && request.resource.data.decidedAt == null;
