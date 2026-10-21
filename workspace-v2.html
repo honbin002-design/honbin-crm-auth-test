@@ -41,11 +41,11 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .task-section[data-category="overdue"] h3{background:#fceaea;color:#842828;border-color:#ad3838}.task-section[data-category="soon"] h3{background:#fff2dd;color:#805000;border-color:#b46a0a}.task-section[data-category="pending"] h3{background:#f0eafa;color:#593681;border-color:#7352a6}.task-section[data-category="done"] h3{background:#e9f5ee;color:#286544;border-color:#377957}
 .task-card{box-shadow:0 3px 12px #20334d0d}.task-card[data-category="overdue"]{background:#fffafa}.task-card[data-category="soon"]{background:#fffdf8}.task-card[data-category="pending"]{background:#fcfaff}.task-card[data-category="done"]{background:#fbfefc}
 .task-title-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;padding:5px 0;text-align:left;color:#173d61;background:transparent;font-size:1.08rem;line-height:1.45}.task-title-button::after{content:'＋';font-size:1.35rem;color:#286544;flex:none}.task-title-button[aria-expanded="true"]::after{content:'−'}.task-title-button:hover{color:#0c5796}
-.task-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;margin:8px 0}.task-summary p{margin:0}.task-summary strong{display:block;color:#52657b;font-size:.9rem}.task-detail-panel{margin-top:14px;padding-top:12px;border-top:1px solid #d8e5de}.task-open-hint{color:#426454;font-size:.94rem;margin:2px 0 0}
+.task-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px;margin:6px 0 0}.task-summary p{margin:0;min-width:0}.task-summary strong{display:block;color:#52657b;font-size:.9rem}.task-summary span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task-detail-panel{margin-top:12px;padding-top:12px;border-top:1px solid #d8e5de}
 .list-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.list-tabs button{background:#e7eff9;color:#24486c}.list-tabs button.active{background:#205a9a;color:#fff}.list-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}.list-controls label{margin:3px 0}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0}.pager button{flex:0 0 auto}.pager span{text-align:center;color:#52657b}.task-card .task-title-button{margin-bottom:0}
 .note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
 .back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
-@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta,.task-summary,.list-controls{grid-template-columns:1fr}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
+@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta,.list-controls{grid-template-columns:1fr}.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
 [hidden]{display:none!important}
 </style></head><body>
 <header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
@@ -81,7 +81,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <div class="list-tabs" role="group" aria-label="任務狀態"><button id="taskOpenTab" type="button" class="active" aria-pressed="true">進行中</button><button id="taskDoneTab" type="button" aria-pressed="false">已完成</button></div>
    <div class="list-controls"><div><label for="taskSearchField">搜尋條件</label><select id="taskSearchField"><option value="all">全部欄位</option><option value="publisher">發布人</option><option value="executor">執行人</option><option value="content">任務名稱與內容</option></select></div><div><label for="taskSearch">搜尋任務</label><input id="taskSearch" type="search" placeholder="輸入名稱或關鍵字"></div></div>
    <button id="taskSearchButton" class="alt" type="button" style="margin-top:10px">搜尋目前批次</button>
-   <p class="hint">每批最多 10 筆。搜尋目前批次；若要查找更舊資料，請按「下一批」，每次只讀取必要資料。</p>
+   <p class="hint">每批最多 10 筆；點任務標題看詳情與操作。搜尋目前批次，按「下一批」繼續查找更舊資料。</p>
    <details><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
    <div id="tasksList"></div>
    <div class="pager"><button class="alt" id="taskPrev" type="button">上一批</button><span id="taskPageStatus" role="status">第 1 批</span><button class="alt" id="taskNext" type="button">下一批</button></div>
@@ -446,10 +446,10 @@ async function loadTasks({reset=true,reuse=false}={}){
   for(const [label,value] of done
    ?[['建立者',await displayName(item.createdBy)],['完成者',await displayName(item.completedBy)]]
    :[['發布人',await displayName(item.createdBy)],['執行人',await displayName(item.assignedUid)],['截止日期',item.dueDate||'未設定']]){
-   const p=mk('p');p.append(mk('strong',label),mk('span',value));summary.append(p);
+   const p=mk('p'),short=value.replace(/（[^）]*）$/,'');const span=mk('span',short);span.title=value;
+   p.append(mk('strong',label),span);summary.append(p);
   }
   box.append(summary);
-  const hint=mk('p',done?'點選標題查看完成內容與歷史。':'點選標題查看詳情與操作。');hint.className='task-open-hint';box.append(hint);
   if(item.description){const description=mk('p',item.description);description.className='task-description';body.append(description)}
   const meta=mk('div');meta.className='task-meta';
   function field(label,value){const p=mk('p');p.append(mk('strong',label),mk('span',value));meta.append(p)}
