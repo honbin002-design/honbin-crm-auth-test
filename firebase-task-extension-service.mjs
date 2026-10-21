@@ -51,6 +51,7 @@ export function taskExtensionService({db,sdk,currentUid}){
   if(decision==='REJECTED'&&approvedDueDate!==undefined)
    throw Error('REJECTED_MUST_NOT_SET_APPROVED_DATE');
   const task=parent(groupId,taskId),ref=doc(requests(groupId,taskId),valid(requestId,'REQUEST_ID'));
+  let expectedOriginalDueDate=null;
   await runTransaction(db,async tx=>{
    const [taskSnap,reqSnap]=await Promise.all([tx.get(task),tx.get(ref)]);
    if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
@@ -61,6 +62,7 @@ export function taskExtensionService({db,sdk,currentUid}){
     throw Error('EXTENSION_DECISION_NOT_ALLOWED');
    if(decision==='APPROVED'&&approvedDueDate<=before.dueDate)
     throw Error('APPROVED_DATE_MUST_BE_AFTER_ORIGINAL_DEADLINE');
+   expectedOriginalDueDate=before.dueDate;
    tx.update(task,{extensionPendingId:null,
     ...(decision==='APPROVED'?{dueDate:approvedDueDate}:{})});
    tx.update(ref,{status:decision,decidedBy:uid,decidedAt:serverTimestamp(),
@@ -74,9 +76,14 @@ export function taskExtensionService({db,sdk,currentUid}){
      !reqRead.data().decidedAt||
      (decision==='APPROVED'&&(
        taskRead.data().dueDate!==approvedDueDate||
-       reqRead.data().approvedDueDate!==approvedDueDate)))
+       reqRead.data().approvedDueDate!==approvedDueDate))||
+     (decision==='REJECTED'&&(
+       taskRead.data().dueDate!==expectedOriginalDueDate||
+       Object.prototype.hasOwnProperty.call(reqRead.data(),'approvedDueDate'))))
    throw Error('EXTENSION_DECISION_SERVER_READBACK_MISMATCH');
-  return {requestId,decision};
+  return {requestId,decision,originalDueDate:expectedOriginalDueDate,
+   effectiveDueDate:taskRead.data().dueDate,
+   ...(decision==='APPROVED'?{approvedDueDate}:{})};
  }
  return Object.freeze({list,request,decide});
 }
