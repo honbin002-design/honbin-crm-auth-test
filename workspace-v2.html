@@ -61,6 +61,10 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <p class="hint">可指派指定帳號，或開放所有成員執行。VIEWER 可以回覆並完成任務，但不能修改共用記事。V3 權限驗收完成後，所有成員皆可發布任務及申請延期。</p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
+   <div class="row" style="margin:12px 0">
+    <button id="verifyTaskV3Read" type="button" class="alt">核對新版延期紀錄讀取（不寫入）</button>
+   </div>
+   <p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對 TEST 伺服器的 V3 延期紀錄讀取權限。</p>
    <div id="tasksList"></div>
    <p class="hint">截止日前 3 天會在任務頁提示；目前尚未啟用 iPhone 背景推播。全員發布及延期核准須待 TEST 伺服器權限正式驗收。</p>
    <form id="taskForm" hidden>
@@ -485,6 +489,23 @@ async function loadTasks(){
   (sections.get(taskCategory(item))||root).append(box);
  }
 }
+$('verifyTaskV3Read').onclick=()=>run(async()=>{
+ const s=session(),label=$('verifyTaskV3Status');
+ if(!taskSelected||!extensions){label.textContent='請先選擇任務共用群組。';return}
+ const button=$('verifyTaskV3Read');button.disabled=true;
+ label.textContent='正在讀取 TEST 伺服器的延期紀錄（不寫入）……';
+ try{
+  const tasksFound=await tasks.list(taskSelected.id);check(s);
+  if(!tasksFound.length){label.textContent='目前沒有可用任務；無法檢查延期紀錄讀取權限。';return}
+  const found=tasksFound[0];
+  const requests=await extensions.list({groupId:taskSelected.id,taskId:found.id});check(s);
+  label.textContent='V3 延期紀錄讀取 PASS（伺服器已允許，讀到 '+requests.length+
+   ' 筆）。這只證明讀取權限，尚未證明全員發布及延期寫入。';
+ }catch(e){
+  label.textContent='V3 讀取尚未通過：'+String(e?.code||e?.message||e)+
+   '。請勿啟用新版寫入功能；現有 V2 任務不受影響。';
+ }finally{button.disabled=false}
+});
 function toggleInviteForm(open){
  $('inviteForm').hidden=!open;
  $('toggleInvite').setAttribute('aria-expanded',String(open));
