@@ -1,0 +1,44 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">
+<title>HONBIN TEST｜任務 V5 權限安全升級候選</title>
+<style>*{box-sizing:border-box}body{font:17px/1.6 -apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;background:#f4f7fc;color:#24364e;max-width:780px;margin:auto;padding:16px 16px 90px}h1{font-size:1.4rem}section{background:white;border:1px solid #d9e3f0;border-radius:14px;padding:16px;margin:14px 0}textarea{width:100%;min-height:230px;border:1px solid #9bafc4;border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,monospace}button{background:#205a98;color:white;border:0;border-radius:9px;padding:12px 16px;font:inherit;font-weight:600}button:disabled{opacity:.5}.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#e9f3fd;border-radius:9px;padding:12px}.warning{background:#fff1d6;padding:12px;border-radius:9px}</style></head><body>
+<h1>任務 V5｜Firestore TEST 安全規則核對</h1>
+<p class="warning"><strong>只供獨立 TEST：</strong>honbin-crm-notes-spark。此頁不連線 Firebase、不修改資料、不發布規則，也不會上傳你貼上的規則。不得用於正式 CRM。</p>
+<section><h2>1. 貼上目前已發布的完整 Firestore 規則</h2>
+<p>Firebase Console → 專案 honbin-crm-notes-spark → Firestore Database → 規則 → 複製目前完整規則。不要貼舊備份。</p>
+<textarea id="current" spellcheck="false" placeholder="rules_version = '2';"></textarea></section>
+<section><h2>2. 核對並產生候選（不發布）</h2>
+<p>只替換原有 /groups/{groupId}/tasks/{taskId} 的 V4 規則。其他權限逐字保留；若原始任務規則有任何不符，立即 HOLD。</p>
+<button id="verify">核對目前規則並產生候選</button>
+<p id="status" class="status" role="status" aria-live="polite">尚未核對。此頁不會發布任何規則。</p>
+<div id="out" hidden><h3>候選完整規則（未發布）</h3>
+<textarea id="candidate" readonly spellcheck="false"></textarea>
+<button id="copy">一鍵複製候選規則</button>
+<p class="warning">候選需先通過獨立 Firebase 模擬器編譯與權限拒絕測試；發布前須人工核對 TEST 專案及完整規則，並於發布後做實際 TEST 伺服器驗收。正式 CRM 一律不動。</p></div>
+</section><p><a href="./workspace-v2.html">返回記事與任務 TEST</a></p>
+<script type="module">
+import {upgradeTaskAclV5} from './firestore-task-v5-exact-upgrade.mjs';
+const $=id=>document.getElementById(id);let candidate='';
+$('verify').onclick=async()=>{
+ candidate='';$('out').hidden=true;$('status').textContent='核對中……';
+ try{
+  const [v4,v5]=await Promise.all([
+   fetch('./firestore-tasks-v4-publisher-deadline-REVIEW-ONLY.rules',{cache:'no-store'}),
+   fetch('./firestore-tasks-v5-pending-completion-REVIEW-ONLY.rules',{cache:'no-store'})
+  ]);
+  if(!v4.ok||!v5.ok)throw Error('RULES_FRAGMENT_UNAVAILABLE');
+  const result=upgradeTaskAclV5($('current').value,await v4.text(),await v5.text());
+  candidate=result.merged;$('candidate').value=candidate;$('out').hidden=false;
+  $('status').textContent='候選產生 PASS（尚未發布）\n其他原始規則逐字保留：YES\n原始長度：'+result.originalBytes+
+   '\n候選長度：'+result.candidateBytes+'\n只替換：'+result.replaced.join('、')+
+   '\n候選尚未發布；待獨立合成資料模擬器及實際 TEST 伺服器驗收。';
+ }catch(e){$('status').textContent='安全 HOLD：'+String(e?.message||e)+
+  '\n沒有修改、上傳或發布任何規則。'}
+};
+$('copy').onclick=async()=>{
+ if(!candidate)return;
+ try{await navigator.clipboard.writeText(candidate);$('status').textContent='已複製候選（未發布）。'}
+ catch{$('candidate').focus();$('candidate').select();$('status').textContent='已選取候選文字，請長按複製；尚未發布。'}
+};
+</script></body></html>
