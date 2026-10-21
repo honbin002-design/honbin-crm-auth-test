@@ -153,7 +153,8 @@ import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebas
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
-const TASK_V3_RULES_ENABLED=true; // TEST ONLY: emulator PASS + owner live extension-path READ PASS; actual writes still pending user acceptance.
+const TASK_V3_RULES_ENABLED=true; // Existing TEST V3 rules live.
+const TASK_V4_PUBLISHER_DATE_ENABLED=false; // Fail closed until V4 reviewed, published, and verified in live TEST.
 const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
@@ -478,19 +479,38 @@ async function loadTasks(){
        entry.append(mk('p','原因：'+req.reason));
        entry.append(mk('p','審核狀態：'+(
         req.status==='PENDING'?'待審核':req.status==='APPROVED'?'已核准':'已拒絕')));
+       if(req.status==='APPROVED')entry.append(mk('p','發布人核准完成日期：'+(req.approvedDueDate||req.newDueDate)+'（'+(req.approvedDueDate?'發布人決定':'舊版沿用申請日期')+'）'));
        if(req.decidedAt?.toDate)entry.append(mk('small','審核時間：'+req.decidedAt.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
        if(req.status==='PENDING'&&item.createdBy===uid&&
           item.status==='OPEN'&&item.extensionPendingId===req.id){
+        const dateLabel=mk('label','發布人核准的最終完成日期（可修改申請日期）');
+        const finalDate=mk('input');finalDate.type='date';
+        finalDate.value=req.newDueDate;
+        finalDate.min=item.dueDate;
+        finalDate.disabled=!TASK_V4_PUBLISHER_DATE_ENABLED;
+        entry.append(dateLabel,finalDate);
+        const note=mk('small',TASK_V4_PUBLISHER_DATE_ENABLED
+         ?'必須晚於原截止日期 '+item.dueDate+'；核准後以這個日期為準，原申請日期保留在紀錄。'
+         :'新版「發布人調整日期」尚待 TEST Firebase V4 規則發布；為避免直接套用申請日期，暫停核准。拒絕延期仍可使用。');
+        entry.append(note);
         const row=mk('div');row.className='row';
         for(const decision of ['APPROVED','REJECTED']){
-         const action=mk('button',decision==='APPROVED'?'核准延期':'拒絕延期');
+         const action=mk('button',decision==='APPROVED'?'核准此日期':'拒絕延期');
          action.type='button';if(decision==='REJECTED')action.className='alt';
+         if(decision==='APPROVED'&&!TASK_V4_PUBLISHER_DATE_ENABLED)action.disabled=true;
          action.onclick=()=>run(async()=>{
-          if(!confirm((decision==='APPROVED'?'核准':'拒絕')+'延期申請？審核結果會保留紀錄。'))return;
+          if(decision==='APPROVED'&&!TASK_V4_PUBLISHER_DATE_ENABLED)
+           throw Error('TEST_V4_RULES_NOT_VERIFIED');
+          const approvedDueDate=decision==='APPROVED'?finalDate.value:undefined;
+          if(decision==='APPROVED'&&(!approvedDueDate||approvedDueDate<=item.dueDate))
+           throw Error('核准完成日期必須晚於原截止日期 '+item.dueDate);
+          if(!confirm(decision==='APPROVED'
+           ?'確定核准延期至 '+approvedDueDate+'？申請人建議 '+req.newDueDate+' 將保留為歷史紀錄。'
+           :'確定拒絕延期？原截止日期 '+item.dueDate+' 將維持不變。'))return;
           action.disabled=true;
           try{
            await extensions.decide({groupId:taskGroupId,taskId:item.id,
-            requestId:req.id,decision});check(s);
+            requestId:req.id,decision,...(decision==='APPROVED'?{approvedDueDate}:{})});check(s);
            await loadTasks();say('延期審核結果已由 TEST 伺服器確認。');
           }finally{action.disabled=false}
          });
