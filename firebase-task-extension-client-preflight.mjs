@@ -69,6 +69,9 @@ await assert.rejects(api.decide({groupId:'group_test',taskId:'task_real',
 const decision=await api.decide({groupId:'group_test',taskId:'task_real',
  requestId:applied.requestId,decision:'APPROVED',approvedDueDate:'2026-10-25'});
 assert.equal(decision.decision,'APPROVED');
+assert.equal(decision.originalDueDate,'2026-10-23');
+assert.equal(decision.effectiveDueDate,'2026-10-25');
+assert.equal(decision.approvedDueDate,'2026-10-25');
 assert.equal(state.get(taskPath).dueDate,'2026-10-25');
 assert.equal(state.get(requestPath).newDueDate,'2026-10-26');
 assert.equal(state.get(requestPath).approvedDueDate,'2026-10-25');
@@ -85,8 +88,10 @@ const rejectedRequest=await api.request({groupId:'group_test',taskId:'task_real'
 uid='publisher_user';
 await assert.rejects(api.decide({groupId:'group_test',taskId:'task_real',
  requestId:rejectedRequest.requestId,decision:'REJECTED',approvedDueDate:'2026-10-28'}),/REJECTED_MUST_NOT_SET_APPROVED_DATE/);
-await api.decide({groupId:'group_test',taskId:'task_real',
+const rejected=await api.decide({groupId:'group_test',taskId:'task_real',
  requestId:rejectedRequest.requestId,decision:'REJECTED'});
+assert.equal(rejected.originalDueDate,'2026-10-25');
+assert.equal(rejected.effectiveDueDate,'2026-10-25');
 assert.equal(state.get(taskPath).dueDate,'2026-10-25');
 assert.equal(state.get(taskPath+'/extensionRequests/'+rejectedRequest.requestId).status,'REJECTED');
 console.log('TEST_TASK_V4_CLIENT_CONTRACT_PASS (IN_MEMORY_ONLY)');
