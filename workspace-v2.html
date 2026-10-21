@@ -419,7 +419,8 @@ async function loadTasks(){
    const waiting=mk('p','延期申請尚待發布人審核，請先處理延期再完成任務。');
    waiting.className='task-alert';box.append(waiting);
   }else if(taskCanComplete(item,uid)){
-   const reply=mk('textarea');reply.placeholder='輸入處理結果（必填）';reply.maxLength=3000;
+   const replyLabel=mk('label','處理結果（必填）');
+   const reply=mk('textarea');reply.id='reply-'+item.id;replyLabel.htmlFor=reply.id;reply.placeholder='輸入處理結果';reply.maxLength=3000;
    const button=mk('button','回覆並完成');
    button.onclick=()=>run(async()=>{
     if(!reply.value.trim())throw Error('請先輸入處理結果');
@@ -429,7 +430,7 @@ async function loadTasks(){
       await loadTasks();say('已由伺服器確認任務完成。')}
     finally{button.disabled=false}
    });
-   box.append(reply,button);
+   box.append(replyLabel,reply,button);
   }else box.append(mk('small','尚未完成｜此任務不是指派給你'));
   if(TASK_V3_RULES_ENABLED&&extensions){
    const canExecute=item.status==='OPEN'&&taskCanComplete(item,uid);
@@ -462,9 +463,11 @@ async function loadTasks(){
     const form=mk('form');form.hidden=true;
     const reasonLabel=mk('label','延期原因（必填）');
     const reason=mk('textarea');reason.maxLength=1000;reason.required=true;
+    reason.id='reason-'+item.id;reasonLabel.htmlFor=reason.id;
     reason.placeholder='請說明未能如期完成的原因';
     const dateLabel=mk('label','申請新的完成日期');
     const newDate=mk('input');newDate.type='date';newDate.required=true;newDate.min=new Date(Date.parse(item.dueDate+'T00:00:00Z')+86400000).toISOString().slice(0,10);
+    newDate.id='extension-date-'+item.id;dateLabel.htmlFor=newDate.id;
     const send=mk('button','送出延期申請');send.type='submit';
     form.append(reasonLabel,reason,dateLabel,newDate,send);
     toggle.onclick=()=>{form.hidden=!form.hidden;toggle.textContent=form.hidden?'申請延期':'收起延期申請'};
@@ -511,6 +514,7 @@ async function loadTasks(){
           item.status==='OPEN'&&item.extensionPendingId===req.id){
         const dateLabel=mk('label','發布人核准的最終完成日期（可修改申請日期）');
         const finalDate=mk('input');finalDate.type='date';
+        finalDate.id='approval-'+req.id;dateLabel.htmlFor=finalDate.id;
         finalDate.value=req.newDueDate;
         finalDate.min=new Date(Date.parse(item.dueDate+'T00:00:00Z')+86400000).toISOString().slice(0,10);
         finalDate.disabled=!TASK_V4_PUBLISHER_DATE_ENABLED;
