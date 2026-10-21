@@ -1,5 +1,15 @@
 # 鴻繽記事與任務 TEST｜任務全員發布與延期流程施工規格（REVIEW ONLY）
-Status: DESIGN / NOT DEPLOYED. Project: honbin-crm-notes-spark.
+Status: HISTORICAL PLAN with verified 2026-10-21 TEST checkpoint below. Project: honbin-crm-notes-spark.
+
+## CURRENT CHECKPOINT (2026-10-21, Asia/Taipei) — supersedes historical "Current delivered" text below
+- Authority: `honbin002-design/honbin-crm-auth-test`, branch `main`; independent TEST only. Never modify formal CRM, existing production notes, or other projects.
+- V4 TEST is reported live by the existing workspace gate. Publisher-defined approved due dates, separate requested dates, and request/rejection history have already been implemented. Last reported cross-account acceptance: PASS; do not retest PASS/FROZEN just to repeat it.
+- V5 Firestore rules remain **REVIEW ONLY / NOT DEPLOYED**, even though the synthetic emulator workflow passed. Strict V5 requires immutable `originalDueDate` on new extension requests and blocks task completion while an extension is pending.
+- Workspace flag `TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED=false` is deliberately held to preserve existing live V4 writes. **DO NOT publish strict V5 directly while that flag remains false**: V4-format extension requests could be rejected in the cutover window. Do not flip the client flag before a compatible server rule is published either.
+- Frontend client guard now independently blocks completion during a pending extension; regression checks assert zero writes for the denied path. Commit `28268155`; 2026-10-21 Auth-only workflow PASS and GitHub Pages deployment PASS. The server-level guard still requires reviewed V5 rules before being claimed LIVE.
+- Exact merge tool `firestore-task-v5-upgrade-review.html` safely compares a pasted CURRENT complete TEST rule set and preserves every non-task block verbatim. No complete live Firebase rules readback is available in this connector session.
+- NEXT: design/verify a no-downtime V4→V5 compatibility bridge, read back actual currently deployed TEST rules in Firebase Console, run full emulator denials on the exact combined candidate, publish **TEST only** with authority confirmation, switch client audited writes only after live rule verification, and perform one positive/negative two-account live readback. Keep V4 operational until safe cutover. No additional accounts, fees, or PROD changes.
+- Never equate GitHub Pages success or emulator PASS with live Firebase Rule publication.
 Do not change formal CRM, deployed Firestore rules, existing tasks or historical data without reviewed TEST rules and server ACL tests.
 
 ## Requirements
