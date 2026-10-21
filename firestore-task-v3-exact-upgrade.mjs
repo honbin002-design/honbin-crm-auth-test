@@ -3,7 +3,7 @@
 function findBlock(source,marker){
  const indexes=[...source.matchAll(new RegExp(marker,'g'))];
  if(indexes.length!==1)throw Error('TASK_MATCH_MUST_APPEAR_EXACTLY_ONCE');
- const start=indexes[0].index,open=source.indexOf('{',start);
+ const start=indexes[0].index,open=start+indexes[0][0].lastIndexOf('{');
  if(open<0)throw Error('MISSING_OPEN_BRACE');
  let depth=0,mode='code',quote='',escape=false;
  for(let i=open;i<source.length;i++){
