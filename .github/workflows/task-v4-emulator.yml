@@ -1,0 +1,35 @@
+name: TEST task V4 Firestore emulator ACL
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore-task-v4-*.mjs'
+      - 'firestore-task-v4-*.html'
+      - 'firestore-tasks-v4-publisher-deadline-REVIEW-ONLY.rules'
+      - 'prepare-firestore-task-v4-emulator-rules.mjs'
+      - 'firebase-task-extension-service.mjs'
+      - 'workspace-v2.html'
+      - 'package.json'
+      - '.github/workflows/task-v4-emulator.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firestore-v4-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install emulator test dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify exact V3-to-V4 ACL replacement (offline)
+        run: node firestore-task-v4-upgrade-preflight.mjs
+      - name: Run synthetic Firestore V4 ACL and rejection tests
+        run: npm run test:task-v4-emulator
