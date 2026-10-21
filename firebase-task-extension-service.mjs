@@ -3,7 +3,7 @@
 const ID=/^[A-Za-z0-9_-]{1,150}$/;
 const valid=(v,name)=>{if(typeof v!=='string'||!ID.test(v))throw Error('INVALID_'+name);return v};
 const date=/^\d{4}-\d{2}-\d{2}$/;
-export function taskExtensionService({db,sdk,currentUid}){
+export function taskExtensionService({db,sdk,currentUid,recordOriginalDueDate=false}){
  const {collection,doc,runTransaction,serverTimestamp,getDocFromServer,getDocsFromServer}=sdk||{};
  if(!db||typeof currentUid!=='function'||![collection,doc,runTransaction,serverTimestamp,getDocFromServer,getDocsFromServer].every(f=>typeof f==='function'))
   throw Error('TASK_EXTENSION_CONTEXT_REQUIRED');
@@ -32,14 +32,16 @@ export function taskExtensionService({db,sdk,currentUid}){
    if(newDueDate<=data.dueDate)throw Error('EXTENSION_MUST_BE_LATER');
    tx.update(task,{extensionPendingId:ref.id});
    tx.set(ref,{requestedBy:uid,requestedAt:serverTimestamp(),reason:message,
-    newDueDate,status:'PENDING',decidedBy:null,decidedAt:null});
+    newDueDate,status:'PENDING',decidedBy:null,decidedAt:null,
+    ...(recordOriginalDueDate?{originalDueDate:data.dueDate}:{})});
   });
   if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
   const [taskRead,requestRead]=await Promise.all([getDocFromServer(task),getDocFromServer(ref)]);
   if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
   if(!taskRead.exists()||taskRead.data().extensionPendingId!==ref.id||
     !requestRead.exists()||requestRead.data().status!=='PENDING'||
-    requestRead.data().requestedBy!==uid||requestRead.data().newDueDate!==newDueDate)
+    requestRead.data().requestedBy!==uid||requestRead.data().newDueDate!==newDueDate||
+    (recordOriginalDueDate&&requestRead.data().originalDueDate!==taskRead.data().dueDate))
    throw Error('EXTENSION_REQUEST_SERVER_READBACK_MISMATCH');
   return {requestId:ref.id};
  }
