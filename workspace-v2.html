@@ -154,7 +154,7 @@ import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
 const TASK_V3_RULES_ENABLED=true; // Existing TEST V3 rules live.
-const TASK_V4_PUBLISHER_DATE_ENABLED=false; // Fail closed until V4 reviewed, published, and verified in live TEST.
+const TASK_V4_PUBLISHER_DATE_ENABLED=true; // Fail closed until V4 reviewed, published, and verified in live TEST.
 const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
 const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
