@@ -42,9 +42,10 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .task-card{box-shadow:0 3px 12px #20334d0d}.task-card[data-category="overdue"]{background:#fffafa}.task-card[data-category="soon"]{background:#fffdf8}.task-card[data-category="pending"]{background:#fcfaff}.task-card[data-category="done"]{background:#fbfefc}
 .task-title-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;padding:5px 0;text-align:left;color:#173d61;background:transparent;font-size:1.08rem;line-height:1.45}.task-title-button::after{content:'＋';font-size:1.35rem;color:#286544;flex:none}.task-title-button[aria-expanded="true"]::after{content:'−'}.task-title-button:hover{color:#0c5796}
 .task-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;margin:8px 0}.task-summary p{margin:0}.task-summary strong{display:block;color:#52657b;font-size:.9rem}.task-detail-panel{margin-top:14px;padding-top:12px;border-top:1px solid #d8e5de}.task-open-hint{color:#426454;font-size:.94rem;margin:2px 0 0}
+.list-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.list-tabs button{background:#e7eff9;color:#24486c}.list-tabs button.active{background:#205a9a;color:#fff}.list-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}.list-controls label{margin:3px 0}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0}.pager button{flex:0 0 auto}.pager span{text-align:center;color:#52657b}.task-card .task-title-button{margin-bottom:0}
 .note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
 .back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
-@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta,.task-summary{grid-template-columns:1fr}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
+@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta,.task-summary,.list-controls{grid-template-columns:1fr}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
 [hidden]{display:none!important}
 </style></head><body>
 <header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜不連接正式 CRM</small></div><span class="pill" id="who">未登入</span></header>
@@ -63,7 +64,8 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   </div>
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>記事列表</h2><button class="alt" id="newNote">＋ 新記事</button></div>
   <label for="search">搜尋記事</label><input id="search" type="search" placeholder="搜尋標題或內容">
-  <div id="notesList"></div></div>
+  <p class="hint">每批最多 10 筆；搜尋目前批次。按「下一批」可查找更舊記事。</p>
+  <div id="notesList"></div><div class="pager"><button class="alt" id="notePrev" type="button">上一批</button><span id="notePageStatus" role="status">第 1 批</span><button class="alt" id="noteNext" type="button">下一批</button></div></div>
   <div class="panel" id="noteEditor" hidden><h2 id="noteHeading">新增記事</h2>
    <label for="noteTitle">標題</label><input id="noteTitle" maxlength="120">
    <label for="noteContent">內容</label><textarea id="noteContent" maxlength="30000"></textarea>
@@ -76,8 +78,13 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <p class="hint">有效群組成員可發布及查看任務；執行人可回覆或申請延期。共用記事權限獨立維持。</p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
+   <div class="list-tabs" role="group" aria-label="任務狀態"><button id="taskOpenTab" type="button" class="active" aria-pressed="true">進行中</button><button id="taskDoneTab" type="button" aria-pressed="false">已完成</button></div>
+   <div class="list-controls"><div><label for="taskSearchField">搜尋條件</label><select id="taskSearchField"><option value="all">全部欄位</option><option value="publisher">發布人</option><option value="executor">執行人</option><option value="content">任務名稱與內容</option></select></div><div><label for="taskSearch">搜尋任務</label><input id="taskSearch" type="search" placeholder="輸入名稱或關鍵字"></div></div>
+   <button id="taskSearchButton" class="alt" type="button" style="margin-top:10px">搜尋目前批次</button>
+   <p class="hint">每批最多 10 筆。搜尋目前批次；若要查找更舊資料，請按「下一批」，每次只讀取必要資料。</p>
    <details><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
    <div id="tasksList"></div>
+   <div class="pager"><button class="alt" id="taskPrev" type="button">上一批</button><span id="taskPageStatus" role="status">第 1 批</span><button class="alt" id="taskNext" type="button">下一批</button></div>
    <p class="hint">截止日前 3 天會在任務頁提示。此為獨立 TEST，請勿輸入正式資料。</p>
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
@@ -177,6 +184,8 @@ let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLo
 let pendingTaskWrite=null;
 const sharedNickCache=new Map();
 let inviteGroups=[],inviteGroupId='',inviteLoaded=false,receivedLoaded=false,inviteSubmitting=false;
+let notePageIndex=0,noteCursors=[null],noteHasMore=false;
+let taskStatus='OPEN',taskPageIndex=0,taskCursors={OPEN:[null],DONE:[null]},taskHasMore=false,taskPageData=null;
 const scope=()=>$('mode').value==='PRIVATE'?{mode:'PRIVATE'}:{mode:'SHARED',groupId:selected?.id};
 const context=()=>uid?{uid,mode:$('mode').value,groupId:$('mode').value==='SHARED'?selected?.id:null}:null;
 const mayWrite=()=>$('mode').value==='PRIVATE'||['ADMIN','EDITOR'].includes(selected?.role);
@@ -229,9 +238,13 @@ function openEditor(item=null){
  $('noteHeading').textContent=item?'編輯記事':'新增記事';
  $('noteEditor').hidden=false;$('noteEditor').scrollIntoView({behavior:'smooth',block:'start'});
 }
-async function loadNotes(){
+async function loadNotes({reset=true}={}){
  const s=session(),sc=scope();if(sc.mode==='SHARED'&&!selected){$('notesList').textContent='尚未加入共用記事簿。';return}
- const all=await notes.list(sc);check(s);
+ if(reset){notePageIndex=0;noteCursors=[null]}
+ const page=await notes.listPage({...sc,cursor:noteCursors[notePageIndex],size:10});check(s);
+ const all=page.items;noteHasMore=page.hasMore;noteCursors[notePageIndex+1]=page.cursor;
+ $('notePrev').disabled=notePageIndex===0;$('noteNext').disabled=!noteHasMore;
+ $('notePageStatus').textContent='第 '+(notePageIndex+1)+' 批｜每批最多 10 筆';
  if(PROFILE_RULES_ENABLED){
   const actors=[...new Set(all.map(x=>x.ownerUid).filter(Boolean))];
   // Missing profiles are optional and do not block reading shared notes.
@@ -243,14 +256,14 @@ async function loadNotes(){
 function renderNotes(){
  const term=$('search').value.trim().toLowerCase(),root=$('notesList');root.replaceChildren();
  const visible=items.filter(x=>(x.title+' '+x.content).toLowerCase().includes(term));
- if(!visible.length){root.append(mk('p','目前沒有記事。'));return}
+ if(!visible.length){root.append(mk('p',term?'目前批次沒有符合的記事；可檢查下一批。':'目前批次沒有記事。'));return}
  for(const item of visible){
   const line=mk('article');line.className='note-card';line.dataset.noteId=item.id;line.append(mk('strong',item.title));
   if(PROFILE_RULES_ENABLED&&item.ownerUid){
    const author=sharedNickCache.get(item.ownerUid);
    line.append(mk('small','建立者：'+(author||'未設定暱稱')));
   }
-  const body=mk('p',item.content.slice(0,100));body.className='note-content';line.append(body);
+  const body=mk('p',item.content.slice(0,60)+(item.content.length>60?'…':''));body.className='note-content';line.append(body);
   const btn=mk('button',mayWrite()?'開啟／編輯':'查看');btn.className='alt';btn.addEventListener('click',()=>{
    if(mayWrite())openEditor(item);
    else {const p=mk('p',item.content);p.className='note-content';p.style.marginTop='8px';line.append(p);btn.disabled=true}
@@ -324,8 +337,11 @@ function taskCategory(item){
  if(days!==null&&days<=3)return 'soon';
  return 'open';
 }
-async function loadTasks(){
+async function loadTasks({reset=true,reuse=false}={}){
  const s=session(),root=$('tasksList');root.replaceChildren();
+ if(reset){taskPageIndex=0;taskCursors[taskStatus]=[null];taskPageData=null}
+ $('taskOpenTab').classList.toggle('active',taskStatus==='OPEN');$('taskDoneTab').classList.toggle('active',taskStatus==='DONE');
+ $('taskOpenTab').setAttribute('aria-pressed',String(taskStatus==='OPEN'));$('taskDoneTab').setAttribute('aria-pressed',String(taskStatus==='DONE'));
  $('taskPublish').disabled=true;
  if(!TASK_RULES_ENABLED||!taskSelected){
   root.append(mk('p',!taskSelected?'請先加入一個多人共用群組。':'任務讀取與發布尚未開放，等待 TEST 伺服器規則驗收。'));return;
@@ -366,8 +382,14 @@ async function loadTasks(){
  }
  if(taskSelected.role!=='ADMIN')
   $('taskScopeHint').textContent+='｜非管理員可發布給自己或所有成員；指定其他成員請由管理員操作。';
- const entries=await tasks.list(taskGroupId);check(s);
- if(!entries.length)root.append(mk('p','目前沒有任務。'));
+ const page=reuse&&taskPageData?.groupId===taskGroupId&&taskPageData.status===taskStatus&&taskPageData.index===taskPageIndex
+  ?taskPageData.page:await tasks.listPage(taskGroupId,{status:taskStatus,cursor:taskCursors[taskStatus][taskPageIndex],size:10});check(s);
+ taskPageData={groupId:taskGroupId,status:taskStatus,index:taskPageIndex,page};
+ taskHasMore=page.hasMore;taskCursors[taskStatus][taskPageIndex+1]=page.cursor;
+ $('taskPrev').disabled=taskPageIndex===0;$('taskNext').disabled=!taskHasMore;
+ $('taskPageStatus').textContent=(taskStatus==='OPEN'?'進行中':'已完成')+'｜第 '+(taskPageIndex+1)+' 批｜每批最多 10 筆';
+ const search=$('taskSearch').value.trim().toLocaleLowerCase('zh-Hant'),searchField=$('taskSearchField').value;
+ const entries=[];
  const categories=[
   {key:'pending',label:'延期待審'},
   {key:'overdue',label:'未完成｜已逾期'},
@@ -377,7 +399,9 @@ async function loadTasks(){
  ];
  const sections=new Map();
  for(const category of categories){
-  const matching=entries.filter(item=>taskCategory(item)===category.key);
+  if((category.key==='done')!==(taskStatus==='DONE'))continue;
+  const matching=page.items.filter(item=>taskCategory(item)===category.key);
+  if(search)continue;
   if(!matching.length)continue;
   const section=mk('section');section.className='task-section';
   section.dataset.category=category.key;
@@ -395,24 +419,36 @@ async function loadTasks(){
   return name?(email?name+'（'+email+'）':name):
    (email||'成員（UID '+id.slice(0,8)+'…）');
  }
+ for(const item of page.items){
+  const publisher=await displayName(item.createdBy),executor=await displayName(item.assignedUid);
+  const fields={publisher,executor,content:item.title+' '+(item.description||'')};
+  if(search&&!String(searchField==='all'?Object.values(fields).join(' '):fields[searchField]).toLocaleLowerCase('zh-Hant').includes(search))continue;
+  entries.push(item);
+ }
+ if(!entries.length)root.append(mk('p',search?'目前批次沒有符合條件的任務；可按「下一批」繼續搜尋。':'目前批次沒有任務。'));
+ if(search&&entries.length){
+  const section=mk('section');section.className='task-section';section.dataset.category=taskStatus==='DONE'?'done':'open';
+  section.append(mk('h3','目前批次搜尋結果（'+entries.length+'）'));root.append(section);
+  for(const item of entries)sections.set(taskCategory(item),section);
+ }
  for(const item of entries){
   const category=taskCategory(item),box=mk('article');box.className='task-card';box.dataset.taskId=item.id;box.dataset.category=category;
-  const done=item.status==='DONE',detail=mk('div'),body=done?detail:box;
-  let openDoneHistory=()=>{};
+  const done=item.status==='DONE',detail=mk('div'),body=detail;
+  let openTaskHistory=()=>{};
   box.append(Object.assign(mk('span',({pending:'延期待審',overdue:'已逾期',soon:'即將到期',open:'進行中',done:'已完成'})[category]),{className:'task-badge'}));
-  if(done){
-   const heading=mk('h4'),title=mk('button',item.title);title.type='button';title.className='task-title-button';
-   title.setAttribute('aria-expanded','false');detail.id='task-detail-'+item.id;detail.className='task-detail-panel';detail.hidden=true;
-   title.setAttribute('aria-controls',detail.id);
-   title.onclick=()=>{detail.hidden=!detail.hidden;title.setAttribute('aria-expanded',String(!detail.hidden));if(!detail.hidden)openDoneHistory()};
-   heading.append(title);box.append(heading);
-   const summary=mk('div');summary.className='task-summary';
-   for(const [label,value] of [['建立者',await displayName(item.createdBy)],['完成者',await displayName(item.completedBy)]]){
-    const p=mk('p');p.append(mk('strong',label),mk('span',value));summary.append(p);
-   }
-   box.append(summary);
-   const hint=mk('p','點選任務標題，查看完整內容與歷史紀錄。');hint.className='task-open-hint';box.append(hint);
-  }else box.append(mk('h4',item.title));
+  const heading=mk('h4'),title=mk('button',item.title);title.type='button';title.className='task-title-button';
+  title.setAttribute('aria-expanded','false');detail.id='task-detail-'+item.id;detail.className='task-detail-panel';detail.hidden=true;
+  title.setAttribute('aria-controls',detail.id);
+  title.onclick=()=>{detail.hidden=!detail.hidden;title.setAttribute('aria-expanded',String(!detail.hidden));if(!detail.hidden)openTaskHistory()};
+  heading.append(title);box.append(heading);
+  const summary=mk('div');summary.className='task-summary';
+  for(const [label,value] of done
+   ?[['建立者',await displayName(item.createdBy)],['完成者',await displayName(item.completedBy)]]
+   :[['發布人',await displayName(item.createdBy)],['執行人',await displayName(item.assignedUid)],['截止日期',item.dueDate||'未設定']]){
+   const p=mk('p');p.append(mk('strong',label),mk('span',value));summary.append(p);
+  }
+  box.append(summary);
+  const hint=mk('p',done?'點選標題查看完成內容與歷史。':'點選標題查看詳情與操作。');hint.className='task-open-hint';box.append(hint);
   if(item.description){const description=mk('p',item.description);description.className='task-description';body.append(description)}
   const meta=mk('div');meta.className='task-meta';
   function field(label,value){const p=mk('p');p.append(mk('strong',label),mk('span',value));meta.append(p)}
@@ -578,11 +614,11 @@ async function loadTasks(){
       history.hidden=false;historyButton.textContent='收起延期紀錄';
      }finally{historyButton.disabled=false}
     });
-    if(done)openDoneHistory=()=>{if(history.hidden)historyButton.click()};
+    if(done)openTaskHistory=()=>{if(history.hidden)historyButton.click()};
     body.append(historyButton,history);
    }
   }
-  if(done)box.append(detail);
+  box.append(detail);
   (sections.get(taskCategory(item))||root).append(box);
  }
 }
@@ -856,6 +892,15 @@ $('taskGroup').onchange=()=>run(async()=>{
  say(taskSelected?'已切換任務群組：'+taskSelected.name:'尚未選擇任務群組。');
 });
 $('search').oninput=renderNotes;
+$('notePrev').onclick=()=>run(async()=>{if(notePageIndex>0){notePageIndex--;await loadNotes({reset:false})}});
+$('noteNext').onclick=()=>run(async()=>{if(noteHasMore){notePageIndex++;await loadNotes({reset:false})}});
+for(const [id,status] of [['taskOpenTab','OPEN'],['taskDoneTab','DONE']])$(id).onclick=()=>run(async()=>{
+ if(taskStatus===status)return;taskStatus=status;taskPageIndex=0;taskPageData=null;await loadTasks({reset:false});
+});
+$('taskPrev').onclick=()=>run(async()=>{if(taskPageIndex>0){taskPageIndex--;taskPageData=null;await loadTasks({reset:false})}});
+$('taskNext').onclick=()=>run(async()=>{if(taskHasMore){taskPageIndex++;taskPageData=null;await loadTasks({reset:false})}});
+$('taskSearchButton').onclick=()=>run(()=>loadTasks({reset:false,reuse:true}));
+$('taskSearch').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('taskSearchButton').click()}};
 $('newNote').onclick=()=>openEditor();
 $('noteTitle').oninput=saveDraft;$('noteContent').oninput=saveDraft;
 $('closeNote').onclick=()=>{if(($('noteTitle').value||$('noteContent').value)&&!confirm('返回列表？未上傳的草稿會留在本機。'))return;clearEditor()};
