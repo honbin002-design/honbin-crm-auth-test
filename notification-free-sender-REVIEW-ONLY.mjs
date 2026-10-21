@@ -27,11 +27,12 @@ async function main(){
  if(!Number.isFinite(activation)||activation>now())throw Error('INVALID_ACTIVATION_TIME');
  const credential=JSON.parse(process.env.TEST_FIREBASE_SERVICE_ACCOUNT_JSON);
  if(credential.project_id!==PROJECT)throw Error('WRONG_FIREBASE_PROJECT_STOP');
- const [{default:admin},{default:webpush}]=await Promise.all([
-  import('firebase-admin'),import('web-push')
+ const [{initializeApp,cert},{getAuth},{getFirestore,Timestamp,FieldPath,FieldValue},{default:webpush}]=await Promise.all([
+  import('firebase-admin/app'),import('firebase-admin/auth'),
+  import('firebase-admin/firestore'),import('web-push')
  ]);
- admin.initializeApp({credential:admin.credential.cert(credential),projectId:PROJECT});
- const db=admin.firestore(),auth=admin.auth();
+ const app=initializeApp({credential:cert(credential),projectId:PROJECT});
+ const db=getFirestore(app),auth=getAuth(app);
  webpush.setVapidDetails(process.env.TEST_PUSH_CONTACT,
   process.env.TEST_VAPID_PUBLIC_KEY,process.env.TEST_VAPID_PRIVATE_KEY);
  const accountCache=new Map();
@@ -91,7 +92,7 @@ async function main(){
       throw Error('PUSH_DELIVERY_IN_PROGRESS_STOP');
      if((data?.attempts||0)>=3)throw Error('PUSH_DELIVERY_RETRIES_EXHAUSTED');
      tx.set(receipt,{status:'SENDING',eventId:event.eventId,
-      recipientUid:uid,deviceId:device.id,claimedAt:admin.firestore.Timestamp.now(),
+      recipientUid:uid,deviceId:device.id,claimedAt:Timestamp.now(),
       attempts:(data?.attempts||0)+1});
      return true;
     });
@@ -101,10 +102,10 @@ async function main(){
       endpoint:subscription.endpoint,
       keys:{p256dh:subscription.p256dh,auth:subscription.auth}
      },JSON.stringify(event.payload),{TTL:3600,urgency:'normal'});
-     await receipt.update({status:'SENT',sentAt:admin.firestore.FieldValue.serverTimestamp()});
+     await receipt.update({status:'SENT',sentAt:FieldValue.serverTimestamp()});
     }catch(err){
      const status=Number(err.statusCode)||0;
-     await receipt.update({status:'FAILED',failedAt:admin.firestore.FieldValue.serverTimestamp(),
+     await receipt.update({status:'FAILED',failedAt:FieldValue.serverTimestamp(),
       httpStatus:status});
      if(status===404||status===410){
       const latest=await device.ref.get();
@@ -133,9 +134,9 @@ async function main(){
   if(last.exists&&last.data().activation!==process.env.TEST_PUSH_START_ISO)
    throw Error('PUSH_CURSOR_ACTIVATION_CHANGED_STOP');
   let query=db.collectionGroup(stream.collection)
-   .where(stream.field,'>=',admin.firestore.Timestamp.fromMillis(activation))
+   .where(stream.field,'>=',Timestamp.fromMillis(activation))
    .orderBy(stream.field,'asc')
-   .orderBy(admin.firestore.FieldPath.documentId(),'asc').limit(40);
+   .orderBy(FieldPath.documentId(),'asc').limit(40);
   if(last.exists){
    const {path,time}=last.data();
    if(typeof path!=='string'||!/^groups\/[A-Za-z0-9_-]+\/(tasks|notes)\/[A-Za-z0-9_-]+$/.test(path)||
@@ -166,7 +167,7 @@ async function main(){
    if(typeof time?.toMillis!=='function'||time.toMillis()<activation)
     throw Error('INVALID_EVENT_TIME_STOP');
    await checkpoint.set({activation:process.env.TEST_PUSH_START_ISO,
-    path:doc.ref.path,time,scannedAt:admin.firestore.FieldValue.serverTimestamp()});
+    path:doc.ref.path,time,scannedAt:FieldValue.serverTimestamp()});
   }
  }
  console.log('TEST_PUSH_SENDER_FINISHED_WITHOUT_EXPOSING_RECIPIENT_DATA');
