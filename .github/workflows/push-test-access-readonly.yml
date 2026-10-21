@@ -1,0 +1,22 @@
+name: TEST notification read-only access check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-only-read:
+    if: github.repository == 'honbin002-design/honbin-crm-auth-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned TEST sender runtime
+        run: npm install --no-save --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Check TEST service account and bounded Firestore indexes
+        env:
+          TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: node notification-test-access-readonly.mjs
+# No schedule, no delivery flag, no VAPID keys, no Firestore writes.
