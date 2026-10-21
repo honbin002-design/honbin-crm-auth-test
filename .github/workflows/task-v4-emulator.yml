@@ -8,6 +8,7 @@ on:
       - 'firestore-tasks-v4-publisher-deadline-REVIEW-ONLY.rules'
       - 'prepare-firestore-task-v4-emulator-rules.mjs'
       - 'firebase-task-extension-service.mjs'
+      - 'firebase-task-v4-service-preflight.mjs'
       - 'workspace-v2.html'
       - 'package.json'
       - '.github/workflows/task-v4-emulator.yml'
@@ -31,5 +32,7 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Verify exact V3-to-V4 ACL replacement (offline)
         run: node firestore-task-v4-upgrade-preflight.mjs
+      - name: Verify V4 publisher decision service with synthetic test
+        run: node firebase-task-v4-service-preflight.mjs
       - name: Run synthetic Firestore V4 ACL and rejection tests
         run: npm run test:task-v4-emulator
