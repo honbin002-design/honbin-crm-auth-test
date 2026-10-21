@@ -15,7 +15,7 @@
 <div id="out" hidden><h3>候選完整規則（未發布）</h3>
 <textarea id="candidate" readonly spellcheck="false"></textarea>
 <button id="copy">一鍵複製候選規則</button>
-<p class="warning">候選尚未完成 Firebase 編譯、模擬器越權測試及實際 TEST 驗收。請勿直接發布；先把核對結果交回驗收。</p></div>
+<p class="warning">候選已通過獨立合成資料的 Firebase 模擬器編譯與權限拒絕測試；仍須核對目前已發布的 TEST 規則，並於發布後做實際 TEST 伺服器驗收。正式 CRM 一律不動。</p></div>
 </section><p><a href="./workspace-v2.html">返回記事與任務 TEST</a></p>
 <script type="module">
 import {upgradeTaskAclV3} from './firestore-task-v3-exact-upgrade.mjs';
@@ -32,7 +32,7 @@ $('verify').onclick=async()=>{
   candidate=result.merged;$('candidate').value=candidate;$('out').hidden=false;
   $('status').textContent='候選產生 PASS（尚未發布）\n其他原始規則逐字保留：YES\n原始長度：'+result.originalBytes+
    '\n候選長度：'+result.candidateBytes+'\n只替換：'+result.replaced.join('、')+
-   '\n仍待 Firebase 編譯及伺服器拒絕測試。';
+   '\n合成資料模擬器 PASS；仍待實際 TEST 伺服器驗收。';
  }catch(e){$('status').textContent='安全 HOLD：'+String(e?.message||e)+
   '\n沒有修改、上傳或發布任何規則。'}
 };
