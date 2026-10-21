@@ -100,7 +100,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   </div>
  </section>
  <section id="settingsPanel">
-  <div class="panel" id="loginBox"><h2>Google 帳號</h2><p id="identity">正在檢查 Google 登入……</p><div class="row"><button id="login" disabled>Google 登入</button><button id="logout" class="alt" disabled>登出／切換帳號</button></div></div>
+  <div class="panel" id="loginBox"><h2>Google 帳號</h2><p id="identity">正在檢查 Google 登入……</p><div class="row"><button id="login" disabled>Google 登入</button><button id="logout" class="alt" disabled>登出／切換帳號</button></div><p class="hint">登入後會在這台裝置保留狀態，關閉再開啟也可自動登入；按「登出／切換帳號」會清除登入狀態。Safari 與加入主畫面的網頁 App 可能需各登入一次；清除網站資料或撤銷帳號存取後仍須重新登入。</p></div>
   <div class="panel" id="ownerManagement" hidden>
    <h2>最高權限｜成員權限管理</h2>
    <p class="hint">僅供 honbin002 最高權限帳號使用。每本共用記事簿的成員權限獨立，不會跨群組改動。</p>
@@ -1042,7 +1042,7 @@ async function start(){
  const authSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js');
  const fsSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js');
  sdk={...authSdk,...fsSdk};const app=appSdk.initializeApp(firebaseConfig);
- auth=authSdk.getAuth(app);await authSdk.setPersistence(auth,authSdk.browserSessionPersistence);db=fsSdk.getFirestore(app);
+ auth=authSdk.getAuth(app);await authSdk.setPersistence(auth,authSdk.browserLocalPersistence);db=fsSdk.getFirestore(app);
  try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
