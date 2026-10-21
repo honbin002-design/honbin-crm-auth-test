@@ -84,8 +84,7 @@ match /tasks/{taskId} {
     && request.resource.data.extensionPending.reason.size() <= 1000
     && request.resource.data.extensionPending.newDueDate is string
     && request.resource.data.extensionPending.newDueDate
-      .matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
-})
+      .matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
     && request.resource.data.extensionPending.newDueDate > resource.data.dueDate;
 
   // Only the immutable original publisher can decide. Preserve every
