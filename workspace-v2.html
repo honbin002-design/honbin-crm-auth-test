@@ -516,9 +516,14 @@ async function loadTasks(){
            :'確定拒絕延期？原截止日期 '+item.dueDate+' 將維持不變。'))return;
           action.disabled=true;
           try{
-           await extensions.decide({groupId:taskGroupId,taskId:item.id,
+           const decided=await extensions.decide({groupId:taskGroupId,taskId:item.id,
             requestId:req.id,decision,...(decision==='APPROVED'?{approvedDueDate}:{})});check(s);
-           await loadTasks();say('延期審核結果已由 TEST 伺服器確認。');
+           await loadTasks();check(s);
+           say(decision==='APPROVED'
+            ?'TEST 伺服器已確認核准延期：原截止 '+decided.originalDueDate+
+             '｜申請人建議 '+req.newDueDate+'｜發布人核准 '+decided.effectiveDueDate+'。'
+            :'TEST 伺服器已確認拒絕延期：原截止 '+decided.originalDueDate+
+             ' 維持不變，申請人建議 '+req.newDueDate+' 已保留在審核歷史。');
           }finally{action.disabled=false}
          });
          row.append(action);
