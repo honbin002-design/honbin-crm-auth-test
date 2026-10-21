@@ -32,6 +32,8 @@ assert.match(page,/到期提醒：/);
 // and live server-positive and server-denial tests have been recorded.
 assert.match(page,/const TASK_V3_RULES_ENABLED=true/);
 assert.match(page,/const TASK_V4_PUBLISHER_DATE_ENABLED=true/);
+assert.match(page,/const TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED=false/);
+assert.match(page,/recordOriginalDueDate:TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED/);
 assert.match(page,/decision==='APPROVED'\?finalDate\.value:undefined/);
 assert.match(page,/approvedDueDate<=item\.dueDate/);
 assert.match(page,/extensions\.decide\(\{groupId:taskGroupId,taskId:item\.id/);
