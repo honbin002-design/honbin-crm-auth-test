@@ -87,6 +87,9 @@ async function main(){
     .collection('devices').limit(4).get();
    if(devices.size>3)throw Error('PUSH_DEVICE_LIMIT_STOP');
    for(const device of devices.docs){
+    // A live ACL probe is a synthetic, never-deliverable entry. Do not send to
+    // it even if a network failure prevented the owner-only cleanup.
+    if(device.id.startsWith('probe_'))continue;
     if(deliveriesThisRun>=30)throw Error('PUSH_RUN_DELIVERY_BUDGET_STOP');
     // Membership can be revoked while this job is processing other devices.
     if(!await stillMember(event.payload.groupId,uid)||
