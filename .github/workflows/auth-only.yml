@@ -92,6 +92,8 @@ jobs:
         run: node firestore-task-nickname-merge-preflight.mjs
       - name: Verify owner-only settings member management and scoped Firestore transaction
         run: node owner-member-management-preflight.mjs
+      - name: Verify obsolete invite can be cancelled by root owner without role changes
+        run: node redundant-invite-revocation-preflight.mjs
       - name: Verify root-only invitation-linked Google account approvals
         run: node invited-account-approval-preflight.mjs
       - name: Verify TEST-only exact task V3 rule upgrade preserves existing ACL
