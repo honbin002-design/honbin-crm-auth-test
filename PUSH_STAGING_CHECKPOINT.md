@@ -2,6 +2,19 @@
 
 **狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 21:21（台南時間）｜舊邀請判斷精修完成／不更改實際 EDITOR 權限
+
+- 本輪接續「已經是編輯者，為何又有待接受邀請」問題。**不能只憑兩張截圖斷言 VIEWER 邀請與 EDITOR 所屬同一個群組**：不同記事簿的角色互不衝突。
+- 根據真實登入身分對每筆 PENDING 的邀請群組做 `getDocFromServer(groups/{gid}/members/{uid})`：
+  1. 若同群組已有 ACTIVE EDITOR/ADMIN/VIEWER → 不計入待接受數字、不提供「接受邀請」，設定頁顯示「已是群組成員，舊邀請不需接受」及現在角色／邀請角色；不得改變現有角色。
+  2. 若另一個尚未加入的群組 → 顯示「另一個尚未加入的共用記事簿邀請」，明確提醒接受只影響該記事簿，不會影響在「鴻繽」或其他群組原有角色。
+  3. 若伺服器讀取失敗／格式異常 → 顯示待核對並**拒絕提供接受操作**，不能把未知狀態當作尚未加入。
+- `firebase-group-service.mjs` 的 `acceptInvite()` 在一切批次寫入之前再讀取已發布 Firestore 伺服器的本人角色。已有 ACTIVE 角色會 `ALREADY_ACTIVE_MEMBER_KEEP_EXISTING_ROLE` 停止；已存在但欄位異常的成員資料會 `MEMBERSHIP_SERVER_STATE_UNEXPECTED_STOP`；網路不可用時也停止。舊邀請文件、原始成員資料與角色**均不刪不改**。
+- 合成回歸 `invite-membership-recovery-preflight.mjs` 已覆蓋：舊 VIEWER 不可覆蓋 EDITOR 或 ADMIN、異常狀態 fail-closed、伺服器離線無寫入、普通新成員接受邀請仍成功、原有索引修復仍可使用。對應 `workspace-v2-preflight.mjs` 斷言兩類 UI。
+- GitHub Actions `Auth-only static safety checks` run `39785912263` **success**，log `INVITE_MEMBERSHIP_RECOVERY_SYNTHETIC_PASS` / `WORKSPACE_V2_STATIC_GATES_PASS`；雲端記事 GitHub Pages run `39785911537` **success**。主 CRM GitHub Pages run `39785768490` **success**，主頁 iframe 引用版本 `v=20261022-existing-editor-safe-v2`，雲端 JS import `v=20261022-safe-existing-member-v2`，避免 iPhone 舊快取。
+- 實際伺服器群組角色**沒有被本次程式施工更動**。除非使用者在第二支 iPhone 的新版設定頁驗收，不能宣稱該 PENDING 邀請已被刪除或 UI 實機 PASS。
+- 第一支 iPhone 鎖定畫面推播、點擊 CRM 的 PASS 保留。第二支 iPhone 已有 Firebase 訂閱與不同 Google 身分 PASS；第二支手機背景推播正式收件及任務/記事深層導覽仍待實機驗收。正式群組自動發送 `senderEnabled=false`、`TEST_PUSH_SEND_ENABLED` 未啟用；無新增費用、不重做之前 PASS。
+
 ## 2026-10-22 20:39+｜現有 EDITOR 與舊 PENDING 邀請衝突：UI/寫入雙重保護
 
 - 用戶在最高權限「鴻繽」共用記事簿群組的成員管理截圖看到 **3 位其他成員**，其中第二支 iPhone 對應成員顯示目前角色 **EDITOR**；但此前第二支 iPhone「收到的邀請」有一筆 **PENDING VIEWER**。這兩種來源獨立，故已編輯者仍見待接受邀請。**照片並未提供該邀請的群組 ID，因此不能斷言兩畫面必定是同一群組。**
