@@ -44,6 +44,16 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .task-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px;margin:6px 0 0}.task-summary p{margin:0;min-width:0}.task-summary strong{display:block;color:#52657b;font-size:.9rem}.task-summary span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task-detail-panel{margin-top:12px;padding-top:12px;border-top:1px solid #d8e5de}
 .list-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.list-tabs button{background:#e7eff9;color:#24486c}.list-tabs button.active{background:#205a9a;color:#fff}.list-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}.list-controls label{margin:3px 0}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0}.pager button{flex:0 0 auto}.pager span{text-align:center;color:#52657b}.task-card .task-title-button{margin-bottom:0}
 .note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
+.float-refresh{position:fixed;left:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:6;display:flex;align-items:center;gap:6px;min-height:48px;box-shadow:0 4px 14px #20334d33}
+.float-refresh[aria-busy="true"]{opacity:.75}
+.notification-overview{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.notice-count{font-size:.9rem;min-width:24px;display:inline-flex;justify-content:center;background:#a43f32;color:white;border-radius:20px;padding:2px 7px}
+.notice-row{border-top:1px solid #dce5ef;padding:12px 0;display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+.notice-row>div{flex:1 1 160px;min-width:0}
+.notice-row button{min-width:100px;flex:0 0 auto}
+.notice-row[data-unread="true"]{border-left:4px solid #2862a2;padding-left:9px;background:#f8fbff}
+.notification-overview button{max-width:100%}
+@media(max-width:440px){.notice-row button{width:100%}.float-refresh{font-size:.9rem;padding:10px 12px}}
 .back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
 .crm-return{display:inline-flex;align-items:center;min-height:44px;padding:8px 12px;border-radius:10px;background:#e7eff9;color:#174c83;font-weight:650;text-decoration:none}
 .embedded header,.embedded .crm-return{display:none}
@@ -83,6 +93,17 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   <button id="tabTasks" type="button">任務</button>
   <button id="tabSettings" type="button">設定</button>
  </div></div>
+ <div class="panel" id="notificationOverview" hidden>
+  <div class="notification-overview">
+   <h2 style="margin:0">訊息通知 <span class="notice-count" id="notificationCount" hidden>0</span></h2>
+   <button id="toggleNotifications" class="alt" type="button" aria-expanded="false" aria-controls="notificationCenter">查看通知</button>
+  </div>
+  <div id="notificationCenter" hidden>
+   <p id="notificationStatus" class="hint" role="status" aria-live="polite">尚未讀取通知。</p>
+   <div class="row"><button class="alt" id="markNotificationsRead" type="button">全部標示已讀</button></div>
+   <div id="notificationList"></div>
+  </div>
+ </div>
  <input type="hidden" id="mode" value="PRIVATE">
  <section id="notesPanel" hidden>
   <div class="panel" id="pendingInviteNotice" hidden>
@@ -196,6 +217,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   <div id="advancedTechnicalPanel" hidden><p id="rulesOwnerLink" hidden></p></div>
  </section>
 </main>
+<button class="float-refresh" id="refreshCloud" type="button" aria-label="重新整理共用記事、任務與通知" disabled>↻ 重新整理</button>
 <button class="back-top alt" id="backTop" type="button" aria-label="回到頁首">↑ 頁首</button>
 <script type="module">
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
@@ -206,6 +228,8 @@ import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
 import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
+import {notificationSource,notificationTitle} from './firebase-inapp-notifications.mjs';
+import {notificationReadMarkers} from './notification-read-markers.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
@@ -218,6 +242,7 @@ const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(t
 let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
 let pendingTaskWrite=null;
+let noticeReader=null,noticeMarkers=null,noticeEvents=[],noticeLastCheck=0,noticeBusy=false;
 const sharedNickCache=new Map();
 let inviteGroups=[],inviteGroupId='',inviteLoaded=false,receivedLoaded=false,inviteSubmitting=false;
 let notePageIndex=0,noteCursors=[null],noteHasMore=false;
