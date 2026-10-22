@@ -86,6 +86,8 @@ jobs:
         run: node notification-event-freshness-preflight.mjs
       - name: Verify live server read denial probes never write and fail closed
         run: node firestore-live-denial-probes-preflight.mjs
+      - name: Verify owner-only write-read-cleanup Firestore ACL probe has no side effects until clicked
+        run: node firestore-push-write-probe-preflight.mjs
       - name: Verify offline-only exact two-match Firestore rules merge
         run: node firestore-task-nickname-merge-preflight.mjs
       - name: Verify owner-only settings member management and scoped Firestore transaction
