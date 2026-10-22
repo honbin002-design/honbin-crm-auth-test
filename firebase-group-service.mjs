@@ -43,7 +43,7 @@ export function groupService({db,sdk,identity}) {
        const g=await getDoc(path(item.id));
        if(!g.exists()||g.data().deleteState==='DELETING')continue;
        const role=await myRole(item.id,g);
-       if(role)visible.push({id:item.id,name:g.data().name,role});
+       if(role)visible.push({id:item.id,name:g.data().name,role,ownerUid:g.data().ownerUid});
      }catch(err) {
        // A stale index must NEVER leak the previously visible group name.
        if(err?.code==='permission-denied'||err?.code==='not-found')continue;
