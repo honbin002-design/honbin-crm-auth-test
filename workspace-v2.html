@@ -858,8 +858,8 @@ async function loadReceivedInvitations(){
  // Only the signed-in Google account can accept its own invitation.
  // An accepted invitation may need a safe membership-index repair.
  const alreadyAccepted=inbox.some(x=>x.status==='ACCEPTED'&&x.acceptedUid===uid);
- const visibleIds=new Set(alreadyAccepted
-  ?(await groups.listGroups()).map(g=>g.id):[]);check(s);
+ const visibleIds=new Set((alreadyAccepted
+  ?await groups.listGroups():groupItems).map(g=>g.id));check(s);
  // A PENDING inbox record is not proof that the recipient has no access:
  // members may already be EDITOR/ADMIN through an earlier invitation.
  // Read the current role from the Firestore server before showing "Accept".
