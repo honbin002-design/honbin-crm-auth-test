@@ -2,6 +2,15 @@
 
 **狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 20:32｜第二支 iPhone 帳號獨立驗收 PASS／邀請仍待接受
+
+- 第二支 iPhone 先前已有真實 Firebase 訂閱「測試 PASS」截圖；本次新增「設定 → Google 帳號」實機截圖，確認它使用與第一支最高權限帳號**不同**的 Google 登入帳號。**第二支手機訂閱＋不同身分 PASS／FROZEN**。
+- 第二支手機畫面顯示「收到的共用群組邀請」內有一筆**尚未接受**的邀請，權限是 **VIEWER／檢視者**；同頁可見其獨立設定的公開暱稱。基於個資最小化，交接紀錄不保存第二位使用者的完整信箱、UID 或裝置推播 endpoint。
+- 請第二位使用者在自己的 iPhone「設定 → 收到的共用群組邀請」親自按「接受邀請」，等待狀態變成已加入群組；再以 VIEWER 身分驗證應可讀共用記事、不可取得管理員權限，不得修改成員權限。
+- 目前**尚無**第二支 iPhone 鎖定畫面收到訊息、任務指派或記事通知／點擊深層導覽的 PASS；第一支手機四項驗收維持 FROZEN，不重做。
+- `notification-recipient-router.mjs` 只將 `status==='ACTIVE'` 且角色在 `OWNER/ADMIN/EDITOR/VIEWER` 的成員列入推播名單；因此第二位使用者**未接受邀請前不得對其送群組推播**。
+- 繼續維持 `subscriptionsEnabled=true`、`senderEnabled=false`、`SPARK_SUBSCRIPTION_STAGING`；不得啟用定時群組發送或付費資源。
+
 ## 2026-10-22 20:21｜第一支 iPhone 推播點擊開啟 CRM｜實機 PASS／FROZEN
 
 - 使用者提供第二張 iPhone 實機截圖，確認**實際點擊先前已收到的鎖定畫面通用通知後，已回到「鴻繽科技 CRM」既有 App**，畫面停留在「雲端記事與任務 → 設定」，Google 帳號 `honbin002@gmail.com` 仍保持登入；沒跳往第三方網站。對應 push `notificationclick`／啟動 CRM 的端到端驗收 **PASS**，不得重做。
