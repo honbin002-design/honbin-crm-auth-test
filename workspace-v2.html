@@ -807,6 +807,17 @@ async function loadSentInvitations(){
  const sent=await groups.listSentInvites(gid);check(s);
  if(gid!==inviteGroupId)return;
  const root=$('sentInvites');root.replaceChildren();
+ // Read-only verified member/email mapping from the SAME group. A pending
+ // invite may be obsolete if a separate accepted invite already granted access.
+ const rootOwn=!!ownerMembers&&inviteGroups.some(g=>g.id===gid&&g.ownerUid===uid);
+ let verifiedActiveMembers=[];
+ if(rootOwn){
+  try{
+   const roster=await ownerMembers.roster(gid);check(s);
+   verifiedActiveMembers=roster.members.filter(m=>m.editable&&
+    m.status==='ACTIVE'&&m.email&&['ADMIN','EDITOR','VIEWER'].includes(m.role));
+  }catch(error){check(s);verifiedActiveMembers=[]}
+ }
  if(!sent.length)root.append(mk('p','此群組尚未發出邀請。'));
  for(const invite of sent){
   const entry=mk('div');entry.className='line';
@@ -816,7 +827,34 @@ async function loadSentInvitations(){
   // Only the fixed highest-permission account can grant system login.
   // Group admins are never allowed to approve global CRM identities.
   const ownGroup=inviteGroups.some(g=>g.id===gid&&g.ownerUid===uid);
-  if(invite.status==='PENDING'&&ownerMembers&&ownGroup){
+  const existing=invite.status==='PENDING'&&rootOwn
+   ?verifiedActiveMembers.filter(m=>m.email.toLowerCase()===
+     String(invite.recipientEmail||'').toLowerCase()):[];
+  if(existing.length===1){
+   const member=existing[0];
+   entry.append(mk('p','此帳號在同一記事簿已是 '+
+    notebookRoleLabel(member.role)+'，這是一筆待取消的舊邀請。'));
+   const revoke=mk('button','取消重複邀請（保留成員權限）');
+   revoke.type='button';revoke.className='alt';
+   revoke.onclick=()=>run(async()=>{
+    const checkpoint=session();
+    if(!confirm('僅取消 '+invite.recipientEmail+' 在這本記事簿的舊邀請。\\n'+
+      '已驗證的 '+member.role+' 成員權限不會更動。確定繼續？'))return;
+    revoke.disabled=true;
+    try{
+     const result=await ownerMembers.revokeRedundantPendingInvite({
+      groupId:gid,memberUid:member.uid,recipientEmail:member.email,
+      invitationId:invite.id,expectedRole:member.role
+     });check(checkpoint);
+     if(result.status!=='REVOKED'||result.memberRole!==member.role)
+      throw Error('REDUNDANT_INVITE_REVOKE_UNVERIFIED');
+     await loadSentInvitations();check(checkpoint);
+     say('只取消了同一本記事簿的重複邀請；'+
+      notebookRoleLabel(member.role)+' 成員資格保留。');
+    }finally{revoke.disabled=false}
+   });
+   entry.append(revoke);
+  }else if(invite.status==='PENDING'&&ownerMembers&&ownGroup){
    const args={groupId:gid,invitationId:invite.id,recipientEmail:invite.recipientEmail};
    try{
     const authStatus=await ownerMembers.accountApprovalStatus(args);check(s);
