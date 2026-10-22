@@ -56,8 +56,15 @@ failOne=true;result=await source.read([g],{now});
 assert.equal(result.partial,true);
 assert.equal(result.failedQueries,1);
 assert.equal(result.items.some(e=>e.kind==='SHARED_NOTE_CREATED'),false,'denied reads never use cached notes');
-currentUid='another';
-await assert.rejects(source.read([g],{now}),/ACCOUNT_CHANGED|NOT_AUTHENTICATED/).catch(()=>{});
+// Account switching while a server query is in flight must abort the read.
+currentUid=me;
+const changingSdk={...mock,getDocsFromServer:async ()=>{
+ currentUid='other_member';
+ return {docs:[]};
+}};
+const changingSource=notificationSource({db:{},sdk:changingSdk,currentUid:()=>currentUid});
+await assert.rejects(changingSource.read([g],{now}),/ACCOUNT_CHANGED/);
+currentUid=me;
 // Pure scoped local read markers: never save task titles or group names.
 const store=new Map();
 const storage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)};
