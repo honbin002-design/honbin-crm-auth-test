@@ -2,6 +2,16 @@
 
 **狀態：TWO_IPHONES_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（兩支不同 Google 帳號的 iPhone 都已實際收到鎖定畫面測試通知；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 晚間｜真實任務事件推播首次 Apple 201／本人收件待驗收
+
+- 正式任務事件發送器有額外安全補強：再次核對「事件建立者或完成者」在群組內仍 ACTIVE；撤銷發布人時不應寄送舊事件；Apple 回應必須為 HTTP 201 或 202 才能將已發紀錄改為 SENT。既有 Auth-only static CI 已 PASS。
+- GitHub Actions live read-only 事件權限計畫 run `39802553044`：在一個「鴻繽」記事簿讀取 4 筆任務／記事事件，2 筆仍符合事件條件，2 組現有收件對象通過權限及狀態核對、未核准／撤銷收件對象 0、伺服器讀取錯誤 0；輸出 `PUSH_EVENT_READONLY_ROUTING_CHECK_PASS_NO_SEND_NO_WRITES`。只讀取，不發送、不修改正式資料；一次性 workflow 已移除。
+- 同時以現有 TEST 專用服務帳號，於 `notificationDeliveryLedger` 與 `notificationSenderCursors` 僅建立兩個 `probe_` 合成文件、伺服器讀回並立即刪除。GitHub Actions run `39803170925` 輸出 `TEST_SENDER_TWO_BOOKKEEPING_COLLECTION_WRITES_CONFIRMED`、`TEST_SENDER_WRITE_READ_DELETE_PASS_NO_TEST_DATA_REMAINING`；不涉及真實使用者、任務、記事或手機訂閱。一次性工作流程已移除。
+- 完成一則**真實既有 TASK_COMPLETED 任務事件** Apple Web Push 發送驗證：GitHub Actions run `39803632916`、job `119910922163`，紀錄 `ONE_REAL_EVENT_APPLE_ACCEPTED_201`、`ONE_REAL_EVENT_KIND_TASK_COMPLETED`、`ONE_REAL_EVENT_TARGET_ORIGINAL_OWNER`、`ONE_REAL_EVENT_SENT_MAX_ONE_NO_FIRESTORE_WRITES`。此事件經 server-only 重新核對活動群組、發布者、收件者、時間與唯一 Apple iPhone 訂閱後，限制**只向第一支管理員 iPhone 一次**、僅發送 kind/groupId/taskId（不含任務標題或內文），沒有寫入 Firebase 資料。
+- 完成後立即移除可執行的一次性 workflow（commit `29afca279fa3cadc111d56e2107cf40af9d92d42`）及一次性私用發送 JS（commit `505646ec2de1cf2c8c90dfd2e11310a004c02c5c`），防止誤重送。
+- 此新驗收**僅證明 Apple HTTP 201**，尚無第一支 iPhone 實際收到「你發布的任務已完成」與按下通知後打開正確任務的使用者截圖。不能先行宣稱背景真實任務深連結實機 PASS；請下一步使用者確認第一支手機是否看到、點後是否開啟任務詳情。
+- 既有兩支手機通用推播收件及點擊、第二支 CRM 內通知按「查看」的任務詳情 PASS 全部 FROZEN 不重做。公開設定仍為 `subscriptionsEnabled=true`、`senderEnabled=false`、`environment=SPARK_SUBSCRIPTION_STAGING`；工作流程 `push-sender-review.yml` 仍無 schedule、無推播 secrets，沒有新增付費服務。不得自行開啟全員自動發送。
+
 ## 2026-10-22｜第二支 iPhone 通知查看指定任務 PASS
 
 使用者已提供 iPhone 實機截圖：從 CRM「通知」列表按「查看」後，成功開啟指定任務的詳細卡片。畫面可見狀態「已完成」、建立者、完成者、發布與完成時間、回覆，以及「返回通知」。此項是 CRM 內通知導覽實機 PASS，已完成，不需要重做。
