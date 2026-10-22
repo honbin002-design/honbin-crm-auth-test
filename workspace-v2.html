@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
-<title>鴻繽｜記事與任務 TEST</title>
+<title>鴻繽｜記事與任務</title>
 <link rel="manifest" href="./workspace-manifest.webmanifest">
 <meta name="theme-color" content="#205a9a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -50,7 +50,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 @media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.list-controls,.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.list-controls>div{min-width:0}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
 [hidden]{display:none!important}
 </style><script>if(new URLSearchParams(location.search).get('embedded')==='1'&&window.self!==window.top)document.documentElement.classList.add('embedded')</script></head><body>
-<header><div><h1>鴻繽記事與任務</h1><small>獨立 TEST｜資料與原 CRM 分開保存</small></div><span class="pill" id="who">未登入</span></header>
+<header><div><h1>鴻繽記事與任務</h1></div><span class="pill" id="who">未登入</span></header>
 <a class="crm-return" href="/-hongbin-personal-crm-beta/">← 返回鴻繽 CRM</a>
 <div id="message" class="status" role="status" aria-live="polite">準備中……</div>
 <main id="app">
@@ -63,7 +63,13 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
  <section id="notesPanel" hidden>
   <div class="panel"><h2>記事範圍</h2><div class="nav" style="grid-template-columns:1fr 1fr">
    <button type="button" id="privateNotes" class="active">私人記事</button><button type="button" id="sharedNotes">共用記事</button></div>
-   <div id="groupWrap" hidden><label for="group">選擇共用記事簿</label><select id="group"></select><p class="hint" id="role"></p></div>
+   <div id="groupWrap" hidden>
+  <div class="row"><label for="group">共用記事簿</label><button class="alt" id="toggleNotebookCreate" type="button">＋ 新增記事簿</button></div>
+  <select id="group"></select><p class="hint" id="role"></p>
+  <form id="notebookCreateForm" hidden><label for="newNotebookName">記事簿名稱</label><input id="newNotebookName" maxlength="120" required placeholder="記事簿名稱"><div class="row"><button id="createNotebook" type="submit">建立記事簿</button><button id="cancelNotebookCreate" class="alt" type="button">取消</button></div></form>
+  <div class="row"><button class="alt" id="retireNotebook" type="button" hidden>刪除這本記事簿</button></div>
+  <p id="notebookActionStatus" class="hint" role="status" aria-live="polite"></p>
+ </div>
   </div>
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>記事列表</h2><button class="alt" id="newNote">＋ 新記事</button></div>
   <label for="search">搜尋記事</label><input id="search" type="search" placeholder="搜尋標題或內容">
@@ -77,7 +83,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   </div>
  </section>
  <section id="tasksPanel" hidden>
-  <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2><span class="pill">TEST 驗收中</span></div>
+  <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2></div>
    <p class="hint">有效群組成員可發布及查看任務；執行人可回覆或申請延期。共用記事權限獨立維持。</p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
@@ -87,8 +93,8 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
    <div id="tasksList"></div>
    <div class="pager"><button class="alt" id="taskPrev" type="button">上一批</button><span id="taskPageStatus" role="status">第 1 批</span><button class="alt" id="taskNext" type="button">下一批</button></div>
    <p class="hint">每批最多 10 筆；點任務標題看詳情與操作。搜尋目前批次，按「下一批」繼續查找更舊資料。</p>
-   <details><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
-   <p class="hint">截止日前 3 天會在任務頁提示。此為獨立 TEST，請勿輸入正式資料。</p>
+   <details hidden><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
+   <p class="hint">截止日前 3 天會在任務頁提示。</p>
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
     <label for="taskTitle">任務名稱（必填）</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
@@ -96,10 +102,10 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
     <label for="taskAssignee">執行人或所有成員</label><select id="taskAssignee"><option value="">所有成員皆可執行</option></select>
     <label for="taskExecuteDate">預定執行日期（選填）</label><input id="taskExecuteDate" type="date">
     <label for="taskDue">截止日期（選填）</label><input id="taskDue" type="date">
-    <p class="hint">目前 TEST 任務保留紀錄，不提供刪除。請勿輸入敏感個資；發布前會再次確認。</p>
+    <p class="hint">任務發布後會保留紀錄，發布前請確認內容。</p>
     <div class="row" style="margin-top:12px"><button type="submit" id="taskPublish" disabled>發布任務</button><button id="cancelTaskForm" class="alt" type="button">取消</button></div>
    </form>
-   <p class="hint">指定任務已在獨立 TEST 開放使用者驗收。只有你明確按「發布」並確認才會寫入；iPhone 背景推播仍未開通。</p>
+   <p class="hint">只有明確按下「發布」並確認後才會儲存任務；iPhone 背景通知尚未開通。</p>
   </div>
  </section>
  <section id="settingsPanel">
@@ -137,30 +143,28 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   <div class="panel"><h2>所有成員看到的暱稱</h2><p class="hint">例如：威、VIC。顯示暱稱不會取代伺服器留存的 Google UID。</p>
    <label for="nickname">我的公開暱稱</label><input id="nickname" maxlength="24" placeholder="輸入想讓其他成員看到的暱稱">
    <div class="row" style="margin-top:12px"><button id="saveNick" disabled>儲存共用暱稱</button></div>
-   <p id="nicknameHint" class="hint">TEST 共用暱稱已開放：請輸入想讓群組成員看到的名稱（最多 24 字），按儲存後會向 Firestore 伺服器重新讀取核對。僅能修改你自己的暱稱，不會更動 Google 帳號或成員權限。</p>
+   <p id="nicknameHint" class="hint">輸入其他成員看得到的顯示名稱，最多 24 字；只能修改自己的暱稱。</p>
   </div>
   <div class="panel" id="pushReadiness">
    <h2>iPhone 通知</h2>
-   <p class="hint">目標：鎖定畫面可收到任務指派、任務完成與新共用記事。請先將本 TEST 網頁「加入主畫面」。</p>
+   <p class="hint">目標：鎖定畫面可收到任務指派、任務完成與新共用記事。如需主畫面捷徑，請將 CRM 加入主畫面。</p>
    <button id="checkPush" class="alt" type="button">檢查手機推播準備狀態</button>
    <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
    <p class="warning">背景通知目前尚未開通：仍需要免費的伺服器端發送與訂閱者身分驗證。在此階段不會向你的手機索取推播權限，也不會產生任何訂閱資料。</p>
   </div>
-  <div class="panel" id="liveRulesReadOnly">
+  <div class="panel" id="liveRulesReadOnly" hidden>
    <h2>TEST 伺服器規則唯讀核對</h2>
    <p class="hint">直接向 Firestore 伺服器讀取「自己的公開暱稱」、「自己的私人推播訂閱」及「已加入群組的任務」。不建立、修改或刪除任何資料，不會要求通知權限。</p>
    <button id="checkLiveRules" class="alt" type="button">核對已發布規則（唯讀）</button>
    <p id="liveRulesStatus" class="hint" role="status" aria-live="polite">尚未核對；不代表已啟用任務或背景推播。</p>
   </div>
-  <div class="panel" id="liveDenialReadOnly">
+  <div class="panel" id="liveDenialReadOnly" hidden>
    <h2>TEST 越權讀取拒絕驗收（唯讀）</h2>
    <p class="hint">測試 Firestore 伺服器是否拒絕：列出所有暱稱、讀取其他帳號的推播訂閱、讀取沒有加入的群組任務。只測試拒絕讀取，不嘗試建立、修改或刪除資料。</p>
    <button id="checkLiveDenials" class="alt" type="button">測試三項越權拒絕（唯讀）</button>
    <p id="liveDenialsStatus" class="hint" role="status" aria-live="polite">尚未測試。不影響已通過的三項 SERVER READ PASS。</p>
   </div>
-  <div class="panel"><h2>進階管理</h2><p class="hint">建立共用記事簿與工程驗收保留在進階頁；日常邀請、接受邀請和成員權限管理都在本設定頁完成。</p>
-   <a href="./notes-preview.html">開啟原有 TEST 管理／驗收頁</a>
-   <p id="rulesOwnerLink" hidden><a href="./firestore-task-nickname-merge-review.html">共用暱稱／指定任務：TEST 規則安全核對工具</a></p></div>
+  <div id="advancedTechnicalPanel" hidden><p id="rulesOwnerLink" hidden></p></div>
  </section>
 </main>
 <button class="back-top alt" id="backTop" type="button" aria-label="回到頁首">↑ 頁首</button>
@@ -358,7 +362,7 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
  $('taskOpenTab').setAttribute('aria-pressed',String(taskStatus==='OPEN'));$('taskDoneTab').setAttribute('aria-pressed',String(taskStatus==='DONE'));
  $('taskPublish').disabled=true;
  if(!TASK_RULES_ENABLED||!taskSelected){
-  root.append(mk('p',!taskSelected?'請先加入一個多人共用群組。':'任務讀取與發布尚未開放，等待 TEST 伺服器規則驗收。'));return;
+  root.append(mk('p',!taskSelected?'請先加入一個多人共用群組。':'目前無法讀取或發布任務，請聯絡管理員確認權限。'));return;
  }
  const taskGroupId=taskSelected.id;
  // TEST V3: emulator denial PASS and live extension readback PASS; actual writes subject to Firestore ACL.
@@ -594,7 +598,7 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
         entry.append(dateLabel,finalDate);
         const note=mk('small',TASK_V4_PUBLISHER_DATE_ENABLED
          ?'必須晚於原截止日期 '+item.dueDate+'；核准後以這個日期為準，原申請日期保留在紀錄。'
-         :'新版「發布人調整日期」尚待 TEST Firebase V4 規則發布；為避免直接套用申請日期，暫停核准。拒絕延期仍可使用。');
+         :'無法確認發布人調整日期的權限，為避免直接套用申請日期，暫停核准。');
         entry.append(note);
         const row=mk('div');row.className='review-actions';
         for(const decision of ['APPROVED','REJECTED']){
@@ -967,7 +971,7 @@ $('taskForm').onsubmit=e=>{e.preventDefault();
   if(pendingTaskWrite&&pendingTaskWrite.fingerprint!==fingerprint)
    throw Error('上一次發布的伺服器結果尚未確認。請先核對任務列表或重新整理，不要改內容重試。');
   if(!pendingTaskWrite){
-   if(!confirm('確定發布到 TEST 群組「'+taskSelected.name+'」？\n任務暫時不能刪除，請確認不含敏感個資。'))
+   if(!confirm('確定發布到群組「'+taskSelected.name+'」？\n任務暫時不能刪除，請確認不含敏感個資。'))
     return;
    pendingTaskWrite={fingerprint,id:tasks.newId(payload.groupId)};
   }
@@ -1099,7 +1103,7 @@ async function start(){
    }
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
-   tab('Notes');say('已通過 TEST 帳號核准。指定任務開放 TEST 驗收，請先選擇正確共用群組。');
+   tab('Notes');say('已登入，請選擇記事簿或任務群組。');
    try{await openPushDeepLink()}catch(error){say('通知連結開啟失敗：'+String(error?.code||error?.message||error))}
   }catch(e){
    if(generation!==epoch)return;uid='';authenticated=false;$('app').hidden=false;tab('Settings');
