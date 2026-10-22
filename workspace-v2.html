@@ -923,8 +923,12 @@ async function loadReceivedInvitations(){
  for(const invitation of actionable){
   const already=invitation.status==='ACCEPTED';
   const entry=mk('div');entry.className='line';
-  entry.append(mk('strong',already?'已接受的共用記事簿邀請':'待接受的共用記事簿邀請'),
-    mk('p','權限：'+notebookRoleLabel(invitation.role)));
+  entry.append(mk('strong',already?'已接受的共用記事簿邀請':'另一個尚未加入的共用記事簿邀請'),
+    mk('p','這筆邀請的權限：'+notebookRoleLabel(invitation.role)));
+  if(!already){
+   entry.append(mk('p','此邀請所屬記事簿目前沒有你的 ACTIVE 成員資格；'+
+    '接受後僅加入此記事簿，不會更改你在其他記事簿已有的 EDITOR／ADMIN 權限。'));
+  }
   const accept=mk('button',already?'確認加入／修復記事簿清單':'接受邀請');
   accept.type='button';accept.className='alt';
   accept.onclick=()=>run(async()=>{
