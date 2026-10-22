@@ -164,7 +164,11 @@ assert.match(page,/不會更改你在其他記事簿已有的 EDITOR／ADMIN 權
 assert.match(page,/保留目前權限；不會依舊邀請重新加入或降級/);
 assert.match(page,/membershipCheckFailed:true/);
 assert.match(page,/x\.status==='PENDING'&&!x\.activeRole&&!x\.membershipCheckFailed/);
-assert.match(page,/邀請狀態待核對，暫不可接受/);
+assert.match(page,/groups\.listGroupsFromServer\(\)/);
+assert.match(page,/const liveRoles=new Map\(/);
+assert.match(page,/這筆舊邀請目前無法確認，已暫停接受/);
+assert.match(page,/不計入待接受邀請/);
+assert.match(page,/permission-denied/);
 assert.match(page,/groups\.acceptInvite\(invitation\)/);
 assert.match(page,/id="pendingInviteNotice"/);
 assert.match(page,/id="openPendingInvites"/);
