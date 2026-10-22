@@ -4,7 +4,7 @@ import {groupService} from './firebase-group-service.mjs';
 const UID='member_1',EMAIL='member@example.test',GID='book_1',INVITE='invite_1';
 const group='groups/'+GID,member=group+'/members/'+UID;
 const inbox='inboxes/'+EMAIL+'/invites/'+INVITE,pointer='users/'+UID+'/groupIndex/'+GID;
-function setup({failIndexOnce=false,status='PENDING'}={}){
+function setup({failIndexOnce=false,status='PENDING',denyMembershipRead=false}={}){
  const data=new Map([
   [group,{ownerUid:'creator_1',name:'合成共用記事簿',createdAt:1}],
   [inbox,{groupId:GID,recipientEmail:EMAIL,role:'EDITOR',status,invitedBy:'creator_1'}]
@@ -19,7 +19,7 @@ function setup({failIndexOnce=false,status='PENDING'}={}){
   getDocs:async ref=>({docs:[...data.keys()].filter(path=>path.startsWith(ref.path+'/')&&
    path.slice(ref.path.length+1).indexOf('/')===-1).map(snap)}),
   getDoc:async ref=>snap(ref.path),
-  getDocFromServer:async ref=>snap(ref.path),
+  getDocFromServer:async ref=>{if(denyMembershipRead&&ref.path===member)throw Object.assign(Error('offline'),{code:'unavailable'});return snap(ref.path)},
   setDoc:async(ref,value)=>{
    indexAttempts++;
    if(failIndexOnce&&indexAttempts===1)throw Object.assign(Error('network interruption'),{code:'unavailable'});
@@ -108,6 +108,15 @@ function setup({failIndexOnce=false,status='PENDING'}={}){
  await assert.rejects(()=>e.api.acceptInvite(pending),/ALREADY_ACTIVE_MEMBER_KEEP_EXISTING_ROLE/);
  assert.equal(e.data.get(member).role,'ADMIN');
  assert.equal(e.data.get(inbox).status,'PENDING');
+}
+// A failed server read cannot be interpreted as permission to re-accept.
+{
+ const e=setup({denyMembershipRead:true});
+ const pending=(await e.api.listInbox())[0];
+ await assert.rejects(()=>e.api.acceptInvite(pending),/offline/);
+ assert.equal(e.data.get(inbox).status,'PENDING');
+ assert.equal(e.data.has(member),false);
+ assert.equal(e.data.has(pointer),false);
 }
 // A missing current membership can still redeem a valid invitation.
 {
