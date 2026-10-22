@@ -71,6 +71,16 @@ assert.match(page,/申請人建議日期：/);
 assert.match(page,/dataset\.category=category/);
 assert.match(page,/\{key:'pending',label:'延期待審'\}/);
 assert.match(page,/id="backTop"/);
+assert.match(page,/id="refreshCloud"/);
+assert.match(page,/id="notificationOverview"/);
+assert.match(page,/id="notificationCenter"/);
+assert.match(page,/id="notificationCount"/);
+assert.match(page,/cloudNotificationController\(\{/);
+assert.match(page,/getGroups:async\(\)=>/);
+assert.match(page,/cloudNotifier\.start\(\)/);
+assert.match(page,/if\(cloudNotifier\)\{cloudNotifier\.stop\(\)/);
+assert.match(page,/程式內通知/);
+
 assert.match(page,/延期原因：/);
 assert.match(page,/原截止日期仍有效/);
 assert.match(page,/核准延期/);
