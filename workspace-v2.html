@@ -197,7 +197,8 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   </div>
   <div class="panel" id="pushReadiness">
    <h2>iPhone 通知</h2>
-   <p class="hint">目標：鎖定畫面可收到任務指派、任務完成與新共用記事。如需主畫面捷徑，請將 CRM 加入主畫面。</p>
+   <p class="hint">已啟用程式內通知：新共用記事、任務指派與完成通知。CRM 開啟時自動核對，開啟期間每 5 分鐘更新，或點左下角「重新整理」立即刷新。</p>
+   <p class="hint">iPhone 鎖定畫面的背景推播與程式內通知不同；背景推播仍需完成伺服器發送及裝置訂閱驗證。</p>
    <button id="checkPush" class="alt" type="button">檢查手機推播準備狀態</button>
    <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
    <p class="warning">背景通知目前尚未開通：仍需要免費的伺服器端發送與訂閱者身分驗證。在此階段不會向你的手機索取推播權限，也不會產生任何訂閱資料。</p>
@@ -228,8 +229,7 @@ import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
 import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
-import {notificationSource,notificationTitle} from './firebase-inapp-notifications.mjs';
-import {notificationReadMarkers} from './notification-read-markers.mjs';
+import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
@@ -242,7 +242,7 @@ const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(t
 let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
 let pendingTaskWrite=null;
-let noticeReader=null,noticeMarkers=null,noticeEvents=[],noticeLastCheck=0,noticeBusy=false;
+let cloudNotifier=null;
 const sharedNickCache=new Map();
 let inviteGroups=[],inviteGroupId='',inviteLoaded=false,receivedLoaded=false,inviteSubmitting=false;
 let notePageIndex=0,noteCursors=[null],noteHasMore=false;
@@ -1240,6 +1240,7 @@ async function start(){
  try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
+  if(cloudNotifier){cloudNotifier.stop();cloudNotifier=null}
   const generation=++epoch;uid='';authenticated=false;extensions=null;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
   inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
@@ -1288,6 +1289,36 @@ async function start(){
       String(inviteError?.code||inviteError?.message||inviteError)+'。請到設定按重新讀取。');
    }
    try{await openPushDeepLink()}catch(error){say('通知連結開啟失敗：'+String(error?.code||error?.message||error))}
+   if(generation!==epoch||auth.currentUser?.uid!==uid)return;
+   cloudNotifier=cloudNotificationController({
+    uid,db,sdk,currentUid:()=>auth.currentUser?.uid,storage:localStorage,
+    getGroups:async()=>{
+     const ss=session();await loadGroups();check(ss);return groupItems;
+    },
+    refreshViews:async()=>{
+     const ss=session();
+     if(!$('notesPanel').hidden)await loadNotes();check(ss);
+     if(!$('tasksPanel').hidden&&taskSelected)await loadTasks();check(ss);
+     if(!$('settingsPanel').hidden){
+      await loadReceivedInvitations();check(ss);
+      if(inviteGroupId)await loadSentInvitations();check(ss);
+     }
+    },
+    openItem:async event=>{
+     const ss=session(),previous=location.pathname+location.search+location.hash;
+     const dest=new URL(location.href);
+     dest.searchParams.set('tab',event.tab);
+     dest.searchParams.set('groupId',event.groupId);
+     dest.searchParams.delete('taskId');dest.searchParams.delete('noteId');
+     dest.searchParams.set(event.tab==='Notes'?'noteId':'taskId',event.itemId);
+     try{
+      history.replaceState(null,'',dest.pathname+dest.search+dest.hash);
+      const opened=await openPushDeepLink();check(ss);return opened;
+     }finally{history.replaceState(null,'',previous)}
+    },
+    onStatus:say
+   });
+   cloudNotifier.start();
   }catch(e){
    if(generation!==epoch)return;uid='';authenticated=false;$('app').hidden=false;tab('Settings');
    if(e?.code==='permission-denied'){
