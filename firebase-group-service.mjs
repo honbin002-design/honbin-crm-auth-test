@@ -52,6 +52,39 @@ export function groupService({db,sdk,identity}) {
    }
    return visible;
  }
+ // Strong positive proof for an existing notebook role: enumerate only this
+ // signed-in user's private group index and read each role from the SERVER.
+ // This lets the invitation UI recognize an existing EDITOR even if an old
+ // invitation points at an unreadable/retired group.
+ async function listGroupsFromServer() {
+   const serverGet=sdk.getDocFromServer,serverList=sdk.getDocsFromServer;
+   if(typeof serverGet!=='function'||typeof serverList!=='function')
+    throw Error('SERVER_MEMBERSHIP_SDK_REQUIRED');
+   const pointers=await serverList(collection(db,'users',uid,'groupIndex'));
+   if(pointers.metadata?.fromCache)throw Error('MEMBERSHIP_DIRECTORY_FROM_CACHE_STOP');
+   const visible=[];
+   for(const item of pointers.docs) {
+    if(!safeId(item.id))continue;
+    try {
+     const g=await serverGet(path(item.id));
+     if(g.metadata?.fromCache||!g.exists()||g.data().deleteState==='DELETING')continue;
+     let role=null;
+     if(g.data().ownerUid===uid)role='ADMIN';
+     else{
+      const own=await serverGet(member(item.id));
+      if(own.metadata?.fromCache||!own.exists())continue;
+      const data=own.data();
+      if(data.uid!==uid||data.status!=='ACTIVE'||!ROLES.includes(data.role))continue;
+      role=data.role;
+     }
+     visible.push({id:item.id,name:g.data().name,role,ownerUid:g.data().ownerUid});
+    }catch(error) {
+     if(error?.code==='permission-denied'||error?.code==='not-found')continue;
+     throw error;
+    }
+   }
+   return visible;
+ }
  async function myRole(groupId,knownGroup) {
    const g=knownGroup||await getDoc(path(groupId));
    if(!g.exists())return null;
@@ -206,5 +239,5 @@ export function groupService({db,sdk,identity}) {
    else await updateDoc(member(groupId,memberUid),{role:change});
  }
  return Object.freeze({createGroup,listGroups,myRole,retireNotebook,sendInvite,listSentInvites,listInbox,
-   acceptInvite,revokeInvite,ensureIndex,listMembers,changeMember,currentMembershipRole});
+   acceptInvite,revokeInvite,ensureIndex,listMembers,changeMember,currentMembershipRole,listGroupsFromServer});
 }
