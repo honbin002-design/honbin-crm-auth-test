@@ -131,7 +131,10 @@ export function groupService({db,sdk,identity}) {
    if(!snap.exists())return null;
    const value=snap.data();
    if(value.uid!==uid)throw Error('MEMBERSHIP_OWNER_MISMATCH_STOP');
-   return value.status==='ACTIVE'&&ROLES.includes(value.role)?value.role:null;
+   if(value.status==='REVOKED')return null;
+   if(value.status!=='ACTIVE'||!ROLES.includes(value.role))
+    throw Error('MEMBERSHIP_SERVER_STATE_UNEXPECTED_STOP');
+   return value.role;
  }
  async function ensureIndex(groupId) {
    // The member's server-side ACTIVE role, not a previous invitation,
