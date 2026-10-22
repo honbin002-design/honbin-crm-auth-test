@@ -860,7 +860,25 @@ async function loadReceivedInvitations(){
  const alreadyAccepted=inbox.some(x=>x.status==='ACCEPTED'&&x.acceptedUid===uid);
  const visibleIds=new Set(alreadyAccepted
   ?(await groups.listGroups()).map(g=>g.id):[]);check(s);
- const actionable=inbox.filter(x=>x.status==='PENDING'||
+ // A PENDING inbox record is not proof that the recipient has no access:
+ // members may already be EDITOR/ADMIN through an earlier invitation.
+ // Read the current role from the Firestore server before showing "Accept".
+ const checked=[];
+ for(const invitation of inbox){
+  if(invitation.status!=='PENDING'){checked.push(invitation);continue}
+  try{
+   const activeRole=await groups.currentMembershipRole(invitation.groupId);check(s);
+   checked.push({...invitation,activeRole:activeRole||null});
+  }catch(error){
+   check(s);
+   // Never offer a role-changing Accept button when own membership cannot
+   // be verified; display an explicit safe-hold instead.
+   checked.push({...invitation,membershipCheckFailed:true});
+  }
+ }
+ const stale=checked.filter(x=>x.status==='PENDING'&&x.activeRole);
+ const blocked=checked.filter(x=>x.status==='PENDING'&&x.membershipCheckFailed);
+ const actionable=checked.filter(x=>(x.status==='PENDING'&&!x.activeRole&&!x.membershipCheckFailed)||
   (x.status==='ACCEPTED'&&x.acceptedUid===uid&&!visibleIds.has(x.groupId)));
  const pending=actionable.filter(x=>x.status==='PENDING');
  const notice=$('pendingInviteNotice');
@@ -868,7 +886,34 @@ async function loadReceivedInvitations(){
  $('pendingInviteSummary').textContent=pending.length
   ?'你有 '+pending.length+' 筆待接受的共用記事簿邀請。按下方按鈕完成加入。'
   :actionable.length?'可確認已接受的記事簿是否已顯示。':'';
- if(!actionable.length)root.append(mk('p','目前沒有待接受的群組邀請。'));
+ if(!actionable.length&&!stale.length&&!blocked.length)
+  root.append(mk('p','目前沒有待接受的群組邀請。'));
+ for(const oldInvite of stale){
+  const entry=mk('div');entry.className='line';
+  const known=groupItems.find(g=>g.id===oldInvite.groupId);
+  entry.append(mk('strong','已是群組成員，舊邀請不需接受'),
+   mk('p','群組：'+(known?.name||'已加入的記事簿')+
+    '｜目前權限：'+notebookRoleLabel(oldInvite.activeRole)+
+    '｜舊邀請權限：'+notebookRoleLabel(oldInvite.role)),
+   mk('p','保留目前權限；不會依舊邀請重新加入或降級。'));
+  if(!visibleIds.has(oldInvite.groupId)){
+   const repair=mk('button','修復已加入的記事簿清單');
+   repair.type='button';repair.className='alt';
+   repair.onclick=()=>run(async()=>{
+    const ss=session();await groups.ensureIndex(oldInvite.groupId);check(ss);
+    await loadGroups();check(ss);await loadReceivedInvitations();check(ss);
+    say('已依現有成員資格確認記事簿清單，權限未更動。');
+   });
+   entry.append(repair);
+  }
+  root.append(entry);
+ }
+ for(const oldInvite of blocked){
+  const entry=mk('div');entry.className='line';
+  entry.append(mk('strong','邀請狀態待核對，暫不可接受'),
+   mk('p','目前無法從 Firebase 伺服器確認是否已有成員權限。為避免覆蓋 EDITOR/ADMIN，暫停接受；請按「重新讀取」或由管理員核對。'));
+  root.append(entry);
+ }
  for(const invitation of actionable){
   const already=invitation.status==='ACCEPTED';
   const entry=mk('div');entry.className='line';
@@ -901,7 +946,7 @@ async function loadReceivedInvitations(){
     inviteLoaded=false;ownerLoadDone=false;
     say('已成功加入共用記事簿「'+joined.name+'」，可以查看記事與任務。');
     await loadReceivedInvitations();check(checkpoint);
-    notice.hidden=true;
+    // loadReceivedInvitations already recalculated the remaining pending count.
    }finally{accept.disabled=false}
   });
   entry.append(accept);root.append(entry);
