@@ -108,6 +108,45 @@ export function groupService({db,sdk,identity}) {
    if(source.ownerUid!==uid)throw Error('NOTEBOOK_CREATOR_REQUIRED');
    if(source.deleteState)throw Error('NOTEBOOK_ALREADY_RETIRED');
    if(source.name!==title)throw Error('NOTEBOOK_NAME_CHANGED');
+   // A notebook that is merely LOCKED can leave invisible, unsafe PENDING
+   // invitations in other phones' inboxes. BEFORE taking the irreversible
+   // delete lock, revoke all remaining invitations through normal Firestore
+   // owner ACL, with exact server readback, keeping historical records.
+   // Existing accepted invitations are never changed.
+   if(typeof sdk.getDocsFromServer!=='function')
+    throw Error('RETIRE_INVITE_SERVER_LIST_REQUIRED');
+   const sent=await sdk.getDocsFromServer(collection(db,'groups',groupId,'sentInvites'));
+   if(sent.metadata?.fromCache)throw Error('RETIRE_INVITE_LIST_CACHE_STOP');
+   if(sent.size>30||sent.docs.length>30)throw Error('RETIRE_TOO_MANY_INVITES_SAFE_STOP');
+   const toRevoke=[];
+   for(const entry of sent.docs){
+    const data=entry.data(),email=normalizedEmail(data?.recipientEmail);
+    if(!safeId(entry.id)||data?.groupId!==groupId||!ROLES.includes(data.role))
+     throw Error('RETIRE_SENT_INVITE_INTEGRITY_STOP');
+    const refInvite=inbox(email,entry.id);
+    const docInvite=await serverGet(refInvite);
+    if(docInvite.metadata?.fromCache)throw Error('RETIRE_INVITE_CACHE_STOP');
+    if(!docInvite.exists())continue;
+    const value=docInvite.data();
+    if(value.groupId!==groupId||value.recipientEmail!==email||value.role!==data.role)
+     throw Error('RETIRE_INVITE_MISMATCH_STOP');
+    if(value.status==='PENDING')toRevoke.push(refInvite);
+    else if(!['ACCEPTED','REVOKED'].includes(value.status))
+     throw Error('RETIRE_INVITE_STATUS_UNEXPECTED_STOP');
+   }
+   let cancelled=0;
+   for(const invite of toRevoke){
+    await updateDoc(invite,{status:'REVOKED'});
+    const checked=await serverGet(invite);
+    if(checked.metadata?.fromCache||!checked.exists()||
+       checked.data().status!=='REVOKED')throw Error('RETIRE_INVITE_CANCEL_READBACK_HOLD');
+    cancelled++;
+   }
+   // No group lock until every old PENDING invite is revoked and verified.
+   const recheck=await serverGet(ref);
+   if(recheck.metadata?.fromCache||!recheck.exists()||
+      recheck.data().ownerUid!==uid||recheck.data().deleteState)
+    throw Error('RETIRE_GROUP_CHANGED_BEFORE_LOCK_STOP');
    const deletionId=doc(collection(db,'groups')).id+'-lock';
    // Only the creator may perform this one-way transition; Rules validate
    // the exact allowed fields. Never attempt collection/root hard deletion.
@@ -119,7 +158,7 @@ export function groupService({db,sdk,identity}) {
       verified.data().deletionId!==deletionId)
      throw Error('NOTEBOOK_RETIRE_READBACK_REQUIRED');
    return Object.freeze({groupId,locked:true,rootDeleted:false,
-     contentDeleted:false});
+     contentDeleted:false,revokedPendingInvites:cancelled});
  }
  async function sendInvite(groupId,email,role) {
    path(groupId);
