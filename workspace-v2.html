@@ -327,7 +327,17 @@ function openEditor(item=null){
  current=item?{id:item.id,version:item.version}:null;pendingId=null;
  $('noteTitle').value=item?.title||'';$('noteContent').value=item?.content||'';
  $('noteHeading').textContent=item?'編輯記事':'新增記事';
- $('noteEditor').hidden=false;$('noteEditor').scrollIntoView({behavior:'smooth',block:'start'});
+ $('noteEditor').hidden=false;
+ // The standalone page can scroll itself, but inside the CRM iframe only the
+ // parent CRM document scrolls. Ask that parent to expose this exact editor.
+ $('noteContent').focus({preventScroll:true});
+ requestAnimationFrame(()=>{
+  if(window.parent!==window&&document.documentElement.classList.contains('embedded')){
+   window.parent.postMessage({type:'HONBIN_CLOUD_NOTE_EDITOR'},location.origin);
+  }else{
+   $('noteEditor').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+ });
 }
 async function loadNotes({reset=true}={}){
  focusedNote=false;
