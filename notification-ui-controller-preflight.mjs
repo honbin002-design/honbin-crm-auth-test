@@ -32,6 +32,9 @@ const events={
  'tasks:completedAt':[], 'notes:createdAt':[]
 };
 let uid='member_1',queries=0,refreshed=0,opened=0,restored='';
+globalThis.window={scrollY:340,location:{origin:'https://example.test'},
+ scrollTo({top}){this.scrollY=top}};
+window.parent=window;
 const detail=new Element('article');detail.dataset.taskId='task_new';$('tasksList').append(detail);
 const sdk={
  collection:(_db,...segments)=>({folder:segments.at(-1),group:segments.at(1)}),
@@ -53,7 +56,7 @@ const config={
  uid:'member_1',db:{},sdk,currentUid:()=>uid,storage,
  getGroups:async()=>[{id:'group_1',name:'群組 A',role:'EDITOR'}],
  refreshViews:async()=>{refreshed++},
- openItem:async()=>{opened++;return true},
+ openItem:async()=>{opened++;window.scrollY=875;return true},
  getCurrentTab:()=> 'Notes',restoreTab:tab=>{restored=tab},
  onStatus:text=>status.push(text)
 };
@@ -78,6 +81,7 @@ assert.equal(opened,1);
 assert.equal(detail.children[0]?.children[0]?.textContent,'← 返回通知');
 assert.equal(detail.children[0].children[0].onclick(),true);
 assert.equal(restored,'Notes');
+assert.equal(window.scrollY,340,'return restores the notification scroll position');
 assert.equal($('notificationCenter').hidden,false);
 assert.equal($('notificationCount').hidden,true);
 assert.equal($('notificationCenter').hidden,false);
