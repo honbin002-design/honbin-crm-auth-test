@@ -18,6 +18,9 @@ function setup({failIndexOnce=false,status='PENDING',denyMembershipRead=false}={
   doc:(base,...parts)=>ref(base?.path?base.path+'/'+parts.join('/'):parts.join('/')),
   getDocs:async ref=>({docs:[...data.keys()].filter(path=>path.startsWith(ref.path+'/')&&
    path.slice(ref.path.length+1).indexOf('/')===-1).map(snap)}),
+  getDocsFromServer:async ref=>({metadata:{fromCache:false},
+   docs:[...data.keys()].filter(path=>path.startsWith(ref.path+'/')&&
+   path.slice(ref.path.length+1).indexOf('/')===-1).map(snap)}),
   getDoc:async ref=>snap(ref.path),
   getDocFromServer:async ref=>{if(denyMembershipRead&&ref.path===member)throw Object.assign(Error('offline'),{code:'unavailable'});return snap(ref.path)},
   setDoc:async(ref,value)=>{
@@ -132,5 +135,27 @@ function setup({failIndexOnce=false,status='PENDING',denyMembershipRead=false}={
  const e=setup();
  e.data.set(member,{uid:UID,role:'VIEWER',status:'REVOKED',invitationId:'old'});
  assert.equal(await e.api.currentMembershipRole(GID),null);
+}
+// A verified own directory is strong positive evidence that a delayed
+// invitation is stale; another group's PENDING invite cannot borrow that role.
+{
+ const e=setup();
+ e.data.set(member,{uid:UID,role:'EDITOR',status:'ACTIVE',invitationId:'past'});
+ e.data.set(pointer,{uid:UID,groupId:GID,createdAt:{seconds:1234}});
+ const roles=await e.api.listGroupsFromServer();
+ assert.deepEqual(roles.map(x=>({id:x.id,role:x.role})),[{id:GID,role:'EDITOR'}]);
+ assert.equal(e.data.get(inbox).status,'PENDING','read-only lookup never mutates pending invite');
+}
+{
+ const e=setup();
+ const roles=await e.api.listGroupsFromServer();
+ assert.deepEqual(roles,[],'new recipient without existing pointer remains unjoined');
+ assert.equal(e.data.get(inbox).status,'PENDING');
+}
+{
+ const e=setup();
+ e.data.set(pointer,{uid:UID,groupId:GID,createdAt:{seconds:1234}});
+ const roles=await e.api.listGroupsFromServer();
+ assert.deepEqual(roles,[],'stale index without ACTIVE member cannot establish membership');
 }
 console.log('INVITE_MEMBERSHIP_RECOVERY_SYNTHETIC_PASS');
