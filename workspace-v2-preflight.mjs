@@ -159,6 +159,8 @@ assert.match(page,/id="refreshReceived"/);
 assert.match(page,/groups\.listInbox\(\)/);
 assert.match(page,/groups\.currentMembershipRole\(invitation\.groupId\)/);
 assert.match(page,/已是群組成員，舊邀請不需接受/);
+assert.match(page,/另一個尚未加入的共用記事簿邀請/);
+assert.match(page,/不會更改你在其他記事簿已有的 EDITOR／ADMIN 權限/);
 assert.match(page,/保留目前權限；不會依舊邀請重新加入或降級/);
 assert.match(page,/membershipCheckFailed:true/);
 assert.match(page,/x\.status==='PENDING'&&!x\.activeRole&&!x\.membershipCheckFailed/);
