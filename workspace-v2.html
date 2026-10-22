@@ -286,12 +286,12 @@ async function showNick(){
  const name=await nicknameFor(uid);
  $('nickname').value=name;$('who').textContent=name||'未設定暱稱';
 }
-function tab(name,{skipTaskLoad=false}={}){
+function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
  if(!authenticated&&name!=='Settings'){
   say('請先到設定頁使用核准的 Google 帳號登入。');name='Settings';
  }
  if(!['Notes','Tasks','Notifications','Settings'].includes(name))name='Notes';
- if(name!=='Notifications')lastNonNotificationTab=name;
+ if(name!=='Notifications'&&!fromNotification)lastNonNotificationTab=name;
  // A navigation tab represents exactly one full page, never a stacked
  // notification panel floating over the notes or task content.
  for(const n of ['Notes','Tasks','Notifications','Settings']){
@@ -392,7 +392,7 @@ async function openPushDeepLink(){
   }
   taskStatus=snap.data().status;$('taskSearch').value='';
   taskSelected=group;$('taskGroup').value=group.id;
-  tab('Tasks',{skipTaskLoad:true});await loadTasks({focusItem:{id:snap.id,...snap.data()}});check(s);
+  tab('Tasks',{skipTaskLoad:true,fromNotification:true});await loadTasks({focusItem:{id:snap.id,...snap.data()}});check(s);
   const row=[...$('tasksList').querySelectorAll('[data-task-id]')]
     .find(e=>e.dataset.taskId===itemId);
   if(row){row.querySelector('.task-title-button')?.click();row.scrollIntoView({block:'start'});say('已開啟通知指定的任務。')}
@@ -403,7 +403,7 @@ async function openPushDeepLink(){
   selected=group;$('mode').value='SHARED';$('groupWrap').hidden=false;
   $('privateNotes').classList.remove('active');$('sharedNotes').classList.add('active');
   $('group').value=group.id;$('role').textContent='目前身分：'+notebookRoleLabel(group.role);
-  $('search').value='';tab('Notes');focusedNote=true;items=[{id:snap.id,...snap.data()}];
+  $('search').value='';tab('Notes',{fromNotification:true});focusedNote=true;items=[{id:snap.id,...snap.data()}];
   $('notePrev').disabled=true;$('noteNext').disabled=true;
   $('notePageStatus').textContent='通知指定記事｜點「共用記事」返回列表';renderNotes();check(s);
   const row=[...$('notesList').querySelectorAll('[data-note-id]')]
