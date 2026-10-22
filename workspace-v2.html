@@ -146,7 +146,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
   </div>
   <div class="panel" id="inviteManagement" hidden>
    <h2>邀請成員</h2>
-   <p class="hint">只顯示你具有管理員權限的共用群組。邀請不會自動寄 Email，對方以自己的 Google 帳號登入後，在下方接受邀請。</p>
+   <p class="hint">邀請與系統登入核准是兩道權限。最高權限帳號可在下方邀請紀錄直接核准受邀者登入；其他群組管理員發出邀請後，仍須由最高權限帳號核准。邀請不會自動寄送 Email。</p>
    <label for="inviteGroup">邀請加入哪個共用群組</label>
    <select id="inviteGroup"></select>
    <div class="row" style="margin-top:10px"><button id="toggleInvite" class="alt" type="button" aria-expanded="false" aria-controls="inviteForm">＋ 邀請新成員</button></div>
@@ -736,9 +736,42 @@ async function loadSentInvitations(){
   const name=mk('strong',invite.recipientEmail||'收件人未提供');
   entry.append(name,mk('p','狀態：'+({PENDING:'待接受',ACCEPTED:'已接受',REVOKED:'已取消'}[invite.status]||invite.status)+
     '｜權限：'+notebookRoleLabel(invite.role)));
+  // Only the fixed highest-permission account can grant system login.
+  // Group admins are never allowed to approve global CRM identities.
+  const ownGroup=inviteGroups.some(g=>g.id===gid&&g.ownerUid===uid);
+  if(invite.status==='PENDING'&&ownerMembers&&ownGroup){
+   const args={groupId:gid,invitationId:invite.id,recipientEmail:invite.recipientEmail};
+   try{
+    const authStatus=await ownerMembers.accountApprovalStatus(args);check(s);
+    if(authStatus.status==='ACTIVE'){
+     entry.append(mk('p','系統登入：已核准，等待對方接受邀請。'));
+    }else{
+     const approval=mk('button',authStatus.status==='REVOKED'?'重新核准此帳號登入':'核准此帳號登入');
+     approval.type='button';approval.className='alt';
+     approval.onclick=()=>run(async()=>{
+      const checkpoint=session();
+      if(!confirm('確認授權 '+invite.recipientEmail+' 登入 CRM？\\n仍僅能看到本人記事與被邀請加入的群組。'))return;
+      approval.disabled=true;
+      try{
+       const result=await ownerMembers.approveInvitedAccount(args);check(checkpoint);
+       if(result.status!=='ACTIVE')throw Error('APPROVAL_READBACK_FAILED');
+       await loadSentInvitations();check(checkpoint);
+       say('已核准帳號登入：'+result.email+'。請對方重新開啟 CRM，登入後接受邀請。');
+      }finally{approval.disabled=false}
+     });
+     entry.append(mk('p',authStatus.status==='REVOKED'
+      ?'系統登入：曾撤銷，須由最高權限帳號重新核准。'
+      :'系統登入：尚未核准，對方目前可能出現 permission-denied。'),approval);
+    }
+   }catch(error){
+    entry.append(mk('p','系統登入核准狀態無法確認：'+String(error?.code||error?.message||error)));
+   }
+  }else if(invite.status==='PENDING'&&!ownerMembers){
+   entry.append(mk('p','系統登入須由最高權限帳號核准，此邀請目前不代表對方已獲登入權限。'));
+  }
   root.append(entry);
  }
- $('inviteStatus').textContent='已核對 '+sent.length+' 筆邀請紀錄。尚未執行寫入。';
+ $('inviteStatus').textContent='已核對 '+sent.length+' 筆邀請紀錄。未經明確按下「核准」不會變更帳號存取。';
  return sent;
 }
 async function loadReceivedInvitations(){
@@ -1180,7 +1213,11 @@ async function start(){
    try{await openPushDeepLink()}catch(error){say('通知連結開啟失敗：'+String(error?.code||error?.message||error))}
   }catch(e){
    if(generation!==epoch)return;uid='';authenticated=false;$('app').hidden=false;tab('Settings');
-   say('登入驗證未通過：'+String(e?.code||e?.message||e));
+   if(e?.code==='permission-denied'){
+    say('Google 身分已驗證，但 Firebase 拒絕讀取。可能尚未核准系統登入，請由最高權限帳號在「設定 → 邀請成員 → 邀請紀錄」核准該帳號。若已核准仍出現此訊息，請核對 Firestore 存取規則。');
+   }else{
+    say('登入驗證未通過：'+String(e?.code||e?.message||e));
+   }
   }
  });
 }
