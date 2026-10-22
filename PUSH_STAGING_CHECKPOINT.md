@@ -49,6 +49,15 @@
 - GitHub 正式發送排程仍保持 `TEST_PUSH_SEND_ENABLED` 未啟用，主 CRM `push-public-config.json` 為 `subscriptionsEnabled=true`、`senderEnabled=false`、`environment="SPARK_SUBSCRIPTION_STAGING"`；無付費服務。
 - 下一個關鍵驗收：本人這支 iPhone 是否實際看到「鴻繽科技 CRM 有新通知」。若未收到，查 iOS「設定 → 通知」、主畫面 App、通知摘要及專注模式、Web Push/SW 處理，不要跳過實機驗收。若收到，進行第二個不同 Google 帳號與另一台 iPhone 訂閱及各角色通知授權／撤銷測試，確定資料隔離後才啟用正式群組發送。
 
+## 2026-10-22 20:17｜第一支 iPhone 鎖定畫面通知確實收到｜PASS FROZEN
+
+- 使用者提供原生 iOS **鎖定畫面／通知中心實機截圖**，畫面約 `20:17`，出現「鴻繽科技 CRM 有新通知」、「from 鴻繽科技 CRM」、「點一下即可開啟 CRM 查看資訊」。與此前一則特定 root-owner-only 一次性 TEST `OWNER_IPHONE_ONE_SHOT_APPLE_PUSH_ACCEPTED_201`（run `39776813890`，發送完成於 20:15 台南時間）對上。
+- 正式記錄三項 **PASS，不得重做**：(1) 本人 `honbin002@gmail.com` Firebase 私人手機訂閱建立／伺服器讀回；(2) 使用 GitHub encrypted VAPID 對 Apple Web Push 送出並收到 HTTP 201；(3) 第一支 iPhone 系統鎖定畫面／通知中心顯示一則該 CRM 測試推播，端到端 PASS。
+- 此圖還**沒有證明**「點擊通知後是否正確打開 CRM」，也**沒有證明**第二支 iPhone／另一位 Google 帳號的任務、記事通知或權限撤銷後停止發送。
+- 單次推播自動工作流程已移除，持續發送依然關閉；正式 CRM 的公開開關須維持 `subscriptionsEnabled=true`、`senderEnabled=false`、`environment=SPARK_SUBSCRIPTION_STAGING`。不得只因第一支手機收件 PASS 就啟動群組正式推播。
+- 下一步**僅需本人點剛才收到的通知**，回報是否進入「鴻繽科技 CRM」主畫面；這是通知點擊驗收。該次只有不含任務 ID 的通用測試訊息，正常應打開 CRM 首頁，不應連結到任何特定記事。之後再測第二個已核准的成員 Google 帳號及第二支 iPhone，驗證各帳號分隔、任務分派、任務完成與權限撤銷無通知。
+- 不修改客戶／產品／報價／本機資料，不新增付費服務，不在 GitHub 檔案或聊天中放私人金鑰。
+
 ## 既有主架構（不可重建）
 - 正式 CRM：`honbin002-design/-hongbin-personal-crm-beta`，入口 `https://honbin002-design.github.io/-hongbin-personal-crm-beta/`
 - Firebase 雲端記事與任務：`honbin002-design/honbin-crm-auth-test`，以同網域 iframe 整合
