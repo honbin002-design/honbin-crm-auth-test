@@ -2,6 +2,16 @@
 
 **狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 22:05（台南）｜舊 PENDING 邀請原因已用正式 Firebase READBACK 確診
+
+- 使用者在第一支最高權限 iPhone 的「鴻繽 → 查看此群組邀請紀錄」截圖顯示三位成員的 `已接受／EDITOR`，自己**完全沒有修改**；「收到的共用群組邀請」顯示目前沒有待接受邀請。第二支成員 iPhone 此前顯示一筆原角色 VIEWER 的 PENDING，但 `Firebase permission-denied` SAFE_HOLD。
+- 為確認是否同一記事簿，使用既有專用 TEST Firebase service account 以**一次性的 GitHub Actions 唯讀分析**（run `39792660723`, job `119872300657`）對根帳號的「鴻繽」記事簿、三位 ACTIVE 編輯者、各自的 inbox PENDING 與所屬記事簿存在／退休狀態進行有上限的 server-admin reads，不輸出 email／UID／groupId／私人資料。
+- **真正根因 PASS**：`INVITE_AUDIT_NOTEBOOKS_1`、`INVITE_AUDIT_ACTIVEEDITORS_3`、`INVITE_AUDIT_MEMBERSWITHPENDING_1`、`INVITE_AUDIT_PENDINGSAMENOTEBOOK_0`、`INVITE_AUDIT_PENDINGOTHERNOTEBOOK_0`、**`INVITE_AUDIT_PENDINGRETIREDNOTEBOOK_1`**，`INVITE_AUDIT_READ_ONLY_NO_RECORDS_MODIFIED`。也就是**不是「鴻繽」的重複邀請**，而是某個**已停用的不同記事簿**留下的 PENDING 舊邀請；因此非該群組成員時，用客戶端 Firebase Rules get/active gate 會被拒絕，造成第二支手機 SAFE_HOLD。
+- 管理員「鴻繽」頁只有三筆已接受的 EDITOR 是**正確的**，不會出現「取消重複邀請」按鈕，不要再要求使用者在「鴻繽」找那個按鈕；也不要要求成員點任何舊 VIEWER 邀請，更不能擅自更動 GROUP 成員權限。
+- 一次性 GitHub Actions 檢查工作流程 `one-time-invitation-live-readback.yml` 已在成功讀回後移除（commit `e2f3b38249630982cdf6706fb44baf3c100c92a6`），以免以後無意反覆掃描。保留唯讀診斷原始碼作稽核但不執行。**沒有任何 Firebase 寫入或資料刪除。**
+- UI 應將這種權限拒絕／無法讀回的過期或未知邀請移至**「歷史／需管理員核對」**，不列入可接受邀請數；不能從一般客戶端 permission-denied 就斷言該筆確實停用（本例已經由專用管理端 READBACK 確認）。不替使用者批次清除歷史 inbox 記錄、不更動 Firebase Rules，也不開付費服務。
+- 第一支 iPhone 原有 Push 訂閱、Apple HTTP 201、鎖定畫面收到、點擊進 CRM 等四項 PASS，以及第二支的獨立身分與訂閱 PASS 保留；正式多人 sender 持續安全關閉 `subscriptionsEnabled=true`／`senderEnabled=false`。
+
 ## 2026-10-22 晚間｜第二支 iPhone 邀請顯示 SAFE_HOLD 的接續修正
 
 - 使用者第二支 iPhone 顯示「邀請狀態待核對，暫不可接受；目前無法從 Firebase 伺服器確認是否已有成員權限」，因此不能把先前靜態測試 PASS 誤稱該手機實機驗收 PASS。**本輪沒有刪除邀請、改角色、動任何業務資料。**
