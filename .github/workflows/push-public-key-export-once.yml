@@ -1,0 +1,63 @@
+name: One-time verified PUBLIC VAPID key publish (no secrets or push sent)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/push-public-key-export-once.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish-public-key-only:
+    if: github.repository == 'honbin002-design/honbin-crm-auth-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      TEST_VAPID_PUBLIC_KEY: ${{ secrets.TEST_VAPID_PUBLIC_KEY }}
+      TEST_VAPID_PRIVATE_KEY: ${{ secrets.TEST_VAPID_PRIVATE_KEY }}
+      TEST_PUSH_CONTACT: ${{ secrets.TEST_PUSH_CONTACT }}
+      TEST_PUSH_SEND_ENABLED: ${{ vars.TEST_PUSH_SEND_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify pair and write PUBLIC key only, never private key
+        run: |
+          node --input-type=module <<'JS'
+          import {webcrypto} from 'node:crypto';
+          import {writeFileSync} from 'node:fs';
+          const {TEST_VAPID_PUBLIC_KEY:pub,TEST_VAPID_PRIVATE_KEY:priv,
+            TEST_PUSH_CONTACT:contact,TEST_PUSH_SEND_ENABLED:enabled}=process.env;
+          if(enabled==='EXPLICITLY_APPROVED')throw Error('SENDER_MUST_REMAIN_DISABLED');
+          if(!/^[A-Za-z0-9_-]{87}$/.test(pub||'')||
+             !/^[A-Za-z0-9_-]{43}$/.test(priv||'')||
+             !/^mailto:[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact||''))
+            throw Error('PUBLIC_KEY_EXPORT_NOT_READY');
+          const raw=Buffer.from(pub,'base64url');
+          if(raw.length!==65||raw[0]!==4)throw Error('INVALID_P256_PUB');
+          const x=raw.subarray(1,33).toString('base64url');
+          const y=raw.subarray(33).toString('base64url');
+          const keys=await Promise.all([
+           webcrypto.subtle.importKey('jwk',{kty:'EC',crv:'P-256',x,y,d:priv},{name:'ECDSA',namedCurve:'P-256'},false,['sign']),
+           webcrypto.subtle.importKey('raw',raw,{name:'ECDSA',namedCurve:'P-256'},false,['verify'])
+          ]);
+          const data=new TextEncoder().encode('verified-public-key-only');
+          const sig=await webcrypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},keys[0],data);
+          if(!await webcrypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},keys[1],sig,data))
+             throw Error('PAIR_MISMATCH');
+          writeFileSync('push-public-vapid-readback.json',JSON.stringify({schemaVersion:1,publicVapidKey:pub},null,2)+'\n');
+          console.log('ONLY_PUBLIC_VAPID_KEY_WRITTEN_TO_FILE_NO_PRIVATE_KEY');
+          JS
+      - name: Commit verified public key only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add push-public-vapid-readback.json
+          if git diff --cached --quiet; then
+            echo 'PUBLIC_KEY_ALREADY_CURRENT'
+          else
+            git commit -m 'Publish only verified public VAPID key for CRM safe-hold staging'
+            git push
+          fi
+# Temporary single purpose workflow. No Firebase access, no private export, no notification.
