@@ -21,7 +21,7 @@ for(const path of ['notes-preview.html','groups-preview.html']){
  assert.doesNotMatch(companion,/browserSessionPersistence/);
 }
 assert.match(page,/taskPublish" disabled/);
-assert.match(page,/只有你明確按「發布」並確認才會寫入/);
+assert.match(page,/只有明確按下「發布」並確認後才會儲存任務/);
 assert.match(page,/firebase-note-service\.mjs/);
 assert.match(page,/firebase-group-service\.mjs/);
 assert.match(page,/sdk\.getDocFromServer\(sdk\.doc\(db,'groups',group\.id,'tasks',itemId\)\)/);
