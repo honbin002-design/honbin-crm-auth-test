@@ -4,7 +4,10 @@ import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs'
 class Element {
  constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.attributes={};
   this.hidden=false;this.disabled=false;this.textContent='';this.className='';this.onclick=null}
- append(...nodes){this.children.push(...nodes)}
+ append(...nodes){for(const x of nodes){x.parentNode=this;this.children.push(x)}}
+ prepend(...nodes){for(const x of [...nodes].reverse()){x.parentNode=this;this.children.unshift(x)}}
+ removeChild(node){this.children=this.children.filter(x=>x!==node);node.parentNode=null}
+ querySelectorAll(selector){return this.children.filter(x=>selector==='[data-task-id]'&&x.dataset.taskId||selector==='[data-note-id]'&&x.dataset.noteId)}
  replaceChildren(...nodes){this.children=[...nodes]}
  setAttribute(key,val){this.attributes[key]=val}
  removeAttribute(key){delete this.attributes[key]}
@@ -28,7 +31,8 @@ const events={
  }],
  'tasks:completedAt':[], 'notes:createdAt':[]
 };
-let uid='member_1',queries=0,refreshed=0,opened=0;
+let uid='member_1',queries=0,refreshed=0,opened=0,restored='';
+const detail=new Element('article');detail.dataset.taskId='task_new';$('tasksList').append(detail);
 const sdk={
  collection:(_db,...segments)=>({folder:segments.at(-1),group:segments.at(1)}),
  query:(ref,sort,limit)=>({ref,sort,limit}),
@@ -50,6 +54,7 @@ const config={
  getGroups:async()=>[{id:'group_1',name:'群組 A',role:'EDITOR'}],
  refreshViews:async()=>{refreshed++},
  openItem:async()=>{opened++;return true},
+ getCurrentTab:()=> 'Notes',restoreTab:tab=>{restored=tab},
  onStatus:text=>status.push(text)
 };
 $('notificationCenter').hidden=true;
@@ -70,6 +75,11 @@ assert.equal($('toggleNotifications').attributes['aria-expanded'],'true');
 const open=$('notificationList').children[0].children[1];
 await open.onclick();
 assert.equal(opened,1);
+assert.equal(detail.children[0]?.children[0]?.textContent,'← 返回通知');
+assert.equal(detail.children[0].children[0].onclick(),true);
+assert.equal(restored,'Notes');
+assert.equal($('notificationCenter').hidden,false);
+assert.equal($('notificationCount').hidden,true);
 assert.equal($('notificationCount').hidden,true);
 assert.equal($('notificationCenter').hidden,true);
 assert.equal(storageMap.size,1,'only per-UID read markers saved');
