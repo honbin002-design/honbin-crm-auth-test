@@ -1,9 +1,5 @@
 name: TEST notification read-only access check
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/push-test-access-readonly.yml'
   workflow_dispatch:
 permissions:
   contents: read
