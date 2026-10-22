@@ -34,6 +34,19 @@ assert.deepEqual(revokedAssignee.recipients,[]);
 assert.throws(()=>call('TASK_COMPLETED','task_6',{status:'DONE',createdBy:'uid_owner',completedBy:'uid_revoked'}),/INVALID_TASK_COMPLETION/);
 assert.throws(()=>call('TASK_ASSIGNED','../evil',{status:'OPEN',createdBy:'uid_owner',assignedUid:null}),/INVALID_NOTIFICATION_EVENT/);
 assert.throws(()=>call('SHARED_NOTE_CREATED','note_3',{groupId:'group_test',ownerUid:'uid_outsider'}),/INVALID_SHARED_NOTE/);
+// A retired notebook retains historical members and notes in Firestore,
+// but neither its owner nor old members can be targeted by push.
+for(const kind of ['TASK_ASSIGNED','TASK_COMPLETED','SHARED_NOTE_CREATED']){
+ const sample=kind==='TASK_ASSIGNED'
+  ?{status:'OPEN',createdBy:'uid_owner',assignedUid:'uid_editor'}
+  :kind==='TASK_COMPLETED'
+   ?{status:'DONE',createdBy:'uid_owner',completedBy:'uid_editor'}
+   :{groupId:'group_test',ownerUid:'uid_owner'};
+ assert.throws(()=>routeNotification({
+  kind,group:{...group,deleteState:'DELETING'},
+  members,itemId:'old_item',record:sample
+ }),/RETIRED_GROUP_NOTIFICATION_STOP/);
+}
 const serial=JSON.stringify([directed,open,done,note]);
 assert.ok(!serial.includes('@gmail.com'));
 assert.ok(!serial.includes('task title'));
