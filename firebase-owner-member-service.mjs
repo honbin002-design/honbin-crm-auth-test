@@ -12,7 +12,7 @@ export const isRootOwnerIdentity=identity=>Boolean(identity &&
 export function ownerMemberService({db,sdk,identity,currentUid}){
  if(!db||!sdk||typeof currentUid!=='function'||!isRootOwnerIdentity(identity))
    throw Error('VERIFIED_ROOT_OWNER_REQUIRED');
- const {doc,collection,getDocs,getDocFromServer,runTransaction}=sdk;
+ const {doc,collection,getDocs,getDocFromServer,runTransaction,setDoc,updateDoc,serverTimestamp}=sdk;
  if(![doc,collection,getDocs,getDocFromServer,runTransaction].every(x=>typeof x==='function'))
    throw Error('MEMBERSHIP_SDK_REQUIRED');
  const uid=id(identity.uid,'UID');
@@ -21,6 +21,13 @@ export function ownerMemberService({db,sdk,identity,currentUid}){
  const memberRef=(groupId,memberUid)=>doc(db,'groups',id(groupId,'GROUP_ID'),'members',id(memberUid,'MEMBER_UID'));
  const sentRef=(groupId,inviteId)=>doc(db,'groups',id(groupId,'GROUP_ID'),'sentInvites',id(inviteId,'INVITE_ID'));
  const inviteRef=(email,inviteId)=>doc(db,'inboxes',String(email).toLowerCase(),'invites',id(inviteId,'INVITE_ID'));
+ const approvalEmail=value=>{
+  const v=String(value||'').trim().toLowerCase();
+  if(v===ROOT_OWNER_EMAIL||v.length>254||!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v))
+   throw Error('INVALID_APPROVAL_EMAIL');
+  return v;
+ };
+ const approvalRef=email=>doc(db,'approvedAccounts',approvalEmail(email));
  const groupOkay=(data)=>data&&data.ownerUid===uid&&
    typeof data.name==='string'&&data.name&&
    !Object.prototype.hasOwnProperty.call(data,'deleteState');
@@ -105,5 +112,52 @@ export function ownerMemberService({db,sdk,identity,currentUid}){
    throw Error('ROLE_CHANGE_READBACK_NOT_CONFIRMED');
   return {groupId,memberUid,email:recipientEmail,previousRole:expectedRole,role:nextRole};
  }
- return Object.freeze({ownedGroups,roster,changeRole});
+
+ // Global account approval and notebook invitation are intentionally distinct.
+ // Only the root owner's Firebase UID can write approvedAccounts under Rules.
+ // Re-check the exact server-authorized, unrevoked invitation before enabling.
+ async function verifiedInviteForApproval({groupId,invitationId,recipientEmail}){
+  guard();
+  const email=approvalEmail(recipientEmail);
+  await requireOwnedGroup(groupId);guard();
+  const [sentSnap,inboxSnap]=await Promise.all([
+   getDocFromServer(sentRef(groupId,invitationId)),
+   getDocFromServer(inviteRef(email,invitationId))
+  ]);guard();
+  if(!sentSnap.exists()||!inboxSnap.exists())throw Error('INVITATION_NOT_FOUND');
+  const sent=sentSnap.data(),invite=inboxSnap.data();
+  if(sent.groupId!==groupId||invite.groupId!==groupId||
+   !sameEmail(sent.recipientEmail,email)||!sameEmail(invite.recipientEmail,email)||
+   !ROLES.includes(sent.role)||invite.role!==sent.role||
+   !['PENDING','ACCEPTED'].includes(invite.status))
+    throw Error('INVITATION_NOT_ELIGIBLE');
+  return email;
+ }
+ async function accountApprovalStatus(args){
+  const email=await verifiedInviteForApproval(args);
+  const snap=await getDocFromServer(approvalRef(email));guard();
+  if(!snap.exists())return {email,status:'NOT_APPROVED'};
+  if(!sameEmail(snap.data().email,email)||
+   !['ACTIVE','REVOKED'].includes(snap.data().status))
+    throw Error('APPROVAL_DOCUMENT_INVALID');
+  return {email,status:snap.data().status};
+ }
+ async function approveInvitedAccount(args){
+  if(![setDoc,updateDoc,serverTimestamp].every(x=>typeof x==='function'))
+   throw Error('APPROVAL_WRITE_SDK_REQUIRED');
+  const status=await accountApprovalStatus(args);guard();
+  if(status.status==='ACTIVE')return {email:status.email,status:'ACTIVE',alreadyActive:true};
+  const ref=approvalRef(status.email);
+  if(status.status==='NOT_APPROVED')
+   await setDoc(ref,{email:status.email,status:'ACTIVE',createdAt:serverTimestamp()});
+  else if(status.status==='REVOKED')
+   await updateDoc(ref,{status:'ACTIVE'});
+  guard();
+  const readback=await getDocFromServer(ref);guard();
+  if(!readback.exists()||!sameEmail(readback.data().email,status.email)||
+   readback.data().status!=='ACTIVE')
+    throw Error('APPROVAL_READBACK_FAILED');
+  return {email:status.email,status:'ACTIVE',alreadyActive:false};
+ }
+ return Object.freeze({ownedGroups,roster,changeRole,accountApprovalStatus,approveInvitedAccount});
 }
