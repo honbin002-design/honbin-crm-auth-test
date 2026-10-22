@@ -104,8 +104,18 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
       markers.mark(item.id);render();
       $('notificationCenter').hidden=true;
      }
-    }catch(error){if(identity())onStatus('通知開啟失敗：'+safeText(error?.code||error?.message||error))}
-    finally{button.disabled=false}
+     if(!ok){
+      // A missing or revoked item must never strand the member on a
+      // half-open detail page without notification navigation.
+      if(typeof openNotifications==='function')openNotifications();
+      onStatus('通知內容已不存在或暫時無法開啟，已返回通知頁面。');
+     }
+    }catch(error){
+     if(identity()){
+      if(typeof openNotifications==='function')openNotifications();
+      onStatus('通知開啟失敗：'+safeText(error?.code||error?.message||error));
+     }
+    }finally{button.disabled=false}
    };
    row.append(content,button);root.append(row);
   }
