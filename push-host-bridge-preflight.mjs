@@ -5,14 +5,14 @@ const saved=new Map(),events=new Map(),replies=[];
 const uid='member_1',endpoint='https://web.push.apple.com/Qm9va2Vk',id='push_request_1';
 const parent={location:{pathname:'/-hongbin-personal-crm-beta/'},
  postMessage:msg=>replies.push(msg)};
-let signedIn=true,who=uid,enabled=true,writes=0;
+let signedIn=true,who=uid,enabled=true,senderEnabled=false,writes=0;
 const fake={
  parent,location:{origin:'https://honbin002-design.github.io'},
  crypto:{randomUUID:()=> '12345678-1234-1234-1234-123456789012'},
  addEventListener:(key,fn)=>events.set(key,fn),
  removeEventListener:key=>events.delete(key),
  fetch:async()=>({ok:true,json:async()=>({subscriptionsEnabled:enabled,
-  senderEnabled:enabled,publicVapidKey:'A'.repeat(88)})})
+  senderEnabled,publicVapidKey:'A'.repeat(87)})})
 };
 const rec=new Map();
 const sdk={
@@ -39,9 +39,10 @@ assert.equal(writes,0,'reject wrong parent window');
 signedIn=false;await emit(payload);signedIn=true;
 assert.equal(writes,0,'reject signed-out identity');
 enabled=false;await emit(payload);enabled=true;
-assert.equal(writes,0,'deny until sender and rules readiness are activated');
+assert.equal(writes,0,'deny until voluntary subscription enrollment is activated');
 await emit(payload);
-assert.equal(writes,1,'one device record from authorized user');
+assert.equal(senderEnabled,false,'real notifications must remain disabled during enrollment');
+assert.equal(writes,1,'one device record from authorized user while sender is OFF');
 assert.equal(replies.at(-1).success,true);
 const doc=[...rec.keys()][0];
 assert.ok(doc.startsWith('pushSubscriptions/member_1/devices/iphone_'));
