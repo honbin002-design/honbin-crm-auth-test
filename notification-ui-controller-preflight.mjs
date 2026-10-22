@@ -125,6 +125,19 @@ assert.equal($('refreshCloud').disabled,false);
 app.stop();
 assert.equal($('notificationOverview').hidden,true);
 assert.equal($('refreshCloud').disabled,true);
+// A deleted or no-longer-authorized notification must return to the
+// dedicated notification page without making its content visible.
+const inaccessible=cloudNotificationController({
+ ...config,openItem:async()=>{switchPage('Tasks',{fromNotification:true});return false}
+});
+controller=inaccessible;inaccessible.start();
+await new Promise(resolve=>setTimeout(resolve,0));
+switchPage('Notifications');
+await $('notificationList').children[0].children[1].onclick();
+assert.equal(page,'Notifications','missing notification returns to the dedicated inbox');
+assert.equal($('notificationOverview').hidden,false);
+assert.equal($('tasksPanel').hidden,true);
+inaccessible.stop();
 const prev=queries;
 uid='another_member';
 await $('refreshCloud').onclick();
