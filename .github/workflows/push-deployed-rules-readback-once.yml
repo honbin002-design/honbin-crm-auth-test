@@ -1,0 +1,26 @@
+name: Read current deployed Firestore push rules (private, no writes)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/push-deployed-rules-readback-once.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-rules:
+    if: github.repository == 'honbin002-design/honbin-crm-auth-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install existing Admin identity library
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts firebase-admin@14.5.0
+      - name: Read deployed Rules release and ACL shape, print status ONLY
+        env:
+          TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: node notification-deployed-rules-readonly.mjs
+# Does not deploy rules, write Firestore, start push or reveal credentials.
