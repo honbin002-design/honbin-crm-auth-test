@@ -49,9 +49,12 @@ export function attachInstalledCRMPushBridge({db,sdk,currentUid,authenticated,
      {cache:'no-store'});
    if(!configResponse.ok)throw Error('PUSH_CONFIG_UNAVAILABLE');
    const config=await configResponse.json();
-   if(config.subscriptionsEnabled!==true||config.senderEnabled!==true||
-      typeof config.publicVapidKey!=='string'||config.publicVapidKey.length<80)
-     throw Error('PUSH_NOT_ACTIVATED');
+   // Phase one explicitly permits voluntary device enrollment while the sender
+   // remains OFF. Never send from this authenticated client/bridge.
+   if(config.subscriptionsEnabled!==true||
+      !/^[A-Za-z0-9_-]{87}$/.test(config.publicVapidKey||'')||
+      ![true,false].includes(config.senderEnabled))
+     throw Error('PUSH_ENROLLMENT_NOT_ACTIVATED');
    if(!authenticated()||currentUid()!==uid)throw Error('ACCOUNT_CHANGED');
    const deviceId=accountDeviceId(uid),ref=sdk.doc(db,'pushSubscriptions',uid,'devices',deviceId);
    const old=await sdk.getDocFromServer(ref);
@@ -72,7 +75,7 @@ export function attachInstalledCRMPushBridge({db,sdk,currentUid,authenticated,
       verified.data().p256dh!==record.p256dh||
       verified.data().auth!==record.auth)throw Error('SUBSCRIPTION_NOT_CONFIRMED');
    respond(true);
-   onStatus('iPhone 系統推播訂閱已經通過伺服器核對。');
+   onStatus('iPhone 訂閱已通過 Firebase 伺服器核對；正式通知仍須通過發送驗收。');
   }catch(error){
    respond(false);
    onStatus('iPhone 系統推播訂閱未完成：'+String(error?.code||error?.message||error));
