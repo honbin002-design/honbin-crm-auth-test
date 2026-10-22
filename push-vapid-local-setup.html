@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; connect-src 'none'; img-src 'none'; frame-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>鴻繽 iPhone 推播｜離線金鑰設定</title>
+<style>
+:root{font:16px/1.55 -apple-system,BlinkMacSystemFont,"PingFang TC",sans-serif;color:#182e43;background:#f3f7fb}
+*{box-sizing:border-box}body{max-width:680px;margin:auto;padding:22px 14px 80px}
+h1{font-size:1.36rem}h2{font-size:1.1rem;margin:18px 0 8px}
+section{background:#fff;border:1px solid #d6e3ee;padding:16px;margin:16px 0;border-radius:14px}
+button{font:inherit;font-weight:700;border:0;border-radius:10px;background:#185a92;color:#fff;min-height:46px;padding:10px 15px;cursor:pointer}
+button.secondary{background:#e4eef9;color:#17476d}
+button:disabled{opacity:.5}p,li{overflow-wrap:anywhere}
+.output{margin:8px 0 12px;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.7 ui-monospace,monospace;background:#edf3f9;border:1px solid #b6cbdc;padding:12px;border-radius:8px;min-height:52px;user-select:text}
+.warning{background:#fff5e0;padding:11px;border-radius:9px;color:#704713}
+#privateArea[hidden],#publicArea[hidden]{display:none!important}
+#message{white-space:pre-wrap}
+a{color:#13558a} .sub{font-size:.92rem;color:#516578}
+</style></head><body>
+<h1>iPhone 推播金鑰｜手機本機產生</h1>
+<p class="warning">只供 CRM 系統管理者使用。這個頁面不連接 Firebase、GitHub API 或其他伺服器，不會上傳或儲存產生的金鑰。關閉頁面後金鑰會從頁面消失；請先將成對金鑰分別安全存入 GitHub Actions Secrets。</p>
+<section>
+<h2>1．產生 Web Push VAPID 金鑰</h2>
+<p>使用 iPhone 瀏覽器內建 Web Crypto P-256 金鑰生成；不需付費、下載程式或註冊新帳號。</p>
+<button id="generate" type="button">在這支手機產生金鑰</button>
+<p id="message" role="status">尚未產生；正式系統推播仍關閉。</p>
+<div id="publicArea" hidden>
+  <h2>公開金鑰（可公開）</h2><div id="publicKey" class="output"></div>
+  <button id="copyPublic" class="secondary" type="button">複製公開金鑰</button>
+  <p class="sub">將它存入雲端記事 GitHub 儲存庫的 Actions Secret：<code>TEST_VAPID_PUBLIC_KEY</code>。待所有安全測試 PASS，正式 CRM 的公開設定才會使用這個值。</p>
+</div>
+<div id="privateArea" hidden>
+  <h2>私人金鑰（保密）</h2><div id="privateKey" class="output" aria-label="私人金鑰"></div>
+  <button id="copyPrivate" class="secondary" type="button">複製私人金鑰</button>
+  <p class="warning">只能存入 GitHub 儲存庫加密的 Actions Secret <code>TEST_VAPID_PRIVATE_KEY</code>。不要貼到聊天室、程式碼、GitHub Issue、一般文字檔或任何雲端共用文件。</p>
+</div>
+</section>
+<section>
+<h2>2．其他免費、安全設定</h2>
+<p>在同一 GitHub 儲存庫 Actions Secrets 另外設定 <code>TEST_PUSH_CONTACT</code>，值以 <code>mailto:</code> 開頭並使用你可收信的地址。Firebase 專用服務帳號憑證若已設定，請沿用，不要另建管理員萬用金鑰。</p>
+<p>現有系統在完成權限核對、兩個帳號隔離驗證與兩支 iPhone 實測之前，<strong>不得將 <code>TEST_PUSH_SEND_ENABLED</code> 設為 <code>EXPLICITLY_APPROVED</code></strong>。本頁不會開啟任何推播。</p>
+<p class="sub"><a href="https://github.com/honbin002-design/honbin-crm-auth-test/settings/secrets/actions" rel="noopener noreferrer">前往 GitHub Actions 加密 Secrets 設定</a></p>
+</section>
+<script>
+'use strict';
+// No network, no localStorage, no IndexedDB, no console logging of keys.
+let pair=null;
+const $=id=>document.getElementById(id);
+const b64url=bytes=>btoa(String.fromCharCode(...bytes))
+ .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+$('generate').addEventListener('click',async()=>{
+ $('generate').disabled=true;
+ $('publicArea').hidden=true;$('privateArea').hidden=true;
+ pair=null;$('publicKey').textContent='';$('privateKey').textContent='';
+ $('message').textContent='正在這支手機內產生金鑰，不連接網路……';
+ try{
+  if(!globalThis.crypto?.subtle)throw Error('此瀏覽器不支援 Web Crypto');
+  const keys=await crypto.subtle.generateKey(
+   {name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);
+  const publicBytes=new Uint8Array(await crypto.subtle.exportKey('raw',keys.publicKey));
+  const privateJwk=await crypto.subtle.exportKey('jwk',keys.privateKey);
+  const pub=b64url(publicBytes),secret=privateJwk.d;
+  if(publicBytes.length!==65||publicBytes[0]!==4||
+     !/^[-_A-Za-z0-9]{87}$/.test(pub)||!/^[-_A-Za-z0-9]{43}$/.test(secret))
+   throw Error('金鑰長度不符合 VAPID 規範');
+  pair={pub,secret};
+  $('publicKey').textContent=pub;$('privateKey').textContent=secret;
+  $('publicArea').hidden=false;$('privateArea').hidden=false;
+  $('message').textContent='產生成功。請將這一對金鑰各自存入 GitHub Actions Secrets，切勿分享私人金鑰。';
+ }catch(e){$('message').textContent='未產生金鑰：'+String(e?.message||e)}
+ finally{$('generate').disabled=false}
+});
+async function copyValue(value){
+ if(!value){$('message').textContent='請先產生金鑰';return}
+ try{await navigator.clipboard.writeText(value);$('message').textContent='已複製。請直接貼到對應的 GitHub 加密 Secret 欄位。'}
+ catch{$('message').textContent='瀏覽器拒絕剪貼簿，請長按金鑰內容並選擇「拷貝」。'}
+}
+$('copyPublic').addEventListener('click',()=>copyValue(pair?.pub));
+$('copyPrivate').addEventListener('click',()=>copyValue(pair?.secret));
+</script></body></html>
