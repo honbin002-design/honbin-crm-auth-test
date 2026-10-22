@@ -1,6 +1,6 @@
 # iPhone CRM Web Push｜安全施工交接｜2026-10-22
 
-**狀態：STAGING_SAFE_HOLD（尚未實際送達 iPhone 系統通知，不得報成正式完成）**
+**狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
 ## 2026-10-22 18:57（台北時間）｜零費用續作，最新權威結論
 
