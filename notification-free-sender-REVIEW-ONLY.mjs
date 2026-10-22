@@ -27,6 +27,13 @@ async function main(){
  if(!Number.isFinite(activation)||activation>now())throw Error('INVALID_ACTIVATION_TIME');
  const credential=JSON.parse(process.env.TEST_FIREBASE_SERVICE_ACCOUNT_JSON);
  if(credential.project_id!==PROJECT)throw Error('WRONG_FIREBASE_PROJECT_STOP');
+ // Never silently use the project's default broad-scope Firebase Admin key.
+ // The existing dedicated read-only-verified sender identity is authoritative.
+ if(credential.type!=='service_account'||
+    credential.client_email!==`honbin-test-push-sender@${PROJECT}.iam.gserviceaccount.com`||
+    typeof credential.private_key!=='string'||
+    !credential.private_key.includes('-----BEGIN PRIVATE KEY-----'))
+  throw Error('DEDICATED_TEST_SENDER_IDENTITY_REQUIRED_STOP');
  const [{initializeApp,cert},{getAuth},{getFirestore,Timestamp,FieldPath,FieldValue},{default:webpush}]=await Promise.all([
   import('firebase-admin/app'),import('firebase-admin/auth'),
   import('firebase-admin/firestore'),import('web-push')
