@@ -64,6 +64,8 @@ jobs:
         run: node firebase-task-extension-client-preflight.mjs
       - name: Verify working foreground notification inbox and local unread state
         run: node inapp-notification-preflight.mjs
+      - name: Verify foreground notification buttons, badges and account-switch safety
+        run: node notification-ui-controller-preflight.mjs
       - name: Verify zero-cost iPhone Web Push PWA groundwork
         run: node push-pwa-readiness-preflight.mjs
       - name: Verify scoped notification recipients and privacy
