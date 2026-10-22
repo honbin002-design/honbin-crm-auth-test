@@ -22,6 +22,15 @@
 - **下一個無法代按的實機步驟**：系統管理員由 iPhone 主畫面 CRM 開啟 → 雲端記事與任務 → 設定 → 「手機通知帳號隔離驗證（唯讀）」按「核對三項越權拒絕（唯讀）」。應有三個 `SERVER_DENIED_PASS`。同頁亦按「伺服器規則安全核對（唯讀）」核實本人訂閱的讀取（即使清單沒有資料）。若任何 HOLD 或 UNEXPECTED_ALLOWED，不得開通。之後需成員獨立帳號及兩支 iPhone 身分、訂閱、鎖屏通知驗收。
 - 正式 CRM `push-public-config.json` 僅有先前 verified PUBLIC VAPID 值；`subscriptionsEnabled=false`、`senderEnabled=false`，GitHub sender `TEST_PUSH_SEND_ENABLED` 未啟用。iPhone 系統通知依然 SAFE_HOLD；無新增費用或任何現有業務資料改動。
 
+## 2026-10-22 19:43+｜iPhone Firebase 實機驗收 PASS 與本人訂閱寫入新 Gate
+
+- 使用者在正式 iPhone CRM 畫面，已完成**三項 Firebase 伺服器越權讀取拒絕**：列出所有公開暱稱 `SERVER_DENIED_PASS`；讀其他帳號私人推播訂閱 `SERVER_DENIED_PASS`；讀取未加入群組任務 `SERVER_DENIED_PASS`。該三項已實機驗證，不再要求重做。
+- 原頁面「伺服器規則安全核對（唯讀）」在同一截圖仍顯示「尚未核對」，故不可誤判本人訂閱 `GET/LIST` 已成功，也不可誤判 `CREATE/DELETE` 通過。
+- 已在最高權限專屬「設定」頁新增 `pushWriteProbe`，讓本人**明確點按**「驗證本人訂閱可寫入並清除」，使用 `firestore-push-write-probe.mjs` 在 Firestore 真實伺服器按本人 UID 建立一筆**合成、不可實際推播**的短暫裝置資料，立即讀回，最後刪除並再次伺服器核對不存在。未點按不寫入。任何未核實清除、權限拒絕或網路錯誤一律 `SAFE_HOLD`，顯示定位用合成路徑供人工確認；不蒐集、輸出真實 endpoint 或私人金鑰。全程不向 iPhone 要求通知權限。
+- 已新增 `firestore-push-write-probe-preflight.mjs` 純內存 PASS 測試：正常寫入/讀回/刪除、寫入拒絕、清除失敗，以及非根帳號零寫入拒絕；並納入既有 `auth-only` CI。
+- 額外讓伺服器 sender 跳過所有 ID 為 `probe_` 開頭的測試裝置；即便手機斷網導致測試紀錄清除失敗，也不得嘗試對它發送 Apple Push。安全回歸測試納入既有 CI。
+- 最新工作仍保持 `subscriptionsEnabled=false`、`senderEnabled=false`、`TEST_PUSH_SEND_ENABLED` 未啟用；未新增付費資源。**下一步只需要使用者測試新本人寫入驗證按鈕一次，回報畫面結果**，不用重做三項拒絕 PASS；合格後才規劃實際 iPhone 訂閱及開通發送。
+
 ## 既有主架構（不可重建）
 - 正式 CRM：`honbin002-design/-hongbin-personal-crm-beta`，入口 `https://honbin002-design.github.io/-hongbin-personal-crm-beta/`
 - Firebase 雲端記事與任務：`honbin002-design/honbin-crm-auth-test`，以同網域 iframe 整合
