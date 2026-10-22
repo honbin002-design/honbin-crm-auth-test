@@ -858,8 +858,8 @@ async function loadReceivedInvitations(){
  // Only the signed-in Google account can accept its own invitation.
  // An accepted invitation may need a safe membership-index repair.
  const alreadyAccepted=inbox.some(x=>x.status==='ACCEPTED'&&x.acceptedUid===uid);
- const visibleIds=new Set((alreadyAccepted
-  ?await groups.listGroups():groupItems).map(g=>g.id));check(s);
+ let visibleGroups=alreadyAccepted?await groups.listGroups():groupItems;check(s);
+ let visibleIds=new Set(visibleGroups.map(g=>g.id));
  // A PENDING inbox record is not proof that the recipient has no access:
  // members may already be EDITOR/ADMIN through an earlier invitation.
  // Read the current role from the Firestore server before showing "Accept".
@@ -877,6 +877,12 @@ async function loadReceivedInvitations(){
   }
  }
  const stale=checked.filter(x=>x.status==='PENDING'&&x.activeRole);
+ if(stale.length&&!alreadyAccepted){
+  // A newly signed-in member's groupItems can be empty before the first
+  // directory load. Confirm its actual pointer once before offering repair.
+  visibleGroups=await groups.listGroups();check(s);
+  visibleIds=new Set(visibleGroups.map(g=>g.id));
+ }
  const blocked=checked.filter(x=>x.status==='PENDING'&&x.membershipCheckFailed);
  const actionable=checked.filter(x=>(x.status==='PENDING'&&!x.activeRole&&!x.membershipCheckFailed)||
   (x.status==='ACCEPTED'&&x.acceptedUid===uid&&!visibleIds.has(x.groupId)));
@@ -890,7 +896,7 @@ async function loadReceivedInvitations(){
   root.append(mk('p','目前沒有待接受的群組邀請。'));
  for(const oldInvite of stale){
   const entry=mk('div');entry.className='line';
-  const known=groupItems.find(g=>g.id===oldInvite.groupId);
+  const known=visibleGroups.find(g=>g.id===oldInvite.groupId);
   entry.append(mk('strong','已是群組成員，舊邀請不需接受'),
    mk('p','群組：'+(known?.name||'已加入的記事簿')+
     '｜目前權限：'+notebookRoleLabel(oldInvite.activeRole)+
