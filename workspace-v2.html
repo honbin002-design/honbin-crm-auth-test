@@ -218,7 +218,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
   <div class="panel" id="pushReadiness">
    <h2>iPhone 通知</h2>
    <p class="hint">已啟用程式內通知：新共用記事、任務指派與完成通知。CRM 開啟時自動核對，開啟期間每 5 分鐘更新，或點左下角「重新整理」立即刷新。</p>
-   <p class="hint">iPhone 鎖定畫面的背景推播與程式內通知不同；背景推播仍需完成伺服器發送及裝置訂閱驗證。</p>
+   <p class="hint">iPhone 系統推播正在接入 CRM 主畫面版；啟用前會先檢查安全規則與伺服器金鑰，不會自動要求通知權限。</p>
    <button id="checkPush" class="alt" type="button">檢查手機推播準備狀態</button>
    <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
    <p class="warning">背景通知目前尚未開通：仍需要免費的伺服器端發送與訂閱者身分驗證。在此階段不會向你的手機索取推播權限，也不會產生任何訂閱資料。</p>
@@ -250,6 +250,7 @@ import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=2026102
 import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
 import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261022-dedicated-inbox';
+import {attachInstalledCRMPushBridge} from './firebase-installed-crm-push-bridge.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
@@ -1267,6 +1268,10 @@ async function start(){
  const fsSdk=await import('https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js');
  sdk={...authSdk,...fsSdk};const app=appSdk.initializeApp(firebaseConfig);
  auth=authSdk.getAuth(app);await authSdk.setPersistence(auth,authSdk.browserLocalPersistence);db=fsSdk.getFirestore(app);
+ attachInstalledCRMPushBridge({db,sdk,
+  currentUid:()=>auth.currentUser?.uid,
+  authenticated:()=>authenticated&&!!auth.currentUser,
+  onStatus:say});
  try{drafts=makeDraftStore({factory:indexedDB})}catch{drafts=null}
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
