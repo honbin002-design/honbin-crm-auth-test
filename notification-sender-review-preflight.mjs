@@ -33,6 +33,8 @@ assert.match(worker,/\.limit\(40\)/);
 assert.match(worker,/PUSH_RUN_DELIVERY_BUDGET_STOP/);
 assert.match(worker,/PUSH_DEVICE_LIMIT_STOP/);
 assert.match(worker,/!live\.exists\|\|live\.data\(\)\.deleteState/);
+assert.match(worker,/stillMember\(event\.payload\.groupId,event\.actorUid\)/);
+assert.match(worker,/response\?\.statusCode!==201&&response\?\.statusCode!==202/);
 assert.match(readFileSync('notification-recipient-router.mjs','utf8'),/RETIRED_GROUP_NOTIFICATION_STOP/);
 assert.match(worker,/device\.id\.startsWith\('probe_'\)/);
 assert.match(worker,/PUSH_GROUP_MEMBER_LIMIT_STOP/);
