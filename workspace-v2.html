@@ -230,8 +230,8 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
    <p id="liveRulesStatus" class="hint" role="status" aria-live="polite">尚未核對；不代表已啟用任務或背景推播。</p>
   </div>
   <div class="panel" id="liveDenialReadOnly" hidden>
-   <h2>帳號隔離安全核對（唯讀）</h2>
-   <p class="hint">測試 Firestore 伺服器是否拒絕：列出所有暱稱、讀取其他帳號的推播訂閱、讀取沒有加入的群組任務。只測試拒絕讀取，不嘗試建立、修改或刪除資料。</p>
+   <h2>手機通知帳號隔離驗證（唯讀）</h2>
+   <p class="hint">直接以目前登入帳號向 Firebase 伺服器驗證三項越權讀取確實遭拒絕，包括其他帳號的手機推播訂閱。只執行唯讀檢查，不刪除、上傳或建立資料；測試成功也不代表背景推播已啟用。</p>
    <button id="checkLiveDenials" class="alt" type="button">核對三項越權拒絕（唯讀）</button>
    <p id="liveDenialsStatus" class="hint" role="status" aria-live="polite">尚未核對，不影響正常使用。</p>
   </div>
@@ -1292,6 +1292,8 @@ async function start(){
   $('receivedInvites').replaceChildren();$('sentInvites').replaceChildren();
   $('inviteEmail').value='';$('inviteRole').value='VIEWER';$('inviteForm').hidden=true;
   $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();$('rulesOwnerLink').hidden=true;
+  // Device/notification ACL probes are owner-only diagnostics, never public settings.
+  $('liveRulesReadOnly').hidden=true;$('liveDenialReadOnly').hidden=true;
   items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
   if(!user){
@@ -1319,6 +1321,9 @@ async function start(){
     ownerMembers=ownerMemberService({db,sdk,identity:rootIdentity,
       currentUid:()=>auth.currentUser?.uid});
     $('ownerManagement').hidden=false;$('rulesOwnerLink').hidden=false;
+    // Live Firebase client denial probes require the actual signed-in identity.
+    // Expose read-only checks to root owner without exposing private subscriptions.
+    $('liveRulesReadOnly').hidden=false;$('liveDenialReadOnly').hidden=false;
    }
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
