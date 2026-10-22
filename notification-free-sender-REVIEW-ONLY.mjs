@@ -81,7 +81,10 @@ async function main(){
  }
  async function sendEvent(event){
   for(const uid of event.recipients){
+   // Revoking the author or completer must stop an old event from
+   // notifying any former group relationship as well as the recipient.
    if(!await approved(uid)||!await stillMember(event.payload.groupId,uid)||
+      !await stillMember(event.payload.groupId,event.actorUid)||
       !await stillRelevant(event,uid))continue;
    const devices=await db.collection('pushSubscriptions').doc(uid)
     .collection('devices').limit(4).get();
@@ -93,6 +96,7 @@ async function main(){
     if(deliveriesThisRun>=30)throw Error('PUSH_RUN_DELIVERY_BUDGET_STOP');
     // Membership can be revoked while this job is processing other devices.
     if(!await stillMember(event.payload.groupId,uid)||
+      !await stillMember(event.payload.groupId,event.actorUid)||
       !await stillRelevant(event,uid))break;
     const subscription=device.data();
     if(!appleEndpoint(subscription.endpoint)||!subscription.p256dh||
@@ -114,10 +118,12 @@ async function main(){
     if(!claimed)continue;
     deliveriesThisRun++;
     try{
-     await webpush.sendNotification({
+     const response=await webpush.sendNotification({
       endpoint:subscription.endpoint,
       keys:{p256dh:subscription.p256dh,auth:subscription.auth}
-     },JSON.stringify(event.payload),{TTL:3600,urgency:'normal'});
+     },JSON.stringify(event.payload),{TTL:3600,urgency:'normal',timeout:12000});
+     if(response?.statusCode!==201&&response?.statusCode!==202)
+      throw Object.assign(Error('APPLE_PUSH_NOT_ACCEPTED'),{statusCode:Number(response?.statusCode)||0});
      await receipt.update({status:'SENT',sentAt:FieldValue.serverTimestamp()});
     }catch(err){
      const status=Number(err.statusCode)||0;
