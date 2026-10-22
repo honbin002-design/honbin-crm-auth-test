@@ -72,6 +72,8 @@ jobs:
         run: node notification-recipient-router-preflight.mjs
       - name: Verify private opt-in iPhone Push subscription client
         run: node push-subscription-client-preflight.mjs
+      - name: Verify authenticated CRM Home Screen push subscription handoff
+        run: node push-host-bridge-preflight.mjs
       - name: Verify zero-cost sender safe-hold and private subscription ACL
         run: node --check notification-free-sender-REVIEW-ONLY.mjs && node notification-sender-review-preflight.mjs && node notification-free-sender-REVIEW-ONLY.mjs
       - name: Verify safe incremental push-only or three-rule candidate
