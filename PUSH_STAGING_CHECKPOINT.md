@@ -31,6 +31,15 @@
 - 額外讓伺服器 sender 跳過所有 ID 為 `probe_` 開頭的測試裝置；即便手機斷網導致測試紀錄清除失敗，也不得嘗試對它發送 Apple Push。安全回歸測試納入既有 CI。
 - 最新工作仍保持 `subscriptionsEnabled=false`、`senderEnabled=false`、`TEST_PUSH_SEND_ENABLED` 未啟用；未新增付費資源。**下一步只需要使用者測試新本人寫入驗證按鈕一次，回報畫面結果**，不用重做三項拒絕 PASS；合格後才規劃實際 iPhone 訂閱及開通發送。
 
+## 2026-10-22｜iPhone 使用者驗收與自願訂閱測試狀態
+
+- 使用者本人在 iPhone 實機截圖正式確認 `SERVER_WRITE_READBACK_CLEANUP_PASS`：根帳號已完成本人手機訂閱合成紀錄的**實際 Firestore 建立／伺服器讀回／刪除回讀**，沒有留下測試訂閱。與先前 3 個 `SERVER_DENIED_PASS` 一併標記為 **PASS／勿重做**。
+- 現在開啟下一階段：正式 CRM `push-public-config.json` 設為 `subscriptionsEnabled=true`、`senderEnabled=false`、`environment="SPARK_SUBSCRIPTION_STAGING"`。verified VAPID 公開金鑰不變，私鑰保持 GitHub encrypted Secret。**此階段僅由 iPhone 使用者自己點擊通知按鈕並同意，才在登入帳號名下建立私人裝置訂閱；絕不發送手機鎖定畫面通知。**
+- 正式 CRM `crm-push-setup.mjs` 與同源雲端 iframe 的 `firebase-installed-crm-push-bridge.mjs` 已解除「必須 sender 先啟用才能訂閱」的錯誤耦合；要求 VAPID 公鑰 87 字元、`subscriptionsEnabled===true`、`senderEnabled` 合法布林、本人 Firebase 身分及伺服器讀回。未登入/非同源/UID 變更必須拒絕。無自動請求手機通知權限。
+- 推播 GitHub Actions sender 的 `TEST_PUSH_SEND_ENABLED` 仍保持關閉，`senderEnabled=false`；沒有付費伺服器、付費 API 或 Firebase Blaze。
+- 下一個真正的 iPhone 驗收：由手機主畫面的獨立 CRM App 開啟「雲端記事與任務」，在 CRM **外層標題右側**按「登記這支 iPhone（測試）」→ iPhone 系統提示時本人按允許 → 顯示「Firebase 伺服器核對成功」「發送仍關閉」才算真實訂閱 PASS。若使用 Safari 一般分頁，先分享加入主畫面。每位成員每支 iPhone 必須各自登記；獨立成員帳號驗收仍待完成。
+- 正式送達、撤銷成員權限即停止投遞、其他成員兩支手機鎖屏推播未驗收，**絕對不得聲稱背景推播已成功**。後續再以可稽核的 TEST 方案啟用有限發送，並確保取消訂閱機制。
+
 ## 既有主架構（不可重建）
 - 正式 CRM：`honbin002-design/-hongbin-personal-crm-beta`，入口 `https://honbin002-design.github.io/-hongbin-personal-crm-beta/`
 - Firebase 雲端記事與任務：`honbin002-design/honbin-crm-auth-test`，以同網域 iframe 整合
