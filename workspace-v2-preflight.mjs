@@ -77,6 +77,10 @@ assert.match(page,/\.embedded body\{height:auto!important;min-height:0!important
 assert.match(page,/class="back-top alt" id="backTop"/);
 assert.match(page,/class="float-refresh" id="refreshCloud"/);
 assert.match(page,/id="refreshCloud"/);
+// Edit must scroll the owning CRM viewport when embedded, not just iframe body.
+assert.match(page,/function openEditor\(item=null\)/);
+assert.match(page,/window\.parent\.postMessage\(\{type:'HONBIN_CLOUD_NOTE_EDITOR'\},location\.origin\)/);
+assert.match(page,/\$\('noteContent'\)\.focus\(\{preventScroll:true\}\)/);
 assert.match(page,/id="notificationOverview"/);
 assert.match(page,/id="tabNotifications"/);
 assert.match(page,/<section class="notification-page" id="notificationOverview" hidden/);
