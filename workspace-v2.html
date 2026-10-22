@@ -85,6 +85,11 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
  </div></div>
  <input type="hidden" id="mode" value="PRIVATE">
  <section id="notesPanel" hidden>
+  <div class="panel" id="pendingInviteNotice" hidden>
+   <h2>收到共用記事簿邀請</h2>
+   <p id="pendingInviteSummary" class="hint" role="status">尚未確認邀請。</p>
+   <button type="button" id="openPendingInvites" class="alt">查看並接受邀請</button>
+  </div>
   <div class="panel"><h2>記事範圍</h2><div class="nav" style="grid-template-columns:1fr 1fr">
    <button type="button" id="privateNotes" class="active">私人記事</button><button type="button" id="sharedNotes">共用記事</button></div>
    <div id="groupWrap" hidden>
@@ -775,30 +780,59 @@ async function loadSentInvitations(){
  return sent;
 }
 async function loadReceivedInvitations(){
- if(!authenticated||!groups)return;
+ if(!authenticated||!groups)return 0;
  const s=session(),inbox=await groups.listInbox();check(s);
  const root=$('receivedInvites');root.replaceChildren();
- const pending=inbox.filter(x=>x.status==='PENDING');
- if(!pending.length)root.append(mk('p','目前沒有待接受的群組邀請。'));
- for(const invitation of pending){
+ // Only the signed-in Google account can accept its own invitation.
+ // An accepted invitation may need a safe membership-index repair.
+ const actionable=inbox.filter(x=>x.status==='PENDING'||
+  (x.status==='ACCEPTED'&&x.acceptedUid===uid));
+ const pending=actionable.filter(x=>x.status==='PENDING');
+ const notice=$('pendingInviteNotice');
+ notice.hidden=actionable.length===0;
+ $('pendingInviteSummary').textContent=pending.length
+  ?'你有 '+pending.length+' 筆待接受的共用記事簿邀請。按下方按鈕完成加入。'
+  :actionable.length?'可確認已接受的記事簿是否已顯示。':'';
+ if(!actionable.length)root.append(mk('p','目前沒有待接受的群組邀請。'));
+ for(const invitation of actionable){
+  const already=invitation.status==='ACCEPTED';
   const entry=mk('div');entry.className='line';
-  entry.append(mk('strong','共用群組邀請'),
+  entry.append(mk('strong',already?'已接受的共用記事簿邀請':'待接受的共用記事簿邀請'),
     mk('p','權限：'+notebookRoleLabel(invitation.role)));
-  const accept=mk('button','接受邀請');accept.type='button';accept.className='alt';
+  const accept=mk('button',already?'確認加入／修復記事簿清單':'接受邀請');
+  accept.type='button';accept.className='alt';
   accept.onclick=()=>run(async()=>{
-   if(!confirm('確認接受這個共用群組邀請？'))return;
+   const checkpoint=session();
+   if(!already&&!confirm('確認接受這個共用記事簿邀請？'))return;
    accept.disabled=true;
    try{
-    const result=await groups.acceptInvite(invitation);check(s);
-    if(!result.indexed)throw Error('INVITE_ACCEPTED_INDEX_PENDING');
-    await loadReceivedInvitations();check(s);
-    say('已完成加入群組；伺服器已確認。');
+    const result=await groups.acceptInvite(invitation);check(checkpoint);
+    if(!result.indexed){
+     say('已接受邀請，但記事簿清單尚未完成，請按「確認加入／修復記事簿清單」重試。');
+     await loadReceivedInvitations();check(checkpoint);return;
+    }
+    await loadGroups();check(checkpoint);
+    const joined=groupItems.find(g=>g.id===result.groupId);
+    if(!joined){
+     say('已接受邀請，但尚未從伺服器讀回記事簿，請按「重新讀取」。');
+     await loadReceivedInvitations();check(checkpoint);return;
+    }
+    selected=joined;
+    $('mode').value='SHARED';$('groupWrap').hidden=false;
+    $('privateNotes').classList.remove('active');$('sharedNotes').classList.add('active');
+    $('group').value=joined.id;
+    $('role').textContent='目前身分：'+notebookRoleLabel(joined.role);
+    clearEditor();tab('Notes');await loadNotes();check(checkpoint);
     inviteLoaded=false;ownerLoadDone=false;
+    say('已成功加入共用記事簿「'+joined.name+'」，可以查看記事與任務。');
+    await loadReceivedInvitations();check(checkpoint);
+    notice.hidden=true;
    }finally{accept.disabled=false}
   });
   entry.append(accept);root.append(entry);
  }
  $('receivedInviteManagement').hidden=false;receivedLoaded=true;
+ return pending.length;
 }
 $('inviteGroup').onchange=()=>run(async()=>{
  inviteGroupId=$('inviteGroup').value;
@@ -809,6 +843,11 @@ $('toggleInvite').onclick=()=>toggleInviteForm($('inviteForm').hidden);
 $('closeInvite').onclick=()=>toggleInviteForm(false);
 $('refreshSentInvites').onclick=()=>run(async()=>{
  await loadSentInvitations();$('sendInvite').disabled=false;
+});
+$('openPendingInvites').onclick=()=>run(async()=>{
+ tab('Settings');
+ await loadReceivedInvitations();
+ $('receivedInviteManagement').scrollIntoView({block:'start',behavior:'smooth'});
 });
 $('refreshReceived').onclick=()=>run(loadReceivedInvitations);
 $('inviteForm').onsubmit=event=>{
@@ -1209,7 +1248,17 @@ async function start(){
    }
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
-   tab('Notes');say('已登入，請選擇記事簿或任務群組。');
+   tab('Notes');say('已登入，正在核對你的共用記事簿邀請……');
+   try{
+    const waiting=await loadReceivedInvitations();
+    if(generation!==epoch)return;
+    say(waiting>0?'你有 '+waiting+' 筆待接受的共用記事簿邀請，請按「查看並接受邀請」。':
+      '已登入，請選擇記事簿或任務群組。');
+   }catch(inviteError){
+    if(generation!==epoch)return;
+    say('已登入，但暫時無法讀取共用記事簿邀請：'+
+      String(inviteError?.code||inviteError?.message||inviteError)+'。請到設定按重新讀取。');
+   }
    try{await openPushDeepLink()}catch(error){say('通知連結開啟失敗：'+String(error?.code||error?.message||error))}
   }catch(e){
    if(generation!==epoch)return;uid='';authenticated=false;$('app').hidden=false;tab('Settings');
