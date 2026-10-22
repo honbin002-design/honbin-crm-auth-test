@@ -13,6 +13,15 @@
 - 剩餘必要操作：由系統管理者在本機金鑰頁產生並複製一次性的配對金鑰，在 GitHub Actions Secrets 設定 `TEST_VAPID_PUBLIC_KEY`、`TEST_VAPID_PRIVATE_KEY` 和 `TEST_PUSH_CONTACT`（mailto: 自己控制的地址）。私鑰絕不可貼回聊天。此後仍需校驗目前 Firebase 正式 Rules 中訂閱 ACL（此前有發布讀回，但未在本輪獨立讀回完整 Rules）、跨帳號、兩支已加入主畫面的 iPhone 訂閱與關閉 App 接收測試。通過才把 CRM 公開金鑰配置及 sender 啟用旗標打開。
 - 不重做已 PASS／不啟用 Blaze、Cloud Functions、不切 Work 模式。GitHub Pages 的正式 CRM 與 Firestore Spark 主資料安全維持原狀。不要把「程式可運作」錯報為「iPhone 已收到通知」。
 
+## 2026-10-22｜手機通知 ACL 驗證施工（本輪）
+
+- 已用 TEST 專用 Firebase Admin 帳號執行**只讀** Firebase Rules REST API live readback；GitHub Actions Run `39771849577` 返回 `FIRESTORE_RULES_API_READ_DENIED_403_SAFE_HOLD`。此帳號能讀 Auth 與三個 notification collection-group indexes，但不具有 Firestore Rules 發布版內容讀取權限，**不得因此自動提升 IAM、覆蓋原有 Firestore Rules 或宣稱 ACL 已 PASS**。
+- 已將 `notification-deployed-rules-readonly.mjs` 留作人工讀回驗證，工作流程 `push-deployed-rules-readback-once.yml` 回復 `workflow_dispatch`（manual only）；無排程、無寫入、無 Secrets 外洩。
+- 正式登入 CRM 的**最高權限**「雲端記事與任務 → 設定」現會顯示原本已施工但被誤隱藏的「伺服器規則安全核對（唯讀）」與「手機通知帳號隔離驗證（唯讀）」；其他帳號、登出後仍隱藏。這兩個既有按鈕走目前 Firebase Auth ID token 與 `getDocFromServer` / `getDocsFromServer`，不能由服務帳號繞過 Firestore Rules；只測唯讀、沒有發送通知。已加 root-only 顯示回歸斷言。
+- GitHub Actions `Auth-only static safety checks` 最新 PASS，`TEST task V4/V5 Firestore emulator ACL` PASS，`pages build and deployment` 在 commit `90d563f3718` PASS。這些**不是**手機實機收信證據。
+- **下一個無法代按的實機步驟**：系統管理員由 iPhone 主畫面 CRM 開啟 → 雲端記事與任務 → 設定 → 「手機通知帳號隔離驗證（唯讀）」按「核對三項越權拒絕（唯讀）」。應有三個 `SERVER_DENIED_PASS`。同頁亦按「伺服器規則安全核對（唯讀）」核實本人訂閱的讀取（即使清單沒有資料）。若任何 HOLD 或 UNEXPECTED_ALLOWED，不得開通。之後需成員獨立帳號及兩支 iPhone 身分、訂閱、鎖屏通知驗收。
+- 正式 CRM `push-public-config.json` 僅有先前 verified PUBLIC VAPID 值；`subscriptionsEnabled=false`、`senderEnabled=false`，GitHub sender `TEST_PUSH_SEND_ENABLED` 未啟用。iPhone 系統通知依然 SAFE_HOLD；無新增費用或任何現有業務資料改動。
+
 ## 既有主架構（不可重建）
 - 正式 CRM：`honbin002-design/-hongbin-personal-crm-beta`，入口 `https://honbin002-design.github.io/-hongbin-personal-crm-beta/`
 - Firebase 雲端記事與任務：`honbin002-design/honbin-crm-auth-test`，以同網域 iframe 整合
