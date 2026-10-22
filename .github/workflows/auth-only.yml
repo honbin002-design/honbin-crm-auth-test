@@ -56,6 +56,8 @@ jobs:
         run: node workspace-v2-preflight.mjs
       - name: Verify notebook create and owner-only retirement (synthetic)
         run: node notebook-lifecycle-preflight.mjs
+      - name: Verify accepted invite directory recovery without network
+        run: node invite-membership-recovery-preflight.mjs
       - name: Verify task assignment, single completion, and nickname client behavior
         run: node task-nickname-client-preflight.mjs
       - name: Verify V4 publisher-date decisions, rejection and idempotent replay without real data
