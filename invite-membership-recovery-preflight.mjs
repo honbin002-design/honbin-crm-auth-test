@@ -90,6 +90,25 @@ function setup({failIndexOnce=false,status='PENDING'}={}){
  assert.equal(e.data.has(pointer),false,'no implied index repair or writes');
  assert.equal(e.indexAttempts(),0,'no unexpected member/index change');
 }
+// Invalid or unreadable membership state must fail closed, never downgrade.
+{
+ const e=setup();
+ e.data.set(member,{uid:UID,role:'UNKNOWN',status:'ACTIVE',invitationId:'legacy'});
+ const pending=(await e.api.listInbox())[0];
+ await assert.rejects(()=>e.api.acceptInvite(pending),/MEMBERSHIP_SERVER_STATE_UNEXPECTED_STOP/);
+ assert.equal(e.data.get(member).role,'UNKNOWN');
+ assert.equal(e.data.get(inbox).status,'PENDING');
+ assert.equal(e.data.has(pointer),false);
+}
+{
+ const e=setup();
+ e.data.set(member,{uid:UID,role:'ADMIN',status:'ACTIVE',invitationId:'legacy'});
+ e.data.set(inbox,{...e.data.get(inbox),role:'VIEWER'});
+ const pending=(await e.api.listInbox())[0];
+ await assert.rejects(()=>e.api.acceptInvite(pending),/ALREADY_ACTIVE_MEMBER_KEEP_EXISTING_ROLE/);
+ assert.equal(e.data.get(member).role,'ADMIN');
+ assert.equal(e.data.get(inbox).status,'PENDING');
+}
 // A missing current membership can still redeem a valid invitation.
 {
  const e=setup();
