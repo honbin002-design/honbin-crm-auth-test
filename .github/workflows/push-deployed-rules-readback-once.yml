@@ -1,9 +1,5 @@
-name: Read current deployed Firestore push rules (private, no writes)
+name: Manual deployed Firebase rules readback (safe hold)
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/push-deployed-rules-readback-once.yml'
   workflow_dispatch:
 permissions:
   contents: read
