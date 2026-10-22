@@ -2,6 +2,17 @@
 
 **狀態：STAGING_SAFE_HOLD（尚未實際送達 iPhone 系統通知，不得報成正式完成）**
 
+## 2026-10-22 18:57（台北時間）｜零費用續作，最新權威結論
+
+- 在原有 TEST 儲存庫 `main` 上完成免費施工，不增開任何付費服務，沒有碰 CRM 主資料、報價或其他非推播功能。
+- sender 現在額外強制既有**專用** `honbin-test-push-sender@honbin-crm-notes-spark.iam.gserviceaccount.com` 服務帳號，拒絕使用泛用 Firebase Admin 憑證（commit `463439c694`）。
+- 新增 `push-vapid-local-setup.html`：在 iPhone 瀏覽器以 Web Crypto 本機建立 P-256 VAPID 金鑰，不使用 Firebase、網路上傳、localStorage、IndexedDB，也不將私人金鑰寫入 GitHub 原始碼。生成是使用者直接按鈕操作；使用者必須將公開／私人金鑰分別儲存在 GitHub Actions encrypted secrets。新增加密金鑰及配對測試 `push-vapid-local-preflight.mjs`，現有 `auth-only` CI PASS。
+- 從加密 TEST service account 執行只讀 GitHub Actions run `39766548800`：`TEST_AUTH_READ_OK`、`TEST_TASK_CREATED_QUERY_OK`、`TEST_TASK_COMPLETED_QUERY_OK`、`TEST_NOTE_CREATED_QUERY_OK` 全部 PASS。只查三項索引及 Auth 讀取，不寫資料、不送通知。完成後已把該工作流程回復 manual-only。
+- 使用私人 GitHub Actions 環境執行零網路 VAPID Secret 探測 run `39766903442`，**三項確認未設定**：`TEST_VAPID_PUBLIC_KEY`、`TEST_VAPID_PRIVATE_KEY`、`TEST_PUSH_CONTACT`；保持 `PUSH_SENDER_STILL_DISABLED_SAFE_HOLD`。探測程式只顯示缺少的 Secret 名稱，不輸出任何憑證。新增 `push-secret-readiness-probe.mjs` 可在密鑰安裝後驗證公私鑰匹配，而不顯示內容。
+- 在能安全設定 GitHub encrypted repository secrets 的連線／介面可用之前，**不可自行把私鑰透過公開 GitHub 原始碼、檔案、對話或 console log 寫入**。此 ChatGPT GitHub connector 支援 GitHub 程式修改／CI 檢查，但不支援編輯 Repository Actions Secrets。
+- 剩餘必要操作：由系統管理者在本機金鑰頁產生並複製一次性的配對金鑰，在 GitHub Actions Secrets 設定 `TEST_VAPID_PUBLIC_KEY`、`TEST_VAPID_PRIVATE_KEY` 和 `TEST_PUSH_CONTACT`（mailto: 自己控制的地址）。私鑰絕不可貼回聊天。此後仍需校驗目前 Firebase 正式 Rules 中訂閱 ACL（此前有發布讀回，但未在本輪獨立讀回完整 Rules）、跨帳號、兩支已加入主畫面的 iPhone 訂閱與關閉 App 接收測試。通過才把 CRM 公開金鑰配置及 sender 啟用旗標打開。
+- 不重做已 PASS／不啟用 Blaze、Cloud Functions、不切 Work 模式。GitHub Pages 的正式 CRM 與 Firestore Spark 主資料安全維持原狀。不要把「程式可運作」錯報為「iPhone 已收到通知」。
+
 ## 既有主架構（不可重建）
 - 正式 CRM：`honbin002-design/-hongbin-personal-crm-beta`，入口 `https://honbin002-design.github.io/-hongbin-personal-crm-beta/`
 - Firebase 雲端記事與任務：`honbin002-design/honbin-crm-auth-test`，以同網域 iframe 整合
