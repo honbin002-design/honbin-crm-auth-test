@@ -2,6 +2,17 @@
 
 **狀態：TWO_IPHONES_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（兩支不同 Google 帳號的 iPhone 都已實際收到鎖定畫面測試通知；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 晚間｜第二支 iPhone 點通知返回 CRM 畫面 PASS；正式任務深層導覽仍未證明
+
+- 使用者提供第二支 iPhone 推播點擊後的實機截圖，畫面清楚可見 **鴻繽科技 CRM → 雲端記事與任務 → 通知**、共用群組「鴻繽」的「有新任務指派」、事件時間「10/22 下午05:15」、通知卡片「查看」。因此第二支 iPhone 的 **點通知進入 CRM 已 PASS/FROZEN**。沒有第二位帳號信箱畫面，因此此張不能單獨再證明登入狀態；此前「不同 Google 帳號」PASS 保留。
+- 此前發給第二支 iPhone 的系統測試通知為**無任務 ID 的通用 payload**：`kind:'SECOND_ACCOUNT_ONE_TIME_TEST_NO_PRIVATE_DATA'`，`sw.js` fallback 會開啟 CRM 首頁。截圖中的「有新任務指派」屬於**CRM 內建通知列表**，不應錯報成正式背景 sender 發送了該任務。畫面上方雖有「已開啟通知指定的任務」，但截圖仍在通知列表、含「查看」按鈕，尚不足證明本次由系統推播直接打開指定任務完整內容。任務深層連結與真正事件 sender 仍需另行驗證。
+- 已針對**已停用記事簿的殘留通知風險**新增兩層 fail-closed 安全：
+  1. `notification-recipient-router.mjs` 若 group 有 `deleteState` 則拒絕任務指派、完成、共用記事三種路由；
+  2. `notification-free-sender-REVIEW-ONLY.mjs` 在每次發送前重讀 `stillMember`，也拒絕 `deleteState` 的群組，即使舊成員紀錄仍 ACTIVE 或是原群組擁有者。
+  已新增合成 `notification-recipient-router-preflight.mjs` 與 `notification-sender-review-preflight.mjs` 防回歸檢查。**只施工程式，不修改 Firebase 正式資料、不開啟發送。**
+- 既有第一支 iPhone 訂閱/Apple 201/鎖定畫面/點擊 PASS 全保留；第二支 iPhone 訂閱/不同身分/EDITOR/Apple 201/鎖定畫面/點擊進 CRM PASS 全保留。
+- 正式多人發送持續 **SAFE_HOLD**：公開設定 `subscriptionsEnabled=true`、`senderEnabled=false`、`SPARK_SUBSCRIPTION_STAGING`，GitHub sender `TEST_PUSH_SEND_ENABLED` 未設為 `EXPLICITLY_APPROVED`；沒有新增費用。下一步是測試單筆任務/記事事件如何依權限投遞，驗證帳號隔離、撤銷後不再送，以及點「查看」真的出現指定任務詳情後才啟用廣泛正式發送；不要重送通用測試。
+
 ## 2026-10-22 22:47（台南）｜第二支 iPhone 重送／鎖定畫面實機 PASS（勿重做）
 
 - 第二支 iPhone 使用者上傳真實 iOS 鎖定畫面截圖，通知時間約 22:47，顯示「鴻繽科技 CRM 有新通知」、「from 鴻繽科技 CRM」、「點一下即可開啟 CRM 查看資訊」；該手機此前已確認為**不同 Google 帳號**的已註冊 iPhone，且「鴻繽」群組為 ACTIVE EDITOR，與管理員手機不同。
