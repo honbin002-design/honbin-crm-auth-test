@@ -28,6 +28,9 @@ if(missing.length){
    throw Error('KEY_PAIR_MISMATCH');
  }catch{throw Error('PUSH_PUBLIC_PRIVATE_KEY_PAIR_INVALID_SAFE_HOLD')}
  console.log('PUSH_VAPID_PAIR_AND_CONTACT_READBACK_PASS');
+ // This key is explicitly PUBLIC; expose only it so CRM setup can be completed
+ // without asking the owner to send any secret through a chat.
+ console.log('PUSH_PUBLIC_VAPID_FOR_CRM='+pub);
 }
 if(process.env.TEST_PUSH_SEND_ENABLED==='EXPLICITLY_APPROVED')
  throw Error('PUSH_SENDER_ACTIVE_UNEXPECTEDLY_REVIEW_REQUIRED');
