@@ -2,6 +2,14 @@
 
 **狀態：TWO_IPHONES_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（兩支不同 Google 帳號的 iPhone 都已實際收到鎖定畫面測試通知；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 23:28+｜第一支 iPhone 真實 TASK_COMPLETED 推播「點擊進已完成任務」｜實機 PASS／FROZEN
+
+- 使用者提供第一支 iPhone 的實機截圖並明確回報：「**有收到且進入到完成的頁面**」。畫面可見 CRM 指定任務「鴻繽」、管理員身分、已完成標籤、原任務「測試」細節，證明 2026-10-22 23:19 的真實任務完成 Apple Web Push 已成功到達 iPhone，且點選通知確實進入該任務的已完成清單與詳情。可標記 **TASK_COMPLETED 真實背景事件推播收件＋深層導覽 PASS/FROZEN**；不需重做，與先前無事件 ID 的通用推播分開記錄。
+- 此前後端對應 GitHub Actions run `39803632916`，`ONE_REAL_EVENT_KIND_TASK_COMPLETED`、`ONE_REAL_EVENT_TARGET_ORIGINAL_OWNER`、`ONE_REAL_EVENT_APPLE_ACCEPTED_201`；一次性 workflow/腳本已移除、全員自動 sender 保持 OFF。
+- 同一張截圖中，使用者提出 UI 新需求：iPhone 頁面兩顆浮動按鈕「重新整理」與「回頂端」位置**一起往下移**。正式 CRM GitHub repo `honbin002-design/-hongbin-personal-crm-beta` 已修改 `index.html` CSS：`#refreshCloudOuter`、`#backToTop` 由 `bottom:calc(100px + env(safe-area-inset-bottom,0px))` 改成 `bottom:calc(24px + env(safe-area-inset-bottom,0px))`，因此兩者同時下降 76 CSS px、仍保留 iOS 手勢安全區；順帶讓詳情頁 `#floatingGoBack` 保持同高度。加上 `tests/r73-simple-acceptance.cjs` iPhone WebKit 定位、對齊、畫面邊界及可點測試。GitHub 最新 commit `28d6fdc6e0` 待正式 CI final result/使用者 iPhone 實機驗收；不可把 code commit 誤稱已實機 PASS。
+- 尚未全面實機驗證的是 TASK_ASSIGNED、SHARED_NOTE_CREATED 的**真正 Apple 背景事件**及成員撤銷後拒送。既有兩台 iPhone 的通用收件及點擊、第二台 CRM 內任務「查看」、第一台 TASK_COMPLETED 深層導覽均 PASS/FROZEN。
+- 主網站推播配置維持 `subscriptionsEnabled=true`、`senderEnabled=false`、`SPARK_SUBSCRIPTION_STAGING`，正式排程仍關閉，不新增任何費用或修改正式資料。
+
 ## 2026-10-22 晚間｜真實任務事件推播首次 Apple 201／本人收件待驗收
 
 - 正式任務事件發送器有額外安全補強：再次核對「事件建立者或完成者」在群組內仍 ACTIVE；撤銷發布人時不應寄送舊事件；Apple 回應必須為 HTTP 201 或 202 才能將已發紀錄改為 SENT。既有 Auth-only static CI 已 PASS。
