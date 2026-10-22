@@ -2,6 +2,17 @@
 
 **狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 晚間｜第二支 iPhone 邀請顯示 SAFE_HOLD 的接續修正
+
+- 使用者第二支 iPhone 顯示「邀請狀態待核對，暫不可接受；目前無法從 Firebase 伺服器確認是否已有成員權限」，因此不能把先前靜態測試 PASS 誤稱該手機實機驗收 PASS。**本輪沒有刪除邀請、改角色、動任何業務資料。**
+- 核查 groupService：舊邀請卡住時，可能是待接受邀請所屬記事簿與已加入的「鴻繽」群組不同，或該群組已退休／規則拒絕無成員者的自我查詢。光看截圖不能確認是哪一個；禁止直接把 pending VIEWER 當成現在 EDITOR 應重新接受。
+- `firebase-group-service.mjs` 新增 `listGroupsFromServer()`，只從已登入 UID 的 groupIndex 執行 Firestore server-only 枚舉，逐筆 server-only 驗證群組與 ACTIVE 角色；`workspace-v2.html` 以這種正向證據識別已是成員的同群組舊邀請。若讀自己 member 路徑仍被 permission-denied，顯示分類原因與安全說明，**不假裝是可接受的邀請**，也不計入「待接受」數字。
+- `firebase-owner-member-service.mjs` 新增最高權限帳號專用 `revokeRedundantPendingInvite()`，必須交易核實：同一群組的 ownerUid、成員 UID 目前 ACTIVE 與角色、成員既有被接受的獨立邀請（同一 recipientEmail）、本次過時 PENDING 邀請與 sent index 均匹配，才只進行 `tx.update(obsolete,{status:'REVOKED'})` 一欄位修改。清除後重新 server readback 驗證舊邀請已 REVOKED 和原成員角色仍 ACTIVE 未變。UI 只有在管理員的 `ownerMembers.roster()` 驗證成員 email 已匹配時，才顯示「取消重複邀請（保留成員權限）」並要求管理員明確二次確認。沒有獲得同群組正向證據就**不顯示**此寫入按鈕。
+- 純記憶體合成測試 `redundant-invite-revocation-preflight.mjs` 覆蓋：原本 EDITOR 保持不變、跨群組拒絕、錯誤 email 拒絕、已撤銷成員拒絕、角色漂移拒絕、重複撤銷拒絕、非 root UID 拒絕；新 read-only 目錄模擬測試排除過期 pointer。雲端 repo 的最新 static run `39788549853`、V4 `39788549861`、V5 `39788550289` **PASS**；GitHub Pages `39788549297` **success**。
+- 正式 CRM `index.html` iframe 改用 `workspace-v2.html?embedded=1&v=20261022-invitation-acl-diagnostics` 強制 iPhone 快取更新。正式 repo Pages run `39788612263` **success**；全量 R73 WebKit `39788613701` 在本輪紀錄時仍未有最終 verdict，不得記為已 PASS。
+- 下一步先讓第二支 iPhone 用「重新整理」重新打開「設定 → 收到的共用群組邀請」，核對新分類。若顯示「已是群組成員，舊邀請不需接受」，無需按任何邀請；若顯示「無法確認／permission-denied」，代表還需要 root owner 查看該邀請所屬群組，由已有正向 evidence 的同群組管理員確認才可取消。**不要求重新做第一支推播等先前 PASS**。
+- 仍為 `subscriptionsEnabled=true`、`senderEnabled=false`、`SPARK_SUBSCRIPTION_STAGING`，所有付費服務保持停用；第二支手機實際鎖屏收件與多成員自動 sender 仍待驗證。
+
 ## 2026-10-22 21:21（台南時間）｜舊邀請判斷精修完成／不更改實際 EDITOR 權限
 
 - 本輪接續「已經是編輯者，為何又有待接受邀請」問題。**不能只憑兩張截圖斷言 VIEWER 邀請與 EDITOR 所屬同一個群組**：不同記事簿的角色互不衝突。
