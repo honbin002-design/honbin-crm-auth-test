@@ -235,6 +235,12 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
    <button id="checkLiveDenials" class="alt" type="button">核對三項越權拒絕（唯讀）</button>
    <p id="liveDenialsStatus" class="hint" role="status" aria-live="polite">尚未核對，不影響正常使用。</p>
   </div>
+  <div class="panel" id="pushWriteProbe" hidden>
+   <h2>本人手機訂閱寫入驗證（自動清除）</h2>
+   <p class="hint">僅最高權限帳號可執行。以一筆不含真實裝置金鑰的暫時測試紀錄，驗證本人可以寫入及讀回，隨即刪除並從 Firebase 伺服器核對已清除。不會要求 iPhone 通知權限、建立真正訂閱或寄送通知。</p>
+   <button id="checkPushWriteProbe" class="alt" type="button">驗證本人訂閱可寫入並清除</button>
+   <p id="pushWriteProbeStatus" class="hint" role="status" aria-live="polite">尚未核對。原本的三項越權拒絕 PASS 不需重做。</p>
+  </div>
   <div id="advancedTechnicalPanel" hidden><p id="rulesOwnerLink" hidden></p></div>
  </section>
 </main>
@@ -252,6 +258,7 @@ import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebas
 import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261022-dedicated-inbox';
 import {attachInstalledCRMPushBridge} from './firebase-installed-crm-push-bridge.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
+import {verifyOwnerSubscriptionWrite} from './firestore-push-write-probe.mjs';
 // Explicit fail-closed gate until the owner reviews and deploys TEST-only Rules.
 const TASK_RULES_ENABLED=true; // Existing V2 task writes are live.
 const TASK_V3_RULES_ENABLED=true; // Existing TEST V3 rules live.
@@ -1269,6 +1276,30 @@ $('checkLiveDenials').onclick=()=>run(async()=>{
    :'安全 HOLD：有未預期允許或未能核對，暫停新功能啟用。');
 });
 
+$('checkPushWriteProbe').onclick=()=>run(async()=>{
+ if(!authenticated||!ownerMembers||!auth?.currentUser)throw Error('僅最高權限登入後可測試');
+ const checkpoint=session(),user=auth.currentUser,button=$('checkPushWriteProbe'),out=$('pushWriteProbeStatus');
+ button.disabled=true;
+ out.textContent='正在核對本人訂閱寫入、伺服器讀回與自動清除……';
+ try{
+  const result=await verifyOwnerSubscriptionWrite({
+   db,sdk,currentUid:()=>auth.currentUser?.uid,
+   identity:{uid:user.uid,email:user.email,emailVerified:user.emailVerified,providerId:'google.com'},
+   uuid:()=>window.crypto.randomUUID()
+  });
+  check(checkpoint);
+  if(result.ok){
+   out.textContent='SERVER_WRITE_READBACK_CLEANUP_PASS：本人寫入／讀回／清除三項完成，沒有留下測試訂閱。尚未啟用手機背景推播。';
+  }else{
+   out.textContent='SAFE_HOLD：'+(result.code||'驗證未完成')+
+    '。寫入讀回：'+(result.writeReadback?'PASS':'未通過')+
+    '；伺服器清除：'+(result.cleaned?'PASS':'未確認')+
+    (result.cleanupPath?'；請提供畫面以安全確認測試路徑是否清除：'+result.cleanupPath:'')+
+    '。不得啟用推播。';
+  }
+ }finally{button.disabled=false}
+});
+
 $('login').onclick=()=>{if(!auth)return;sdk.signInWithPopup(auth,new sdk.GoogleAuthProvider()).catch(e=>say(String(e?.code||e?.message||e)))};
 $('logout').onclick=()=>{if(auth)sdk.signOut(auth).catch(e=>say(String(e?.code||e?.message||e)))};
 async function start(){
@@ -1293,7 +1324,7 @@ async function start(){
   $('inviteEmail').value='';$('inviteRole').value='VIEWER';$('inviteForm').hidden=true;
   $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();$('rulesOwnerLink').hidden=true;
   // Device/notification ACL probes are owner-only diagnostics, never public settings.
-  $('liveRulesReadOnly').hidden=true;$('liveDenialReadOnly').hidden=true;
+  $('liveRulesReadOnly').hidden=true;$('liveDenialReadOnly').hidden=true;$('pushWriteProbe').hidden=true;
   items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
   if(!user){
@@ -1323,7 +1354,7 @@ async function start(){
     $('ownerManagement').hidden=false;$('rulesOwnerLink').hidden=false;
     // Live Firebase client denial probes require the actual signed-in identity.
     // Expose read-only checks to root owner without exposing private subscriptions.
-    $('liveRulesReadOnly').hidden=false;$('liveDenialReadOnly').hidden=false;
+    $('liveRulesReadOnly').hidden=false;$('liveDenialReadOnly').hidden=false;$('pushWriteProbe').hidden=false;
    }
    $('saveNick').disabled=!PROFILE_RULES_ENABLED;
    await showNick();if(generation!==epoch)return;
