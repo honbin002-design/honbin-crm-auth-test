@@ -1,6 +1,15 @@
 # iPhone CRM Web Push｜安全施工交接｜2026-10-22
 
-**狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
+**狀態：TWO_IPHONES_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（兩支不同 Google 帳號的 iPhone 都已實際收到鎖定畫面測試通知；正式多人任務與記事背景發送仍未啟用）**
+
+## 2026-10-22 22:47（台南）｜第二支 iPhone 重送／鎖定畫面實機 PASS（勿重做）
+
+- 第二支 iPhone 使用者上傳真實 iOS 鎖定畫面截圖，通知時間約 22:47，顯示「鴻繽科技 CRM 有新通知」、「from 鴻繽科技 CRM」、「點一下即可開啟 CRM 查看資訊」；該手機此前已確認為**不同 Google 帳號**的已註冊 iPhone，且「鴻繽」群組為 ACTIVE EDITOR，與管理員手機不同。
+- GitHub Actions 指定一次性 run `39795231630` 產生了**兩次執行 attempt**。第 1 次 job `119880764246` 記錄 `2026-10-22T14:24:04Z SECOND_APPROVED_EDITOR_ONE_SHOT_APPLE_ACCEPTED_201`；第 2 次 job `119892429706` 記錄 `2026-10-22T14:46:51Z SECOND_APPROVED_EDITOR_ONE_SHOT_APPLE_ACCEPTED_201`。兩次均有 `NO_OTHER_MEMBER_NOTIFIED_NO_FIRESTORE_WRITES_SENDER_STAYS_OFF`，最多每次 1 則，沒有寫 Firestore。使用者看到的截圖與第二次 22:46:51 台南時間的重送吻合。**不把只有 Apple HTTP 201 當成實機收件；這次另有使用者手機實拍，因此標記 END_TO_END_DELIVERY_PASS。**
+- 第二支手機「訂閱、身分獨立、目前 EDITOR 角色、Apple 接受、鎖定畫面收件」正式 **PASS/FROZEN**。第二支手機**通知點擊是否開啟 CRM 尚未驗收**；具體任務／共用記事推播事件、群組隔離與取消權限後不送仍未驗收。
+- 已在本輪移除一度可被觸發的一次性 GitHub workflow `.github/workflows/second-iphone-one-shot-once.yml`（commit `83fcd16125b8cb81a6172f5ff33c680a888538ad`）以及一次性專用 sender JS（commit `024ee5f758cc039e26905de7d4d3c01bc8a14c2c`），防止未來重新執行；不會設定新排程。
+- 正式 CRM 公開設定核對為 `subscriptionsEnabled=true`、`senderEnabled=false`、`environment=SPARK_SUBSCRIPTION_STAGING`，既有 GitHub 5 分鐘發送器仍鎖定，**免費 Spark 無升級、無付費資源**。
+- 後續最小使用者驗收：請第二支 iPhone 的持有人**點這次通知**，確認進入原本 CRM 並維持該成員 Google 登入；不再傳送更多重複測試通知。下一階段才做真實任務／共用記事事件導覽與收件人隔離，不重做已通過之兩台 iPhone 收件測試。
 
 ## 2026-10-22 22:13｜已停用測試記事簿舊邀請：正式 Firebase 單筆撤回 PASS
 
