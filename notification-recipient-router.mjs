@@ -8,6 +8,9 @@ const activeMember=m=>m&&valid(m.uid)&&m.status==='ACTIVE'&&roles.has(m.role);
 function membership(group,members){
  if(!group||!valid(group.id)||!valid(group.ownerUid)||!Array.isArray(members))
   throw Error('INVALID_GROUP_CONTEXT');
+ // A retired notebook may retain historical ACTIVE member documents; those
+ // records must NEVER authorize new device notifications after retirement.
+ if(group.deleteState)throw Error('RETIRED_GROUP_NOTIFICATION_STOP');
  const allowed=new Set([group.ownerUid]);
  for(const m of members)if(activeMember(m))allowed.add(m.uid);
  return allowed;
