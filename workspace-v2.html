@@ -785,8 +785,11 @@ async function loadReceivedInvitations(){
  const root=$('receivedInvites');root.replaceChildren();
  // Only the signed-in Google account can accept its own invitation.
  // An accepted invitation may need a safe membership-index repair.
+ const alreadyAccepted=inbox.some(x=>x.status==='ACCEPTED'&&x.acceptedUid===uid);
+ const visibleIds=new Set(alreadyAccepted
+  ?(await groups.listGroups()).map(g=>g.id):[]);check(s);
  const actionable=inbox.filter(x=>x.status==='PENDING'||
-  (x.status==='ACCEPTED'&&x.acceptedUid===uid));
+  (x.status==='ACCEPTED'&&x.acceptedUid===uid&&!visibleIds.has(x.groupId)));
  const pending=actionable.filter(x=>x.status==='PENDING');
  const notice=$('pendingInviteNotice');
  notice.hidden=actionable.length===0;
