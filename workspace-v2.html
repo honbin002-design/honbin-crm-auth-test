@@ -857,9 +857,13 @@ async function loadReceivedInvitations(){
  const root=$('receivedInvites');root.replaceChildren();
  // Only the signed-in Google account can accept its own invitation.
  // An accepted invitation may need a safe membership-index repair.
- const alreadyAccepted=inbox.some(x=>x.status==='ACCEPTED'&&x.acceptedUid===uid);
- let visibleGroups=alreadyAccepted?await groups.listGroups():groupItems;check(s);
- let visibleIds=new Set(visibleGroups.map(g=>g.id));
+ // Never rely on a cached member directory to decide if an old invitation
+ // can be accepted. This is a bounded, identity-scoped SERVER read only.
+ let visibleGroups=[];
+ try{visibleGroups=await groups.listGroupsFromServer();check(s)}
+ catch(error){check(s);visibleGroups=[]}
+ const visibleIds=new Set(visibleGroups.map(g=>g.id));
+ const liveRoles=new Map(visibleGroups.map(g=>[g.id,g.role]));
  // A PENDING inbox record is not proof that the recipient has no access:
  // members may already be EDITOR/ADMIN through an earlier invitation.
  // Read the current role from the Firestore server before showing "Accept".
@@ -867,22 +871,20 @@ async function loadReceivedInvitations(){
  for(const invitation of inbox){
   if(invitation.status!=='PENDING'){checked.push(invitation);continue}
   try{
-   const activeRole=await groups.currentMembershipRole(invitation.groupId);check(s);
+   const activeRole=liveRoles.get(invitation.groupId)||
+    await groups.currentMembershipRole(invitation.groupId);check(s);
    checked.push({...invitation,activeRole:activeRole||null});
   }catch(error){
    check(s);
-   // Never offer a role-changing Accept button when own membership cannot
-   // be verified; display an explicit safe-hold instead.
-   checked.push({...invitation,membershipCheckFailed:true});
+   // A missing/retired group may deny even the recipient's own member GET.
+   // Keep the offer disabled but make the reason visible (no UID/keys).
+   const code=String(error?.code||error?.message||'UNKNOWN');
+   checked.push({...invitation,membershipCheckFailed:true,
+    membershipFailure:/permission-denied/.test(code)?'權限拒絕（permission-denied）':
+      /unavailable|network|deadline/.test(code)?'伺服器暫時無法連線':'伺服器無法驗證成員資料'});
   }
  }
  const stale=checked.filter(x=>x.status==='PENDING'&&x.activeRole);
- if(stale.length&&!alreadyAccepted){
-  // A newly signed-in member's groupItems can be empty before the first
-  // directory load. Confirm its actual pointer once before offering repair.
-  visibleGroups=await groups.listGroups();check(s);
-  visibleIds=new Set(visibleGroups.map(g=>g.id));
- }
  const blocked=checked.filter(x=>x.status==='PENDING'&&x.membershipCheckFailed);
  const actionable=checked.filter(x=>(x.status==='PENDING'&&!x.activeRole&&!x.membershipCheckFailed)||
   (x.status==='ACCEPTED'&&x.acceptedUid===uid&&!visibleIds.has(x.groupId)));
@@ -916,8 +918,9 @@ async function loadReceivedInvitations(){
  }
  for(const oldInvite of blocked){
   const entry=mk('div');entry.className='line';
-  entry.append(mk('strong','邀請狀態待核對，暫不可接受'),
-   mk('p','目前無法從 Firebase 伺服器確認是否已有成員權限。為避免覆蓋 EDITOR/ADMIN，暫停接受；請按「重新讀取」或由管理員核對。'));
+  entry.append(mk('strong','這筆舊邀請目前無法確認，已暫停接受'),
+   mk('p','原因：'+oldInvite.membershipFailure+'。該邀請可能屬於另一個記事簿或已失效；為保護目前 EDITOR／ADMIN 權限，不會重新加入或更改角色。'),
+   mk('p','此項不計入待接受邀請；需要管理員核對邀請所屬記事簿，再決定是否取消過期邀請。'));
   root.append(entry);
  }
  for(const invitation of actionable){
