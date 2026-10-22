@@ -64,7 +64,7 @@ async function main(){
  async function stillMember(groupId,uid){
   const groupRef=db.collection('groups').doc(groupId);
   const live=await groupRef.get();
-  if(!live.exists)return false;
+  if(!live.exists||live.data().deleteState)return false;
   if(live.data().ownerUid===uid)return true;
   const member=await groupRef.collection('members').doc(uid).get();
   return member.exists&&member.data().status==='ACTIVE'&&
