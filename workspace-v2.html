@@ -52,6 +52,10 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .notice-row>div{flex:1 1 160px;min-width:0}
 .notice-row button{min-width:100px;flex:0 0 auto}
 .notice-row[data-unread="true"]{border-left:4px solid #2862a2;padding-left:9px;background:#f8fbff}
+.notification-return-action{margin:0 0 12px;padding:8px 0;border-bottom:1px solid #d8e4f0}
+.notification-return-action button{display:inline-flex;align-items:center;justify-content:center;
+ min-height:44px;max-width:100%;padding:10px 16px;white-space:normal}
+@media(max-width:520px){.notification-return-action button{width:100%;margin:0!important}}
 .notification-overview button{max-width:100%}
 @media(max-width:440px){.notice-row button{width:100%}.float-refresh{font-size:.9rem;padding:10px 12px}}
 .back-top{position:fixed;right:max(14px,calc((100vw - 760px)/2 + 14px));bottom:calc(16px + env(safe-area-inset-bottom));z-index:5;box-shadow:0 4px 14px #20334d33}
@@ -1308,6 +1312,10 @@ async function start(){
       if(inviteGroupId)await loadSentInvitations();check(ss);
      }
     },
+    getCurrentTab:()=>['Notes','Tasks','Settings'].find(name=>
+     $('tab'+name).classList.contains('active'))||'Notes',
+    restoreTab:name=>tab(['Notes','Tasks','Settings'].includes(name)?name:'Notes',
+     {skipTaskLoad:true}),
     openItem:async event=>{
      const ss=session(),previous=location.pathname+location.search+location.hash;
      const dest=new URL(location.href);
