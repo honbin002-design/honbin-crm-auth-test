@@ -1,0 +1,28 @@
+name: One-time TEST sender bookkeeping write/read/delete gate (zero paid resources)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/push-sender-write-gate-once.yml'
+permissions:
+  contents: read
+jobs:
+  minimal-two-synthetic-records:
+    if: github.repository == 'honbin002-design/honbin-crm-auth-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check strict synthetic probe syntax
+        run: node --check push-sender-minimal-write-gate.mjs
+      - name: Install existing Firebase package without installer hooks
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts firebase-admin@14.5.0
+      - name: Create, server read, clean up two throwaway sender gate docs
+        env:
+          TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
+          TEST_PUSH_SEND_ENABLED: ${{ vars.TEST_PUSH_SEND_ENABLED }}
+        run: node push-sender-minimal-write-gate.mjs
+# No push sent, no task/note/user/subscription modification.
