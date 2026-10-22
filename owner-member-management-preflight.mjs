@@ -14,7 +14,11 @@ assert.equal(isRootOwnerIdentity({uid:'owner_123',email:ROOT_OWNER_EMAIL,
 assert.match(source,/getDocFromServer/);
 assert.match(source,/await runTransaction/);
 assert.match(source,/tx.update\(member,\{role:nextRole\}\)/);
-assert.doesNotMatch(source,/deleteDoc|setDoc|batch\.set/);
+// Restrict the role-change path; account approval is separately protected.
+const roleOnly=source.slice(source.indexOf('async function changeRole('),
+ source.indexOf('// Global account approval and notebook invitation'));
+assert.match(roleOnly,/tx.update\(member,\{role:nextRole\}\)/);
+assert.doesNotMatch(roleOnly,/deleteDoc|setDoc|batch\.set|tx\.set/);
 assert.match(html,/id="ownerManagement" hidden/);
 assert.match(html,/isRootOwnerIdentity\(rootIdentity\)/);
 assert.match(html,/ownerMembers\.changeRole/);
