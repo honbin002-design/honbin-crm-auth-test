@@ -1,0 +1,25 @@
+name: One-time read-only accepted-editor invitation audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-invitation-live-readback.yml'
+permissions:
+  contents: read
+jobs:
+  compare-live-invites:
+    if: github.repository == 'honbin002-design/honbin-crm-auth-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install existing pinned Firebase Admin (no scripts)
+        run: npm install --no-save --omit=dev --ignore-scripts --no-audit --no-fund
+      - name: Firestore LIVE diagnostic (read-only, aggregated counts only)
+        env:
+          TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: node diagnose-accepted-editor-pending-invites-readonly.mjs
+# NO writes, no root role change, no push, no billing.
