@@ -249,7 +249,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
 <script type="module">
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
 import {noteService} from './firebase-note-service.mjs?v=20261021-paging';
-import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261022-preserve-existing-roles';
+import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261022-safe-existing-member-v2';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
