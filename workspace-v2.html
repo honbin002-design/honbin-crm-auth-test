@@ -275,7 +275,19 @@ function renderNotes(){
   const btn=mk('button',mayWrite()?'開啟／編輯':'查看');btn.className='alt';btn.addEventListener('click',()=>{
    if(mayWrite())openEditor(item);
    else {const p=mk('p',item.content);p.className='note-content';p.style.marginTop='8px';line.append(p);btn.disabled=true}
-  });line.append(btn);root.append(line);
+  });line.append(btn);
+  if($('mode').value==='PRIVATE'||selected?.role==='ADMIN'){
+   const del=mk('button','刪除記事');del.className='alt';
+   del.setAttribute('aria-label','刪除記事：'+item.title);
+   del.addEventListener('click',()=>run(async()=>{
+    const s=session(),sc=scope();
+    if(sc.mode==='SHARED'&&selected?.role!=='ADMIN')throw Error('NOTEBOOK_ADMIN_REQUIRED');
+    if(!confirm('確定刪除記事「'+item.title+'」？刪除後不會顯示在記事列表。'))return;
+    await notes.softDelete({...sc,noteId:item.id,expectedVersion:item.version});
+    check(s);await loadNotes();check(s);say('記事已刪除。');
+   }));line.append(del);
+  }
+  root.append(line);
  }
 }
 // Push links are only hints; group and note/task reads remain server-authorized.
@@ -334,6 +346,7 @@ async function loadGroups(){
  if(taskSelected)taskGroup.value=taskSelected.id;
  $('taskScopeHint').textContent=taskSelected?'目前任務群組：'+taskSelected.name+'｜你的身分：'+notebookRoleLabel(taskSelected.role):'目前沒有可使用的多人群組，請到設定中的進階管理加入。';
  $('newNote').disabled=!mayWrite();
+ $('retireNotebook').hidden=!selected||selected.ownerUid!==uid;
 }
 function taipeiDateKey(){
  const parts=Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
@@ -906,6 +919,42 @@ $('sharedNotes').onclick=()=>changeNoteMode('SHARED');
 $('group').onchange=()=>run(async()=>{
  selected=groupItems.find(x=>x.id===$('group').value)||null;
  await reload();say('已切換共用記事簿。');
+});
+$('toggleNotebookCreate').onclick=()=>{
+ const open=$('notebookCreateForm').hidden;
+ $('notebookCreateForm').hidden=!open;
+ if(open)$('newNotebookName').focus();
+};
+$('cancelNotebookCreate').onclick=()=>{
+ $('notebookCreateForm').hidden=true;$('newNotebookName').value='';
+};
+$('notebookCreateForm').onsubmit=event=>{
+ event.preventDefault();void run(async()=>{
+  const title=$('newNotebookName').value.trim(),s=session();
+  if(!title||title.length>120)throw Error('請輸入 1 至 120 字的記事簿名稱');
+  $('createNotebook').disabled=true;
+  try {
+   const result=await groups.createGroup(title);check(s);
+   $('newNotebookName').value='';$('notebookCreateForm').hidden=true;
+   selected=result;await loadGroups();check(s);
+   await loadNotes();check(s);
+   $('notebookActionStatus').textContent='已建立記事簿：'+title;
+  }finally{$('createNotebook').disabled=false}
+ });
+};
+$('retireNotebook').onclick=()=>run(async()=>{
+ const target=selected,s=session();
+ if(!target||target.ownerUid!==uid)throw Error('只有建立者可以刪除記事簿');
+ if(!confirm('確定停止使用「'+target.name+'」？所有成員都將無法再使用這本記事簿。'))return;
+ const typed=prompt('請輸入記事簿完整名稱，以確認刪除', '');
+ if(typed!==target.name){say('記事簿名稱不一致，已取消。');return}
+ const result=await groups.retireNotebook(target.id,typed);check(s);
+ if(!result.locked)throw Error('NOTEBOOK_LOCK_NOT_VERIFIED');
+ selected=null;taskSelected=null;clearEditor();await loadGroups();check(s);
+ if(selected)await loadNotes();
+ else {items=[];$('notesList').textContent='目前沒有共用記事簿。'}
+ $('notebookActionStatus').textContent='記事簿已停用並移出清單。雲端原始資料仍保留，等待安全清除。';
+ say('記事簿已從清單移除，成員將無法再使用。');
 });
 $('taskGroup').onchange=()=>run(async()=>{
  taskSelected=groupItems.find(g=>g.id===$('taskGroup').value)||null;
