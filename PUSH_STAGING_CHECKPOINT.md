@@ -2,6 +2,14 @@
 
 **狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 20:21｜第一支 iPhone 推播點擊開啟 CRM｜實機 PASS／FROZEN
+
+- 使用者提供第二張 iPhone 實機截圖，確認**實際點擊先前已收到的鎖定畫面通用通知後，已回到「鴻繽科技 CRM」既有 App**，畫面停留在「雲端記事與任務 → 設定」，Google 帳號 `honbin002@gmail.com` 仍保持登入；沒跳往第三方網站。對應 push `notificationclick`／啟動 CRM 的端到端驗收 **PASS**，不得重做。
+- 第一支 iPhone 的四項完成證據鎖定：實際 Firebase 本人訂閱建立與伺服器讀回 PASS；Apple HTTP 201 PASS；鎖定畫面收到系統通知 PASS；點擊後返回同一 CRM PASS。
+- 上述通知是**通用測試訊息**、不含任務 ID／記事 ID，故本輪不能推論具體任務、共用記事的點擊深層導覽已通過，也不能推論所有成員會收到。
+- 下一階段需要**另一支 iPhone、另一個已由最高權限帳號核准的 Google 帳號**：Safari 開啟同一正式 CRM 加入主畫面、以成員自己的 Google 帳號登入、在雲端記事與任務標題右側自行按「登記這支 iPhone（測試）」並允許通知；取得 Firebase 訂閱讀回 PASS 後，再執行**只針對第二位成員一支裝置**的有限測試，驗證越權拒絕、群組成員/撤銷後拒送，以及 task/note 深層導覽。不同帳號不得共用最高權限登入身分。
+- 此時安全發布狀態仍為 `subscriptionsEnabled=true`、`senderEnabled=false`、`environment=SPARK_SUBSCRIPTION_STAGING`；一鍵測試工作流程已移除，五分鐘排程在 `TEST_PUSH_SEND_ENABLED` 未設為 `EXPLICITLY_APPROVED` 時絕不執行。保持 Firebase Spark、零新增費用、正式資料不更動。
+
 ## 2026-10-22 18:57（台北時間）｜零費用續作，最新權威結論
 
 - 在原有 TEST 儲存庫 `main` 上完成免費施工，不增開任何付費服務，沒有碰 CRM 主資料、報價或其他非推播功能。
