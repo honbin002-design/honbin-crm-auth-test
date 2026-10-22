@@ -23,7 +23,7 @@ export function ownerMemberService({db,sdk,identity,currentUid}){
  const inviteRef=(email,inviteId)=>doc(db,'inboxes',String(email).toLowerCase(),'invites',id(inviteId,'INVITE_ID'));
  const approvalEmail=value=>{
   const v=String(value||'').trim().toLowerCase();
-  if(v===ROOT_OWNER_EMAIL||v.length>254||!/^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/.test(v))
+  if(v===ROOT_OWNER_EMAIL||v.length>254||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v))
    throw Error('INVALID_APPROVAL_EMAIL');
   return v;
  };
