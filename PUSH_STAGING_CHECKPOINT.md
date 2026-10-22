@@ -2,6 +2,16 @@
 
 **狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 22:13｜已停用測試記事簿舊邀請：正式 Firebase 單筆撤回 PASS
+
+- 使用者明確確認那本是**已刪除的測試記事簿**。既有程式實際為將 group root 設定 `deleteState=DELETING` 並移出可見列表，並非直接硬刪 Firestore 所有子資料。舊的 `PENDING VIEWER` 邀請沒有同步處理，造成第二支手機殘留提示。
+- 在之前已用 Firebase server READBACK 驗證「鴻繽」正確具有三位 ACTIVE EDITOR、唯一另一筆 PENDING 來自 root-owner 已停用的不同記事簿之後，執行一次性 GitHub Actions `39793705292`，job `119875730458`，在寫入之前從 Firebase server 重讀並確認全部條件：同一 verified root 擁有、正好三位 ACTIVE EDITOR、正好一筆已退役群組的 PENDING VIEWER、對應 sentInvites 完整一致，才只把這筆 inbox 的 `status` 從 `PENDING` 更新為 `REVOKED`。
+- GitHub 執行紀錄明確回報 `RETIRED_TEST_INVITE_REVOKED_ONE_STATUS_FIELD_PASS`、`ACTIVE_PRIMARY_EDITOR_ROLE_PRESERVED_PASS`、`NO_GROUP_NOTES_TASKS_OR_MEMBERS_MODIFIED_PASS`。**正式伺服器狀態已撤銷，是真實 LIVE PASS，不是模擬**；舊邀請歷史文件還在，但不應再被當成待接受。
+- 一次性寫入工作流程已移除（commit `40eb16b39223df6fc102a90d5f3d273df6889828`），不能再次自動執行；不留排程。
+- 往後的 `firebase-group-service.mjs` `retireNotebook()` 已加上「先限量從伺服器查所有發出的邀請 → 逐筆驗證 → 撤回所有 PENDING 及伺服器讀回 → 最後才將記事簿設成 DELETING」。ACCEPTED 歷史不動，驗證失敗不設停用鎖。新增 `notebook-lifecycle-preflight.mjs` 合成測試：已接受邀請不變／順序正確／不一致發送紀錄零寫入拒絕。必須等待最新 CI 回報才能標記自動測試 PASS。
+- 主 CRM 的第一支 iPhone 推播 4 項 PASS、第二支 iPhone 訂閱和獨立帳號 PASS 持續保留；尚未開啟多人自動發送，沒有新增費用。
+- 後續僅需第二支 iPhone 重新讀取「設定 → 收到的共用群組邀請」，應顯示沒有待接受邀請；若介面有歷史資料可見，狀態應已撤回，不可再按接受。不必重做已 PASS。
+
 ## 2026-10-22 22:05（台南）｜舊 PENDING 邀請原因已用正式 Firebase READBACK 確診
 
 - 使用者在第一支最高權限 iPhone 的「鴻繽 → 查看此群組邀請紀錄」截圖顯示三位成員的 `已接受／EDITOR`，自己**完全沒有修改**；「收到的共用群組邀請」顯示目前沒有待接受邀請。第二支成員 iPhone 此前顯示一筆原角色 VIEWER 的 PENDING，但 `Firebase permission-denied` SAFE_HOLD。
