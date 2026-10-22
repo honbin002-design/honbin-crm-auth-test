@@ -90,7 +90,15 @@ assert.match(page,/成員（UID /);
 assert.doesNotMatch(page,/return \(await nicknameFor\(id\)\.catch\(\(\)=>''\)\)\|\|'未設定暱稱'/);
 
 
-assert.match(page,/TEST 共用暱稱已開放/);
+assert.match(page,/輸入其他成員看得到的顯示名稱/);
+assert.match(page,/id="notebookCreateForm"/);
+assert.match(page,/id="retireNotebook"/);
+assert.match(page,/groups\.createGroup\(title\)/);
+assert.match(page,/groups\.retireNotebook\(target\.id,typed\)/);
+assert.match(page,/notes\.softDelete\(/);
+assert.match(page,/target\.ownerUid!==uid/);
+assert.match(page,/記事簿名稱不一致/);
+assert.doesNotMatch(page,/<span class="pill">TEST 驗收中<\/span>/);
 assert.match(service,/getDocFromServer\(ref\)/);
 assert.match(service,/NICKNAME_SERVER_READBACK_MISMATCH/);
 assert.match(page,/const TASK_RULES_ENABLED=true/);
