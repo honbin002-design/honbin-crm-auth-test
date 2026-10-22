@@ -149,8 +149,8 @@ export function ownerMemberService({db,sdk,identity,currentUid}){
    if(!obsoleteSnap.exists()||obsoleteSnap.data().status!=='PENDING'||
       obsoleteSnap.data().groupId!==groupId||
       !sameEmail(obsoleteSnap.data().recipientEmail,email)||
-      !obsoleteSent.exists()||obsoleteSent.data().groupId!==groupId||
-      !sameEmail(obsoleteSent.data().recipientEmail,email))
+      !sentSnap.exists()||sentSnap.data().groupId!==groupId||
+      !sameEmail(sentSnap.data().recipientEmail,email))
     throw Error('OLD_PENDING_INVITE_NOT_VERIFIED_STOP');
    // Exact same group, same verified email; one safe status-only mutation.
    tx.update(obsolete,{status:'REVOKED'});
