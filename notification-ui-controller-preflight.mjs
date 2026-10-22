@@ -52,6 +52,9 @@ const config={
  openItem:async()=>{opened++;return true},
  onStatus:text=>status.push(text)
 };
+$('notificationCenter').hidden=true;
+$('notificationOverview').hidden=true;
+$('notificationCount').hidden=true;
 const app=cloudNotificationController(config);
 app.start();
 await new Promise(resolve=>setTimeout(resolve,0));
