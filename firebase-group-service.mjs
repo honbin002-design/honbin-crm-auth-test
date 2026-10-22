@@ -120,6 +120,19 @@ export function groupService({db,sdk,identity}) {
    const result=await getDocs(collection(db,'inboxes',mail,'invites'));
    return result.docs.map(item=>({id:item.id,...item.data()}));
  }
+ // Live, own-membership lookup. Never infer access from an invitation's role.
+ // This is intentionally a server read so a stale PENDING invite cannot
+ // overwrite an existing EDITOR/ADMIN membership with VIEWER.
+ async function currentMembershipRole(groupId) {
+   path(groupId);
+   if(typeof sdk.getDocFromServer!=='function')throw Error('MEMBERSHIP_SERVER_READ_REQUIRED');
+   const snap=await sdk.getDocFromServer(member(groupId));
+   if(snap.metadata?.fromCache)throw Error('MEMBERSHIP_SERVER_READ_REQUIRED');
+   if(!snap.exists())return null;
+   const value=snap.data();
+   if(value.uid!==uid)throw Error('MEMBERSHIP_OWNER_MISMATCH_STOP');
+   return value.status==='ACTIVE'&&ROLES.includes(value.role)?value.role:null;
+ }
  async function ensureIndex(groupId) {
    // The member's server-side ACTIVE role, not a previous invitation,
    // authorizes directory recovery. Reject caches and revoked memberships.
@@ -157,6 +170,10 @@ export function groupService({db,sdk,identity}) {
      return {groupId,alreadyAccepted:true,indexed:true};
    }
    if(data.status!=='PENDING')throw Error('INVITATION_NOT_PENDING');
+   // A stale pending invitation is never permission to overwrite the member
+   // record. Preserve already-granted EDITOR/ADMIN and do not mutate inbox.
+   const existingRole=await currentMembershipRole(groupId);
+   if(existingRole)throw Error('ALREADY_ACTIVE_MEMBER_KEEP_EXISTING_ROLE');
    const batch=writeBatch(db);
    batch.update(ref,{status:'ACCEPTED',acceptedUid:uid});
    batch.set(member(groupId),{uid,role:data.role,status:'ACTIVE',invitationId:invitation.id});
@@ -186,5 +203,5 @@ export function groupService({db,sdk,identity}) {
    else await updateDoc(member(groupId,memberUid),{role:change});
  }
  return Object.freeze({createGroup,listGroups,myRole,retireNotebook,sendInvite,listSentInvites,listInbox,
-   acceptInvite,revokeInvite,ensureIndex,listMembers,changeMember});
+   acceptInvite,revokeInvite,ensureIndex,listMembers,changeMember,currentMembershipRole});
 }
