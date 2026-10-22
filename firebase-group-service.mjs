@@ -33,7 +33,7 @@ export function groupService({db,sdk,identity}) {
    batch.set(ref,{ownerUid:uid,name:title,createdAt:Timestamp.now()});
    batch.set(pointer(ref.id),indexBody(ref.id));
    await batch.commit();
-   return {id:ref.id,name:title,role:'ADMIN'};
+   return {id:ref.id,name:title,role:'ADMIN',ownerUid:uid};
  }
  async function listGroups() {
    const snapshots=await getDocs(collection(db,'users',uid,'groupIndex'));
