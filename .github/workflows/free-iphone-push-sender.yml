@@ -1,0 +1,47 @@
+name: Free iPhone CRM push sender (explicit activation only)
+on:
+  workflow_dispatch:
+  schedule:
+    # Every five minutes, offset away from the busiest minute. GitHub does
+    # not guarantee exact delivery times; runs can be delayed or dropped.
+    - cron: '3/5 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: crm-iphone-push-sender
+  cancel-in-progress: false
+jobs:
+  guarded-sender:
+    # A missing repository variable means NO runner, NO Firebase access,
+    # NO service credential, NO device notification, and NO extra cost.
+    if: ${{ vars.TEST_PUSH_SEND_ENABLED == 'EXPLICITLY_APPROVED' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      TEST_PUSH_SEND_ENABLED: ${{ vars.TEST_PUSH_SEND_ENABLED }}
+      TEST_PUSH_START_ISO: ${{ vars.TEST_PUSH_START_ISO }}
+      TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
+      TEST_VAPID_PUBLIC_KEY: ${{ secrets.TEST_VAPID_PUBLIC_KEY }}
+      TEST_VAPID_PRIVATE_KEY: ${{ secrets.TEST_VAPID_PRIVATE_KEY }}
+      TEST_PUSH_CONTACT: ${{ secrets.TEST_PUSH_CONTACT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed if any encrypted credentials are missing
+        shell: bash
+        run: |
+          for key in TEST_FIREBASE_SERVICE_ACCOUNT_JSON TEST_VAPID_PUBLIC_KEY TEST_VAPID_PRIVATE_KEY TEST_PUSH_CONTACT TEST_PUSH_START_ISO; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Required push configuration not installed: $key"
+              exit 1
+            fi
+          done
+      - name: Install pinned free/open-source sender packages
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts firebase-admin@14.5.0 web-push@3.6.7
+      - name: Send bounded, re-authorized, content-free push notifications
+        run: node notification-free-sender-REVIEW-ONLY.mjs
+# IMPORTANT: no activation variables or secret values are stored in source.
+# Public repository on standard ubuntu-latest = no GitHub Actions minute cost.
+# Do NOT set activation until Firestore ACLs and two-phone tests have passed.
