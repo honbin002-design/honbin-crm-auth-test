@@ -113,6 +113,58 @@ export function ownerMemberService({db,sdk,identity,currentUid}){
   return {groupId,memberUid,email:recipientEmail,previousRole:expectedRole,role:nextRole};
  }
 
+ // Owner-only cleanup for a genuinely redundant PENDING invitation.
+ // Require that this exact recipient already has a separately ACCEPTED,
+ // currently ACTIVE membership for the SAME group. Only the old invite status
+ // is written. No member role, group index, notes or task data may change.
+ async function revokeRedundantPendingInvite({groupId,memberUid,recipientEmail,invitationId,expectedRole}) {
+  guard();
+  id(groupId,'GROUP_ID');id(memberUid,'MEMBER_UID');id(invitationId,'INVITE_ID');
+  if(memberUid===uid||!ROLES.includes(expectedRole))throw Error('INVALID_MEMBER_ROLE_STOP');
+  const email=approvalEmail(recipientEmail);
+  const root=groupRef(groupId),member=memberRef(groupId,memberUid);
+  const obsolete=inviteRef(email,invitationId),obsoleteSent=sentRef(groupId,invitationId);
+  await runTransaction(db,async tx=>{
+   guard();
+   const [groupSnap,memberSnap,obsoleteSnap,sentSnap]=await Promise.all([
+    tx.get(root),tx.get(member),tx.get(obsolete),tx.get(obsoleteSent)]);
+   guard();
+   if(!groupSnap.exists()||!groupOkay(groupSnap.data()))throw Error('ROOT_GROUP_CHANGED_STOP');
+   if(!memberSnap.exists()||memberSnap.data().uid!==memberUid||
+      memberSnap.data().status!=='ACTIVE'||memberSnap.data().role!==expectedRole||
+      !id(memberSnap.data().invitationId,'ACCEPTED_INVITE'))
+    throw Error('ACTIVE_MEMBER_NOT_VERIFIED_STOP');
+   const acceptedId=memberSnap.data().invitationId;
+   if(acceptedId===invitationId)throw Error('CANNOT_REVOKE_MEMBER_ACCEPTED_INVITE');
+   const [acceptedSnap,acceptedSentSnap]=await Promise.all([
+    tx.get(inviteRef(email,acceptedId)),tx.get(sentRef(groupId,acceptedId))]);
+   guard();
+   if(!acceptedSnap.exists()||acceptedSnap.data().groupId!==groupId||
+      acceptedSnap.data().status!=='ACCEPTED'||
+      acceptedSnap.data().acceptedUid!==memberUid||
+      !sameEmail(acceptedSnap.data().recipientEmail,email)||
+      !acceptedSentSnap.exists()||acceptedSentSnap.data().groupId!==groupId||
+      !sameEmail(acceptedSentSnap.data().recipientEmail,email))
+    throw Error('MEMBER_ACCEPTED_EMAIL_LINK_INVALID_STOP');
+   if(!obsoleteSnap.exists()||obsoleteSnap.data().status!=='PENDING'||
+      obsoleteSnap.data().groupId!==groupId||
+      !sameEmail(obsoleteSnap.data().recipientEmail,email)||
+      !obsoleteSent.exists()||obsoleteSent.data().groupId!==groupId||
+      !sameEmail(obsoleteSent.data().recipientEmail,email))
+    throw Error('OLD_PENDING_INVITE_NOT_VERIFIED_STOP');
+   // Exact same group, same verified email; one safe status-only mutation.
+   tx.update(obsolete,{status:'REVOKED'});
+  });
+  guard();
+  const [after,membership]=await Promise.all([
+   getDocFromServer(obsolete),getDocFromServer(member)]);guard();
+  if(!after.exists()||after.data().status!=='REVOKED')
+   throw Error('OLD_INVITE_REVOKE_READBACK_HOLD');
+  if(!membership.exists()||membership.data().role!==expectedRole||
+     membership.data().status!=='ACTIVE'||membership.data().uid!==memberUid)
+   throw Error('MEMBER_ROLE_READBACK_HOLD');
+  return {groupId,recipientEmail:email,status:'REVOKED',memberRole:expectedRole};
+ }
  // Global account approval and notebook invitation are intentionally distinct.
  // Only the root owner's Firebase UID can write approvedAccounts under Rules.
  // Re-check the exact server-authorized, unrevoked invitation before enabling.
@@ -159,5 +211,5 @@ export function ownerMemberService({db,sdk,identity,currentUid}){
     throw Error('APPROVAL_READBACK_FAILED');
   return {email:status.email,status:'ACTIVE',alreadyActive:false};
  }
- return Object.freeze({ownedGroups,roster,changeRole,accountApprovalStatus,approveInvitedAccount});
+ return Object.freeze({ownedGroups,roster,changeRole,accountApprovalStatus,approveInvitedAccount,revokeRedundantPendingInvite});
 }
