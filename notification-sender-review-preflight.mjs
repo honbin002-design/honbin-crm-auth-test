@@ -32,6 +32,7 @@ assert.match(worker,/collectionGroup\(stream\.collection\)/);
 assert.match(worker,/\.limit\(40\)/);
 assert.match(worker,/PUSH_RUN_DELIVERY_BUDGET_STOP/);
 assert.match(worker,/PUSH_DEVICE_LIMIT_STOP/);
+assert.match(worker,/device\.id\.startsWith\('probe_'\)/);
 assert.match(worker,/PUSH_GROUP_MEMBER_LIMIT_STOP/);
 assert.doesNotMatch(worker,/db\.collection\('groups'\)\.get\(\)/);
 assert.doesNotMatch(worker,/groupDoc\.ref\.collection\('tasks'\)\.get\(\)/);
