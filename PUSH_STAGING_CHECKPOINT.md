@@ -2,6 +2,16 @@
 
 **狀態：FIRST_IPHONE_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（第一支 iPhone 真正收到鎖定畫面推播；正式多人任務與記事背景發送仍未啟用）**
 
+## 2026-10-22 20:39+｜現有 EDITOR 與舊 PENDING 邀請衝突：UI/寫入雙重保護
+
+- 用戶在最高權限「鴻繽」共用記事簿群組的成員管理截圖看到 **3 位其他成員**，其中第二支 iPhone 對應成員顯示目前角色 **EDITOR**；但此前第二支 iPhone「收到的邀請」有一筆 **PENDING VIEWER**。這兩種來源獨立，故已編輯者仍見待接受邀請。**照片並未提供該邀請的群組 ID，因此不能斷言兩畫面必定是同一群組。**
+- 已檢查 `firebase-group-service.mjs`，原 `acceptInvite()` 對 `PENDING` 邀請使用 `writeBatch().set(member(...),{role:invitation.role})`，如 UI 不先檢查已存在的 ACTIVE 成員角色，就可能請求把 EDITOR 角色改寫成 VIEWER（最終 Firestore Rules 仍具權威，禁止假定真的降級）。
+- 已施工 **Client Safety Gate**：`currentMembershipRole(groupId)` 使用本人登入身分及 **getDocFromServer** 查自己的當前成員紀錄；`acceptInvite()` 於任何批次寫入前必須通過伺服器查核，若已經 ACTIVE，拋出 `ALREADY_ACTIVE_MEMBER_KEEP_EXISTING_ROLE`，原有角色與歷史邀請資料均不修改。
+- 已施工 **UI Gate**：收到 PENDING 邀請時逐一對應 `groupId` 執行 server readback；若本群已是 EDITOR/ADMIN/VIEWER，**不再視為待接受、不再顯示「接受邀請」按鈕**；於設定中僅說明「已是群組成員，舊邀請不需接受」及原/新角色。若伺服器核對失敗，以 SAFE_HOLD 暫不顯示接受按鈕。若本來就不同群組／非成員，仍保留正常邀請流程。成員索引失落時以當前權限而非舊邀請進行獨立索引修復。
+- `invite-membership-recovery-preflight.mjs` 新增純記憶體測試：已有 EDITOR 時再次收到 VIEWER invite 不可覆蓋角色、不修改 invitation、不產生 pointer write；原本正常非成員接收邀請，以及 REVOKED 邏輯仍保留。新增 `workspace-v2-preflight.mjs` 靜態 UI Gate。**不動任何正式 Firestore 成員權限、群組、邀請文件、報價或供應商進價。**
+- GitHub 雲端記事服務、iPhone 內嵌頁快取版本已更新，等最新版部署 readback PASS。注意不是「已經刪除舊邀請」：此階段保留歷史文件，只防止過時邀請誤導 UI 或更動既有權限。
+- 不要求用戶再次按此前 PENDING VIEWER 邀請；請重新開啟第二支 iPhone 的「記事 → 設定」，查看是否顯示舊邀請無需接受。若仍為真正待接受，代表不是同群組，須核對該邀請的群組 ID，絕不自動調整 EDITOR 角色。
+
 ## 2026-10-22 20:32｜第二支 iPhone 帳號獨立驗收 PASS／邀請仍待接受
 
 - 第二支 iPhone 先前已有真實 Firebase 訂閱「測試 PASS」截圖；本次新增「設定 → Google 帳號」實機截圖，確認它使用與第一支最高權限帳號**不同**的 Google 登入帳號。**第二支手機訂閱＋不同身分 PASS／FROZEN**。
