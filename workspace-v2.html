@@ -48,6 +48,30 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .crm-return{display:inline-flex;align-items:center;min-height:44px;padding:8px 12px;border-radius:10px;background:#e7eff9;color:#174c83;font-weight:650;text-decoration:none}
 .embedded header,.embedded .crm-return{display:none}
 @media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.list-controls,.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.list-controls>div{min-width:0}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
+/* iPhone-safe controls: keep notebook actions in their own rows, never overlay. */
+#groupWrap{min-width:0;display:grid;gap:11px}
+#groupWrap>.row:first-child{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#groupWrap>.row:first-child label{margin:0;flex:1 1 130px;min-width:0}
+#groupWrap button{max-width:100%;white-space:normal}
+#groupWrap select{min-width:0;width:100%}
+#notebookCreateForm{border:1px solid #dbe6f1;border-radius:13px;background:#f7f9fd;padding:14px;min-width:0}
+#notebookCreateForm>.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#notebookCreateForm>.row button{width:100%;min-width:0}
+#retireNotebook{color:#922d35;background:#fff1f1;border:1px solid #dbb3b6}
+#notesPanel>.panel,#tasksPanel>.panel{min-width:0}
+#notesPanel .row>*{min-width:0}
+#notesPanel .note-card{min-width:0;box-shadow:0 4px 16px rgba(27,64,110,.045)}
+#notesPanel .note-card button{margin-right:8px}
+@media(max-width:520px){
+ #groupWrap>.row:first-child{display:grid;grid-template-columns:1fr;gap:8px}
+ #groupWrap>.row:first-child label{width:100%;min-width:0}
+ #toggleNotebookCreate{width:100%;margin:0}
+ #groupWrap>.row:nth-last-of-type(1) button{width:100%}
+ #notesPanel>.panel{padding:14px 12px}
+ #notesPanel .nav button{min-width:0;padding:12px 6px}
+ #notesPanel .note-card button{width:100%;margin:5px 0}
+ #notebookCreateForm>.row{grid-template-columns:1fr}
+}
 [hidden]{display:none!important}
 </style><script>if(new URLSearchParams(location.search).get('embedded')==='1'&&window.self!==window.top)document.documentElement.classList.add('embedded')</script></head><body>
 <header><div><h1>鴻繽記事與任務</h1></div><span class="pill" id="who">未登入</span></header>
