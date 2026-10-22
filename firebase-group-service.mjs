@@ -41,7 +41,7 @@ export function groupService({db,sdk,identity}) {
    for(const item of snapshots.docs) {
      try {
        const g=await getDoc(path(item.id));
-       if(!g.exists())continue;
+       if(!g.exists()||g.data().deleteState==='DELETING')continue;
        const role=await myRole(item.id,g);
        if(role)visible.push({id:item.id,name:g.data().name,role});
      }catch(err) {
@@ -59,6 +59,34 @@ export function groupService({db,sdk,identity}) {
    const record=await getDoc(member(groupId));
    if(!record.exists()||record.data().status!=='ACTIVE')return null;
    return ROLES.includes(record.data().role)?record.data().role:null;
+ }
+ async function retireNotebook(groupId,expectedName) {
+   // Logical delete only. Firestore Rules explicitly deny browser root deletion.
+   // A matching server-enforced deletion LOCK makes members lose access, while
+   // content remains available for a separately audited administrator cleanup.
+   if(!safeId(groupId))throw Error('INVALID_GROUP_ID');
+   const title=String(expectedName||'').trim();
+   if(!title||title.length>120)throw Error('NOTEBOOK_NAME_CONFIRMATION_REQUIRED');
+   const serverGet=sdk.getDocFromServer;
+   if(typeof serverGet!=='function')throw Error('SERVER_VERIFICATION_REQUIRED');
+   const ref=path(groupId),snap=await serverGet(ref);
+   if(snap.metadata?.fromCache||!snap.exists())throw Error('SERVER_NOTEBOOK_NOT_FOUND');
+   const source=snap.data();
+   if(source.ownerUid!==uid)throw Error('NOTEBOOK_CREATOR_REQUIRED');
+   if(source.deleteState)throw Error('NOTEBOOK_ALREADY_RETIRED');
+   if(source.name!==title)throw Error('NOTEBOOK_NAME_CHANGED');
+   const deletionId=doc(collection(db,'groups')).id+'-lock';
+   // Only the creator may perform this one-way transition; Rules validate
+   // the exact allowed fields. Never attempt collection/root hard deletion.
+   await updateDoc(ref,{deleteState:'DELETING',deletionId,
+     deletingAt:Timestamp.now()});
+   const verified=await serverGet(ref);
+   if(verified.metadata?.fromCache||!verified.exists()||
+      verified.data().deleteState!=='DELETING'||
+      verified.data().deletionId!==deletionId)
+     throw Error('NOTEBOOK_RETIRE_READBACK_REQUIRED');
+   return Object.freeze({groupId,locked:true,rootDeleted:false,
+     contentDeleted:false});
  }
  async function sendInvite(groupId,email,role) {
    path(groupId);
@@ -145,6 +173,6 @@ export function groupService({db,sdk,identity}) {
    if(change==='REVOKED')await updateDoc(member(groupId,memberUid),{status:'REVOKED'});
    else await updateDoc(member(groupId,memberUid),{role:change});
  }
- return Object.freeze({createGroup,listGroups,myRole,sendInvite,listSentInvites,listInbox,
+ return Object.freeze({createGroup,listGroups,myRole,retireNotebook,sendInvite,listSentInvites,listInbox,
    acceptInvite,revokeInvite,ensureIndex,listMembers,changeMember});
 }
