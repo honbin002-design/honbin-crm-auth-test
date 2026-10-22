@@ -76,4 +76,33 @@ function setup({failIndexOnce=false,status='PENDING'}={}){
  assert.equal(e.data.has(member),false);
  assert.equal(e.data.has(pointer),false);
 }
+// Regression: a member already promoted to EDITOR must not accidentally
+// lose access when an old VIEWER invite remains in their inbox.
+{
+ const e=setup();
+ e.data.set(member,{uid:UID,role:'EDITOR',status:'ACTIVE',invitationId:'already_joined'});
+ e.data.set(inbox,{...e.data.get(inbox),role:'VIEWER'});
+ const pending=(await e.api.listInbox())[0];
+ assert.equal(await e.api.currentMembershipRole(GID),'EDITOR');
+ await assert.rejects(()=>e.api.acceptInvite(pending),/ALREADY_ACTIVE_MEMBER_KEEP_EXISTING_ROLE/);
+ assert.equal(e.data.get(member).role,'EDITOR','never replace existing EDITOR with VIEWER');
+ assert.equal(e.data.get(inbox).status,'PENDING','do not mutate live old invite');
+ assert.equal(e.data.has(pointer),false,'no implied index repair or writes');
+ assert.equal(e.indexAttempts(),0,'no unexpected member/index change');
+}
+// A missing current membership can still redeem a valid invitation.
+{
+ const e=setup();
+ assert.equal(await e.api.currentMembershipRole(GID),null);
+ const result=await e.api.acceptInvite((await e.api.listInbox())[0]);
+ assert.equal(result.indexed,true);
+ assert.equal(e.data.get(member).role,'EDITOR');
+}
+// A revoked former member must not be silently reactivated through a cached
+// membership read; the current invitation redemption remains server-controlled.
+{
+ const e=setup();
+ e.data.set(member,{uid:UID,role:'VIEWER',status:'REVOKED',invitationId:'old'});
+ assert.equal(await e.api.currentMembershipRole(GID),null);
+}
 console.log('INVITE_MEMBERSHIP_RECOVERY_SYNTHETIC_PASS');
