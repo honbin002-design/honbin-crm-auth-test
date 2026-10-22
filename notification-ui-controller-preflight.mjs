@@ -32,6 +32,16 @@ const events={
  'tasks:completedAt':[], 'notes:createdAt':[]
 };
 let uid='member_1',queries=0,refreshed=0,opened=0,restored='';
+let page='Notes',returnPage='Notes',controller=null;
+function switchPage(name,{fromNotification=false}={}){
+ if(name!=='Notifications'&&!fromNotification)returnPage=name;
+ for(const tab of ['Notes','Tasks','Notifications','Settings']){
+  const panel=tab==='Notifications'?'notificationOverview':tab.toLowerCase()+'Panel';
+  $(panel).hidden=tab!==name;
+ }
+ $('notificationCenter').hidden=name!=='Notifications';
+ page=name;controller?.onTabChange(name);
+}
 globalThis.window={scrollY:340,location:{origin:'https://example.test'},
  scrollTo({top}){this.scrollY=top}};
 window.parent=window;
@@ -56,36 +66,57 @@ const config={
  uid:'member_1',db:{},sdk,currentUid:()=>uid,storage,
  getGroups:async()=>[{id:'group_1',name:'群組 A',role:'EDITOR'}],
  refreshViews:async()=>{refreshed++},
- openItem:async()=>{opened++;window.scrollY=875;return true},
- getCurrentTab:()=> 'Notes',restoreTab:tab=>{restored=tab},
+ openItem:async()=>{opened++;switchPage('Tasks',{fromNotification:true});window.scrollY=875;return true},
+ getCurrentTab:()=>page,
+ restoreTab:tab=>{restored=tab;switchPage(tab)},
+ openNotifications:()=>switchPage('Notifications'),
+ closeNotifications:()=>switchPage(returnPage),
  onStatus:text=>status.push(text)
 };
 $('notificationCenter').hidden=true;
 $('notificationOverview').hidden=true;
 $('notificationCount').hidden=true;
 const app=cloudNotificationController(config);
+controller=app;
 app.start();
 await new Promise(resolve=>setTimeout(resolve,0));
 assert.equal($('refreshCloud').disabled,false);
-assert.equal($('notificationOverview').hidden,false);
+assert.equal($('notificationOverview').hidden,true,'notice page hidden when showing Notes');
+assert.equal($('notesPanel').hidden,false,'Notes alone visible initially');
 assert.equal($('notificationCount').textContent,'1');
 assert.equal($('notificationCount').hidden,false);
 assert.equal($('notificationList').children.length,1);
 assert.equal(queries,3,'one bounded initial read per event stream');
-$('toggleNotifications').onclick();
+switchPage('Notifications');
 assert.equal($('notificationCenter').hidden,false);
-assert.equal($('toggleNotifications').attributes['aria-expanded'],'true');
+assert.equal($('notificationOverview').hidden,false);
+assert.equal($('notesPanel').hidden,true,'opening notice shows a separate page');
+assert.equal($('tasksPanel').hidden,true);
+assert.equal($('settingsPanel').hidden,true);
 const open=$('notificationList').children[0].children[1];
 await open.onclick();
 assert.equal(opened,1);
+assert.equal($('notificationOverview').hidden,true,'detail page hides notifications');
+assert.equal($('tasksPanel').hidden,false);
 assert.equal(detail.children[0]?.children[0]?.textContent,'← 返回通知');
 assert.equal(detail.children[0].children[0].onclick(),true);
-assert.equal(restored,'Notes');
+assert.equal(page,'Notifications');
+assert.equal($('tasksPanel').hidden,true);
+assert.equal($('notificationOverview').hidden,false);
 assert.equal(window.scrollY,340,'return restores the notification scroll position');
 assert.equal($('notificationCenter').hidden,false);
 assert.equal($('notificationCount').hidden,true);
 assert.equal($('notificationCenter').hidden,false);
 assert.equal(app.returnToNotifications(),false,'returns only once to the originating list');
+$('toggleNotifications').onclick();
+assert.equal(page,'Notes','notification page back restores the previous feature page');
+assert.equal($('notificationOverview').hidden,true,'notice list never remains on Notes page');
+assert.equal($('notesPanel').hidden,false);
+switchPage('Notifications');
+switchPage('Settings');
+assert.equal($('notificationOverview').hidden,true,'switching to Settings always hides notices');
+assert.equal($('settingsPanel').hidden,false);
+switchPage('Notes');
 assert.equal(storageMap.size,1,'only per-UID read markers saved');
 await $('refreshCloud').onclick();
 assert.equal(refreshed,1);
