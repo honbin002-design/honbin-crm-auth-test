@@ -17,7 +17,7 @@ button,input,textarea,select{font:inherit}button{border:0;background:#205a9a;col
 button{cursor:pointer;min-width:44px;overflow-wrap:anywhere}button.alt{background:#e7eff9;color:#174c83}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #73a8e7;outline-offset:2px}
 input,textarea,select{width:100%;padding:11px;border:1px solid #9fafc2;border-radius:10px;background:#fff;min-height:46px}
 textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;margin:13px 0 5px}input,textarea{scroll-margin-bottom:45vh}
-.nav{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .nav button{background:#e7eff9;color:#24486c}.nav button.active{background:#205a9a;color:#fff}
 #message{margin-bottom:10px}#tasksPanel .panel .panel{border:0;background:#f4f7fb}
 .line{border-bottom:1px solid #e1e8f0;padding:12px 0}.line:last-child{border:0}
@@ -52,6 +52,15 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .notice-row>div{flex:1 1 160px;min-width:0}
 .notice-row button{min-width:100px;flex:0 0 auto}
 .notice-row[data-unread="true"]{border-left:4px solid #2862a2;padding-left:9px;background:#f8fbff}
+.notification-page{width:100%;min-width:0}
+.notification-page>.panel{margin:12px 0;min-height:55vh}
+#tabNotifications{display:flex;justify-content:center;align-items:center;gap:4px;min-width:0}
+#tabNotifications .notice-count{padding:1px 6px;min-width:19px;font-size:.72rem;line-height:1.25}
+@media(max-width:520px){
+ .nav{gap:6px}
+ .nav button{min-width:0;padding:10px 5px;font-size:.96rem}
+ .notification-page>.panel{padding:14px 12px}
+}
 .notification-return-action{margin:0 0 12px;padding:8px 0;border-bottom:1px solid #d8e4f0}
 .notification-return-action button{display:inline-flex;align-items:center;justify-content:center;
  min-height:44px;max-width:100%;padding:10px 16px;white-space:normal}
@@ -99,19 +108,22 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
  <div class="panel"><div class="nav">
   <button id="tabNotes" class="active" type="button">記事</button>
   <button id="tabTasks" type="button">任務</button>
+  <button id="tabNotifications" type="button">通知 <span class="notice-count" id="notificationCount" hidden>0</span></button>
   <button id="tabSettings" type="button">設定</button>
  </div></div>
- <div class="panel" id="notificationOverview" hidden>
-  <div class="notification-overview">
-   <h2 style="margin:0">訊息通知 <span class="notice-count" id="notificationCount" hidden>0</span></h2>
-   <button id="toggleNotifications" class="alt" type="button" aria-expanded="false" aria-controls="notificationCenter">查看通知</button>
+ <section class="notification-page" id="notificationOverview" hidden aria-label="訊息通知頁面">
+  <div class="panel">
+   <div class="notification-overview">
+    <h2 style="margin:0">訊息通知</h2>
+    <button id="toggleNotifications" class="alt" type="button">← 返回上一頁</button>
+   </div>
+   <div id="notificationCenter">
+    <p id="notificationStatus" class="hint" role="status" aria-live="polite">尚未讀取通知。</p>
+    <div class="row"><button class="alt" id="markNotificationsRead" type="button">全部標示已讀</button></div>
+    <div id="notificationList"></div>
+   </div>
   </div>
-  <div id="notificationCenter" hidden>
-   <p id="notificationStatus" class="hint" role="status" aria-live="polite">尚未讀取通知。</p>
-   <div class="row"><button class="alt" id="markNotificationsRead" type="button">全部標示已讀</button></div>
-   <div id="notificationList"></div>
-  </div>
- </div>
+ </section>
  <input type="hidden" id="mode" value="PRIVATE">
  <section id="notesPanel" hidden>
   <div class="panel" id="pendingInviteNotice" hidden>
@@ -251,6 +263,7 @@ let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
 let pendingTaskWrite=null;
 let cloudNotifier=null;
+let lastNonNotificationTab='Notes';
 const sharedNickCache=new Map();
 let inviteGroups=[],inviteGroupId='',inviteLoaded=false,receivedLoaded=false,inviteSubmitting=false;
 let notePageIndex=0,noteCursors=[null],noteHasMore=false;
@@ -274,15 +287,23 @@ async function showNick(){
  $('nickname').value=name;$('who').textContent=name||'未設定暱稱';
 }
 function tab(name,{skipTaskLoad=false}={}){
- if(!authenticated&&name!=='Settings'){say('請先到設定頁使用核准的 Google 帳號登入。');name='Settings'}
- for(const n of ['Notes','Tasks','Settings']){
-  $('tab'+n).classList.toggle('active',n===name);
-  $(n.toLowerCase()+'Panel').hidden=n!==name;
+ if(!authenticated&&name!=='Settings'){
+  say('請先到設定頁使用核准的 Google 帳號登入。');name='Settings';
  }
+ if(!['Notes','Tasks','Notifications','Settings'].includes(name))name='Notes';
+ if(name!=='Notifications')lastNonNotificationTab=name;
+ // A navigation tab represents exactly one full page, never a stacked
+ // notification panel floating over the notes or task content.
+ for(const n of ['Notes','Tasks','Notifications','Settings']){
+  $('tab'+n).classList.toggle('active',n===name);
+  (n==='Notifications'?$('notificationOverview'):
+   $(n.toLowerCase()+'Panel')).hidden=n!==name;
+ }
+ $('notificationCenter').hidden=name!=='Notifications';
+ cloudNotifier?.onTabChange(name);
  if(name==='Tasks'&&authenticated&&!skipTaskLoad)void run(async()=>{await loadGroups();await loadTasks()});
  if(name==='Settings'&&authenticated){
   if(ownerMembers&&!ownerLoadDone)void run(loadOwnerManagement);
-  // Invitation controls have their own, independent refresh flow.
   if(!inviteLoaded)void loadInvitePanel().catch(e=>say('讀取邀請管理失敗：'+String(e?.code||e?.message||e)));
   if(!receivedLoaded)void loadReceivedInvitations().catch(e=>say('讀取收到的邀請失敗：'+String(e?.code||e?.message||e)));
  }
@@ -1020,7 +1041,8 @@ $('ownerGroup').onchange=()=>run(async()=>{
 $('ownerRefresh').onclick=()=>run(loadOwnerManagement);
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
-$('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabSettings').onclick=()=>tab('Settings');
+$('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');
+$('tabNotifications').onclick=()=>tab('Notifications');$('tabSettings').onclick=()=>tab('Settings');
 $('backTop').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
 function setTaskForm(open){
  $('taskForm').hidden=!open;
@@ -1312,10 +1334,12 @@ async function start(){
       if(inviteGroupId)await loadSentInvitations();check(ss);
      }
     },
-    getCurrentTab:()=>['Notes','Tasks','Settings'].find(name=>
+    getCurrentTab:()=>['Notes','Tasks','Notifications','Settings'].find(name=>
      $('tab'+name).classList.contains('active'))||'Notes',
-    restoreTab:name=>tab(['Notes','Tasks','Settings'].includes(name)?name:'Notes',
+    restoreTab:name=>tab(['Notes','Tasks','Notifications','Settings'].includes(name)?name:'Notes',
      {skipTaskLoad:true}),
+    openNotifications:()=>tab('Notifications'),
+    closeNotifications:()=>tab(lastNonNotificationTab,{skipTaskLoad:true}),
     openItem:async event=>{
      const ss=session(),previous=location.pathname+location.search+location.hash;
      const dest=new URL(location.href);
