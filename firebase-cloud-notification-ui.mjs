@@ -2,7 +2,7 @@ import {notificationSource,notificationTitle} from './firebase-inapp-notificatio
 import {notificationReadMarkers} from './notification-read-markers.mjs';
 // All data flows through signed-in Firestore's server-authorized group queries.
 // This is a foreground inbox, NOT a claim of lock-screen background delivery.
-export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,refreshViews,openItem,storage,onStatus,getCurrentTab,restoreTab}){
+export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,refreshViews,openItem,storage,onStatus,getCurrentTab,restoreTab,openNotifications,closeNotifications}){
  const $=id=>document.getElementById(id);
  if(!uid||!db||!sdk||typeof currentUid!=='function'||typeof getGroups!=='function'||
   typeof refreshViews!=='function'||typeof openItem!=='function'||!storage)
@@ -28,11 +28,9 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
   if(!identity()||!returnContext)return false;
   const context=returnContext;
   clearReturn();
-  if(typeof restoreTab==='function'&&context.previousTab)
-   restoreTab(context.previousTab);
+  if(typeof openNotifications==='function')openNotifications();
+  else if(typeof restoreTab==='function')restoreTab('Notifications');
   $('notificationCenter').hidden=false;
-  $('toggleNotifications').setAttribute('aria-expanded','true');
-  $('toggleNotifications').textContent='收起通知';
   render();
   const scroll=()=>{
    if(!identity())return;
@@ -105,8 +103,6 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
       }
       markers.mark(item.id);render();
       $('notificationCenter').hidden=true;
-      $('toggleNotifications').setAttribute('aria-expanded','false');
-      $('toggleNotifications').textContent='查看通知';
      }
     }catch(error){if(identity())onStatus('通知開啟失敗：'+safeText(error?.code||error?.message||error))}
     finally{button.disabled=false}
@@ -148,22 +144,20 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
  }
  const visibility=()=>{
   if(!identity()||document.hidden||busy||Date.now()-last<300000||
-   !$('notificationOverview').getClientRects().length)return;
+   !$('app').getClientRects().length)return;
   void refresh({quiet:true}).catch(error=>{if(identity())setStatus(
    '通知更新失敗：'+safeText(error?.code||error?.message||error))});
  };
  function start(){
   if(!identity())return;
-  $('notificationOverview').hidden=false;
+  $('notificationOverview').hidden=true;
+  $('notificationCenter').hidden=true;
   $('refreshCloud').disabled=false;
   $('refreshCloud').onclick=refreshAll;
   $('toggleNotifications').onclick=()=>{
-   // Opening the notification list directly supersedes stale detail navigation.
-   if(returnContext)clearReturn();
-   const open=$('notificationCenter').hidden;
-   $('notificationCenter').hidden=!open;
-   $('toggleNotifications').setAttribute('aria-expanded',String(open));
-   $('toggleNotifications').textContent=open?'收起通知':'查看通知';
+   clearReturn();
+   if(typeof closeNotifications==='function')closeNotifications();
+   else if(typeof restoreTab==='function')restoreTab('Notes');
   };
   $('markNotificationsRead').onclick=()=>{
    const saved=markers.markAll(entries.map(x=>x.id));
@@ -184,5 +178,7 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
   $('notificationList').replaceChildren();
   $('notificationCount').hidden=true;
  }
- return Object.freeze({start,stop,refresh,refreshAll,returnToNotifications});
+ return Object.freeze({start,stop,refresh,refreshAll,returnToNotifications,
+  onTabChange:()=>{if(returnContext)clearReturn()}
+ });
 }
