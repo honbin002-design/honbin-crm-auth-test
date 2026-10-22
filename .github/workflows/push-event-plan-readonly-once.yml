@@ -1,0 +1,28 @@
+name: One-time real task and note event recipient audit (read-only)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/push-event-plan-readonly-once.yml'
+permissions:
+  contents: read
+jobs:
+  bounded-real-event-gates:
+    if: github.repository == 'honbin002-design/honbin-crm-auth-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
+      TEST_PUSH_SEND_ENABLED: ${{ vars.TEST_PUSH_SEND_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax-check read-only event plan
+        run: node --check push-real-event-plan-readonly.mjs
+      - name: Install locked Firebase identity library without lifecycle hooks
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts firebase-admin@14.5.0
+      - name: Review small existing task/note event sample against active membership
+        run: node push-real-event-plan-readonly.mjs
+# No scheduled sender, device read, Firestore write, or push delivery.
