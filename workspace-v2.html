@@ -569,7 +569,7 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
      try{
       await extensions.request({groupId:taskGroupId,taskId:item.id,
        reason:reason.value,newDueDate:newDate.value});check(s);
-      await loadTasks();say('延期申請已由 TEST 伺服器確認，等待發布人審核。');
+      await loadTasks();say('延期申請已送出，等待發布人審核。');
      }finally{send.disabled=false}
     })};
     body.append(toggle,form);
@@ -633,9 +633,9 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
             requestId:req.id,decision,...(decision==='APPROVED'?{approvedDueDate}:{})});check(s);
            await loadTasks();check(s);
            say(decision==='APPROVED'
-            ?'TEST 伺服器已確認核准延期：原截止 '+decided.originalDueDate+
+            ?'已核准延期：原截止 '+decided.originalDueDate+
              '｜申請人建議 '+req.newDueDate+'｜發布人核准 '+decided.effectiveDueDate+'。'
-            :'TEST 伺服器已確認拒絕延期：原截止 '+decided.originalDueDate+
+            :'已拒絕延期：原截止 '+decided.originalDueDate+
              ' 維持不變，申請人建議 '+req.newDueDate+' 已保留在審核歷史。');
           }finally{action.disabled=false}
          });
@@ -660,7 +660,7 @@ $('verifyTaskV3Read').onclick=()=>run(async()=>{
  const s=session(),label=$('verifyTaskV3Status');
  if(!taskSelected||!extensions){label.textContent='請先選擇任務共用群組。';return}
  const button=$('verifyTaskV3Read');button.disabled=true;
- label.textContent='正在讀取 TEST 伺服器的延期紀錄（不寫入）……';
+ label.textContent='正在讀取延期紀錄……';
  try{
   const tasksFound=await tasks.list(taskSelected.id);check(s);
   if(!tasksFound.length){label.textContent='目前沒有可用任務；無法檢查延期紀錄讀取權限。';return}
@@ -994,7 +994,7 @@ $('saveNote').onclick=()=>run(async()=>{
  finally{$('saveNote').disabled=false}
 });
 $('saveNick').onclick=()=>{
- if(!PROFILE_RULES_ENABLED){say('共用暱稱尚未啟用。需先通過 TEST Firestore 權限驗收。');return}
+ if(!PROFILE_RULES_ENABLED){say('共用暱稱目前無法使用，請洽管理員。');return}
  void run(async()=>{
   const s=session(),nick=$('nickname').value.trim();
   if(!nick||nick.length>24)throw Error('暱稱必須為 1～24 字');
