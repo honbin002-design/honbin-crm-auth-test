@@ -121,13 +121,25 @@ export function groupService({db,sdk,identity}) {
    return result.docs.map(item=>({id:item.id,...item.data()}));
  }
  async function ensureIndex(groupId) {
-   // Never re-index a group after revocation just because an old invite
-   // remains ACCEPTED. A server-authorized fresh read is mandatory.
-   const authorized=await getDoc(path(groupId));
-   if(!authorized.exists())throw Error('GROUP_NOT_FOUND');
+   // The member's server-side ACTIVE role, not a previous invitation,
+   // authorizes directory recovery. Reject caches and revoked memberships.
+   const serverGet=sdk.getDocFromServer;
+   if(typeof serverGet!=='function')throw Error('SERVER_VERIFICATION_REQUIRED');
+   const authorized=await serverGet(path(groupId));
+   if(authorized.metadata?.fromCache||!authorized.exists()||
+      authorized.data().deleteState==='DELETING')
+    throw Error('GROUP_NOT_AVAILABLE');
+   const active=await serverGet(member(groupId));
+   if(active.metadata?.fromCache||!active.exists()||
+      active.data().uid!==uid||active.data().status!=='ACTIVE'||
+      !ROLES.includes(active.data().role))throw Error('MEMBERSHIP_NOT_ACTIVE');
    const existing=await getDoc(pointer(groupId));
    if(existing.exists())return true;
    await setDoc(pointer(groupId),indexBody(groupId));
+   const readBack=await serverGet(pointer(groupId));
+   if(readBack.metadata?.fromCache||!readBack.exists()||
+      readBack.data().uid!==uid||readBack.data().groupId!==groupId)
+     throw Error('GROUP_INDEX_READBACK_REQUIRED');
    return true;
  }
  async function acceptInvite(invitation) {
