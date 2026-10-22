@@ -40,6 +40,15 @@
 - 下一個真正的 iPhone 驗收：由手機主畫面的獨立 CRM App 開啟「雲端記事與任務」，在 CRM **外層標題右側**按「登記這支 iPhone（測試）」→ iPhone 系統提示時本人按允許 → 顯示「Firebase 伺服器核對成功」「發送仍關閉」才算真實訂閱 PASS。若使用 Safari 一般分頁，先分享加入主畫面。每位成員每支 iPhone 必須各自登記；獨立成員帳號驗收仍待完成。
 - 正式送達、撤銷成員權限即停止投遞、其他成員兩支手機鎖屏推播未驗收，**絕對不得聲稱背景推播已成功**。後續再以可稽核的 TEST 方案啟用有限發送，並確保取消訂閱機制。
 
+## 2026-10-22 20:15｜首次真實 Apple Web Push 接受成功／手機畫面仍待使用者確認
+
+- 使用者從 iPhone 主畫面 CRM 提供截圖，顯示本人登入最高權限 `honbin002@gmail.com`，上方「這支 iPhone 的訂閱已由 Firebase 伺服器核對成功（測試 PASS）；背景發送仍關閉」。**真實裝置註冊 PASS**，不用重做。
+- 發送端未開通排程/正式啟用旗標。為此執行嚴格限縮的一次性 TEST：`push-owner-iphone-one-shot.mjs` 驗證 GitHub 加密 VAPID 公鑰與正式 CRM 公開金鑰一致、專用 Firebase service account、Firebase Auth 查得 Google 已驗證的 root email、僅一支真實已登記 Apple endpoint、非 probe 裝置與最近 7 日內建立；**不讀取任何客戶內容、記事、任務、不寫入 Firestore**。只送一則 generic safe payload，其他帳號 0 次。
+- GitHub Actions **run `39776813890`** PASS，job `119817741694` 有 `OWNER_IPHONE_ONE_SHOT_APPLE_PUSH_ACCEPTED_201`。此證據**只證明 Apple Web Push 遠端服務接受 HTTP 201，不能聲稱已在手機通知中心或鎖定畫面實際看到通知**。需請使用者回報實機通知截圖或明確結果。
+- 已立即移除自動觸發的一次性測試工作流程 `.github/workflows/iphone-owner-push-one-shot.yml`（commit `1347a927deaf96b707b2995eca46ce3d3fab0cd3`），不會再次自動測試。保留安全限制的 one-shot JS 腳本作審計但無啟動路徑。
+- GitHub 正式發送排程仍保持 `TEST_PUSH_SEND_ENABLED` 未啟用，主 CRM `push-public-config.json` 為 `subscriptionsEnabled=true`、`senderEnabled=false`、`environment="SPARK_SUBSCRIPTION_STAGING"`；無付費服務。
+- 下一個關鍵驗收：本人這支 iPhone 是否實際看到「鴻繽科技 CRM 有新通知」。若未收到，查 iOS「設定 → 通知」、主畫面 App、通知摘要及專注模式、Web Push/SW 處理，不要跳過實機驗收。若收到，進行第二個不同 Google 帳號與另一台 iPhone 訂閱及各角色通知授權／撤銷測試，確定資料隔離後才啟用正式群組發送。
+
 ## 既有主架構（不可重建）
 - 正式 CRM：`honbin002-design/-hongbin-personal-crm-beta`，入口 `https://honbin002-design.github.io/-hongbin-personal-crm-beta/`
 - Firebase 雲端記事與任務：`honbin002-design/honbin-crm-auth-test`，以同網域 iframe 整合
