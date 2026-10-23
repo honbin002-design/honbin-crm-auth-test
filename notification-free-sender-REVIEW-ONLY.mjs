@@ -65,8 +65,8 @@ async function main(){
  // Stop before an unexpectedly large group/device set can consume the Spark
  // daily quota. The cursor is only advanced after a whole event completes.
  let deliveriesThisRun=0;
- async function approved(uid){
-  if(accountCache.has(uid))return accountCache.get(uid);
+ async function approved(uid,forceServerRead=false){
+  if(!forceServerRead&&accountCache.has(uid))return accountCache.get(uid);
   let ok=false;
   try{
    const u=await auth.getUser(uid),email=u.email?.toLowerCase();
@@ -142,7 +142,7 @@ async function main(){
      // Recheck instantly before Apple's request, after the idempotent claim.
      // If permissions were revoked between claim and delivery, drop the claim
      // as SKIPPED (never SENT) and do not transmit.
-     if(!await approved(uid)||!await approved(event.actorUid)||
+     if(!await approved(uid,true)||!await approved(event.actorUid,true)||
        !await stillMember(event.payload.groupId,uid)||
        !await stillMember(event.payload.groupId,event.actorUid)||
        !await stillRelevant(event,uid)){
