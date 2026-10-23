@@ -5,6 +5,7 @@
 import {createHash} from 'node:crypto';
 import {routeNotification} from './notification-recipient-router.mjs';
 import {notificationEventStillRelevant} from './notification-event-freshness.mjs';
+import {confirmedLivePublicPushConfig} from './push-live-free-activation.mjs';
 const PROJECT='honbin-crm-notes-spark';
 const required=[
  'TEST_FIREBASE_SERVICE_ACCOUNT_JSON','TEST_VAPID_PUBLIC_KEY',
@@ -20,9 +21,7 @@ async function verifiedPublicActivation(publicVapidKey){
   const response=await fetch(url,{headers:{Accept:'application/json'},signal:ctrl.signal,cache:'no-store'});
   if(!response.ok)throw Error('PUBLIC_CONFIG_HTTP_STOP');
   const data=await response.json();
-  if(data.schemaVersion!==1||data.subscriptionsEnabled!==true||
-    data.senderEnabled!==true||data.environment!=='SPARK_LIVE_FREE'||
-    data.publicVapidKey!==publicVapidKey)
+  if(!confirmedLivePublicPushConfig(data,publicVapidKey))
    throw Error('PUBLIC_PUSH_LIVE_SWITCH_NOT_CONFIRMED');
   return true;
  }finally{clearTimeout(timeout)}
