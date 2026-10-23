@@ -1,6 +1,7 @@
-// REVIEW-ONLY TEST sender. NEVER scheduled or deployed until the owner
-// approves credential storage, Firestore subscription Rules and end-to-end
-// two-account acceptance. No secrets in repo, URLs or push payloads.
+// Zero-fee, fail-closed CRM task/note background notification sender.
+// Enabled only by the owner-authorized GitHub scheduled workflow AND the
+// matching published CRM public sender switch. No credentials or private
+// customer content is ever stored in repo, URLs, or push payloads.
 import {createHash} from 'node:crypto';
 import {routeNotification} from './notification-recipient-router.mjs';
 import {notificationEventStillRelevant} from './notification-event-freshness.mjs';
@@ -10,6 +11,22 @@ const required=[
  'TEST_VAPID_PRIVATE_KEY','TEST_PUSH_CONTACT','TEST_PUSH_START_ISO'
 ];
 const now=()=>Date.now();
+// The public CRM sender switch is a second, independently deployable kill
+// switch. Any fetch failure or key/config mismatch must STOP before Firebase.
+async function verifiedPublicActivation(publicVapidKey){
+ const ctrl=new AbortController(),timeout=setTimeout(()=>ctrl.abort(),12000);
+ try{
+  const url='https://honbin002-design.github.io/-hongbin-personal-crm-beta/push-public-config.json?readback='+now();
+  const response=await fetch(url,{headers:{Accept:'application/json'},signal:ctrl.signal,cache:'no-store'});
+  if(!response.ok)throw Error('PUBLIC_CONFIG_HTTP_STOP');
+  const data=await response.json();
+  if(data.schemaVersion!==1||data.subscriptionsEnabled!==true||
+    data.senderEnabled!==true||data.environment!=='SPARK_LIVE_FREE'||
+    data.publicVapidKey!==publicVapidKey)
+   throw Error('PUBLIC_PUSH_LIVE_SWITCH_NOT_CONFIRMED');
+  return true;
+ }finally{clearTimeout(timeout)}
+}
 const appleEndpoint=value=>{
  try{const u=new URL(value);return u.protocol==='https:'&&
   u.hostname==='web.push.apple.com'&&!u.username&&!u.password&&!u.port}
@@ -25,6 +42,9 @@ async function main(){
  for(const key of required)if(!process.env[key])throw Error('MISSING_SECRET_OR_CONFIG_'+key);
  const activation=Date.parse(process.env.TEST_PUSH_START_ISO);
  if(!Number.isFinite(activation)||activation>now())throw Error('INVALID_ACTIVATION_TIME');
+ if(!/^[A-Za-z0-9_-]{87}$/.test(process.env.TEST_VAPID_PUBLIC_KEY||''))
+  throw Error('INVALID_PUBLIC_VAPID_KEY');
+ await verifiedPublicActivation(process.env.TEST_VAPID_PUBLIC_KEY);
  const credential=JSON.parse(process.env.TEST_FIREBASE_SERVICE_ACCOUNT_JSON);
  if(credential.project_id!==PROJECT)throw Error('WRONG_FIREBASE_PROJECT_STOP');
  // Never silently use the project's default broad-scope Firebase Admin key.
@@ -83,7 +103,8 @@ async function main(){
   for(const uid of event.recipients){
    // Revoking the author or completer must stop an old event from
    // notifying any former group relationship as well as the recipient.
-   if(!await approved(uid)||!await stillMember(event.payload.groupId,uid)||
+   if(!await approved(uid)||!await approved(event.actorUid)||
+      !await stillMember(event.payload.groupId,uid)||
       !await stillMember(event.payload.groupId,event.actorUid)||
       !await stillRelevant(event,uid))continue;
    const devices=await db.collection('pushSubscriptions').doc(uid)
@@ -95,7 +116,8 @@ async function main(){
     if(device.id.startsWith('probe_'))continue;
     if(deliveriesThisRun>=30)throw Error('PUSH_RUN_DELIVERY_BUDGET_STOP');
     // Membership can be revoked while this job is processing other devices.
-    if(!await stillMember(event.payload.groupId,uid)||
+    if(!await approved(uid)||!await approved(event.actorUid)||
+      !await stillMember(event.payload.groupId,uid)||
       !await stillMember(event.payload.groupId,event.actorUid)||
       !await stillRelevant(event,uid))break;
     const subscription=device.data();
@@ -118,6 +140,16 @@ async function main(){
     if(!claimed)continue;
     deliveriesThisRun++;
     try{
+     // Recheck instantly before Apple's request, after the idempotent claim.
+     // If permissions were revoked between claim and delivery, drop the claim
+     // as SKIPPED (never SENT) and do not transmit.
+     if(!await approved(uid)||!await approved(event.actorUid)||
+       !await stillMember(event.payload.groupId,uid)||
+       !await stillMember(event.payload.groupId,event.actorUid)||
+       !await stillRelevant(event,uid)){
+      await receipt.update({status:'SKIPPED',skippedAt:FieldValue.serverTimestamp()});
+      continue;
+     }
      const response=await webpush.sendNotification({
       endpoint:subscription.endpoint,
       keys:{p256dh:subscription.p256dh,auth:subscription.auth}
