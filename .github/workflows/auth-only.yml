@@ -78,6 +78,8 @@ jobs:
         run: node push-vapid-local-preflight.mjs
       - name: Verify zero-cost sender safe-hold and private subscription ACL
         run: node --check notification-free-sender-REVIEW-ONLY.mjs && node notification-sender-review-preflight.mjs && node notification-free-sender-REVIEW-ONLY.mjs
+      - name: Check fail-closed public switch and post-claim permission guards
+        run: node push-live-free-activation-preflight.mjs
       - name: Verify safe incremental push-only or three-rule candidate
         run: node firestore-push-safe-candidate-preflight.mjs
       - name: Verify pasted Firebase candidate exact-match before publishing
