@@ -1,0 +1,35 @@
+name: One-time first LIVE free task and note push sender smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/first-live-push-safe-smoke-once.yml'
+permissions:
+  contents: read
+concurrency:
+  group: crm-iphone-push-sender
+  cancel-in-progress: false
+jobs:
+  bounded-live-gate:
+    if: ${{ github.repository == 'honbin002-design/honbin-crm-auth-test' && vars.TEST_PUSH_PAUSED != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      TEST_PUSH_SEND_ENABLED: EXPLICITLY_APPROVED
+      TEST_PUSH_START_ISO: '2026-10-23T00:16:00Z'
+      TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
+      TEST_VAPID_PUBLIC_KEY: ${{ secrets.TEST_VAPID_PUBLIC_KEY }}
+      TEST_VAPID_PRIVATE_KEY: ${{ secrets.TEST_VAPID_PRIVATE_KEY }}
+      TEST_PUSH_CONTACT: ${{ secrets.TEST_PUSH_CONTACT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact live sender syntax
+        run: node --check notification-free-sender-REVIEW-ONLY.mjs
+      - name: Install free pinned Apple Web Push and Firebase SDK
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts firebase-admin@14.5.0 web-push@3.6.7
+      - name: Verify PUBLIC live kill switch, ACL, cursor and run live bounded sender
+        run: node notification-free-sender-REVIEW-ONLY.mjs
+# Temporary manual smoke, remove immediately after pass; no fake events.
