@@ -1,9 +1,9 @@
-name: Free iPhone CRM push sender (explicit activation only)
+name: 鴻繽 CRM 零費用手機背景通知（任務及記事）
 on:
   workflow_dispatch:
   schedule:
-    # Every five minutes, offset away from the busiest minute. GitHub does
-    # not guarantee exact delivery times; runs can be delayed or dropped.
+    # Check roughly every five minutes; GitHub can delay/drop scheduled jobs.
+    # Spark read/write quotas, bounded rows, ACL and Apple receipts are enforced.
     - cron: '3/5 * * * *'
 permissions:
   contents: read
@@ -12,14 +12,15 @@ concurrency:
   cancel-in-progress: false
 jobs:
   guarded-sender:
-    # A missing repository variable means NO runner, NO Firebase access,
-    # NO service credential, NO device notification, and NO extra cost.
-    if: ${{ vars.TEST_PUSH_SEND_ENABLED == 'EXPLICITLY_APPROVED' }}
+    # Owner approved free live activation. Admin emergency stop: set
+    # TEST_PUSH_PAUSED=true in GitHub Actions repository variables or remove
+    # this job. A separate published public switch must also stay LIVE.
+    if: ${{ github.repository == 'honbin002-design/honbin-crm-auth-test' && vars.TEST_PUSH_PAUSED != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 4
     env:
-      TEST_PUSH_SEND_ENABLED: ${{ vars.TEST_PUSH_SEND_ENABLED }}
-      TEST_PUSH_START_ISO: ${{ vars.TEST_PUSH_START_ISO }}
+      TEST_PUSH_SEND_ENABLED: EXPLICITLY_APPROVED
+      TEST_PUSH_START_ISO: '2026-10-23T00:16:00Z'
       TEST_FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_FIREBASE_SERVICE_ACCOUNT_JSON }}
       TEST_VAPID_PUBLIC_KEY: ${{ secrets.TEST_VAPID_PUBLIC_KEY }}
       TEST_VAPID_PRIVATE_KEY: ${{ secrets.TEST_VAPID_PRIVATE_KEY }}
@@ -42,6 +43,7 @@ jobs:
         run: npm install --no-save --no-audit --no-fund --ignore-scripts firebase-admin@14.5.0 web-push@3.6.7
       - name: Send bounded, re-authorized, content-free push notifications
         run: node notification-free-sender-REVIEW-ONLY.mjs
-# IMPORTANT: no activation variables or secret values are stored in source.
-# Public repository on standard ubuntu-latest = no GitHub Actions minute cost.
+# Public repository + standard ubuntu-latest runner = GitHub no-cost usage.
+# Firebase stays Spark. No secret values stored in source. Emergency stop
+# via the public CRM senderEnabled=false switch or TEST_PUSH_PAUSED=true.
 # Do NOT set activation until Firestore ACLs and two-phone tests have passed.
