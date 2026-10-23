@@ -46,4 +46,5 @@ jobs:
 # Public repository + standard ubuntu-latest runner = GitHub no-cost usage.
 # Firebase stays Spark. No secret values stored in source. Emergency stop
 # via the public CRM senderEnabled=false switch or TEST_PUSH_PAUSED=true.
-# Do NOT set activation until Firestore ACLs and two-phone tests have passed.
+# Live activation is owner-authorized after two iPhone delivery and ACL PASS.
+# Disable by TEST_PUSH_PAUSED=true or the public CRM senderEnabled=false switch.
