@@ -1,6 +1,18 @@
-# iPhone CRM Web Push｜安全施工交接｜2026-10-22
+# iPhone CRM Web Push｜正式免費通知啟用交接｜2026-10-23
 
-**狀態：TWO_IPHONES_LOCKSCREEN_PUSH_PASS／MULTI_MEMBER_SENDER_SAFE_HOLD（兩支不同 Google 帳號的 iPhone 都已實際收到鎖定畫面測試通知；正式多人任務與記事背景發送仍未啟用）**
+**最新狀態：LIVE_FREE_BACKGROUND_SENDER_ENABLED／FIRST_LIVE_RUN_PASS（已正式啟用免費排程及群組權限檢查；兩支手機與真實任務完成通知原實機 PASS 保留。排程延遲／配額可能影響送達）**
+
+## 2026-10-23｜正式免費背景通知啟用：LIVE FREE／第一次真實發送器運行 PASS
+
+- 使用者明確要求「全面開通手機推播通知」。在不升級 Firebase Spark、不新增費用、不重新驗收前面 PASS 工作的前提下，已把 GitHub Pages 正式 CRM `push-public-config.json` 設為 `subscriptionsEnabled=true`、`senderEnabled=true`、`environment=SPARK_LIVE_FREE`。公開 VAPID 公鑰保持原配對，不發布私人金鑰。GitHub Pages 對應 commit `1202de3c9932` build/deploy SUCCESS（run `39876918607`）；最新版 UI/SW 快取版本 commit `c6daa1610418` 亦 Pages SUCCESS（run `39877221055`），R73 iPhone WebKit 回歸 SUCCESS（run `39877220551`）。
+- 唯一正式背景發送排程：`.github/workflows/free-iphone-push-sender.yml`，`cron: '3/5 * * * *'`，UTC 每約五分鐘建立候選排程，但 GitHub Actions 可能延遲或略過。用公開免費標準 `ubuntu-latest` runner 和既有加密 GitHub Secrets，不需要 paid API／Blaze。啟用時間單調固定為 `2026-10-23T00:16:00Z`（台南 08:16），只掃描此時後的新事件，不重播舊的歷史通知。
+- 真正的發送程式是 `notification-free-sender-REVIEW-ONLY.mjs`（舊檔名保留避免誤回退）。**雙重安全開關**：正式 workflow 必須包含明確 `TEST_PUSH_SEND_ENABLED=EXPLICITLY_APPROVED`，且程式從正式公開 GitHub Pages `push-public-config.json` 即時讀回，驗證 schema、雙功能開啟、環境 `SPARK_LIVE_FREE` 與公開 VAPID 金鑰吻合；若網站、網路、資料或金鑰異常則在連線 Firebase 之前 STOP。管理員可在 GitHub Repository Actions variables 增加 `TEST_PUSH_PAUSED=true` 暫停後續工作，或將正式 CRM 公開 `senderEnabled=false` 作為獨立緊急停止開關。
+- 三類事件：`TASK_ASSIGNED`→指派執行人（或所有符合權限成員），`TASK_COMPLETED`→原發布人，`SHARED_NOTE_CREATED`→記事簿其他符合權限成員。只有 approvedAccounts ACTIVE（最高管理員單獨確認）、Google 已驗證帳號、有效群組 ACTIVE member/owner、符合狀態的真實任務／記事與先前**本人同意登記** Apple Web Push 裝置才發送；任務/記事內容、客戶資料、聯絡人與訂閱端點不在 payload 或公開 log。
+- 發送前與每筆裝置送達前都重讀目前的群組、事件、發布者、收件者與全域帳號核准狀態。已停用記事簿、撤銷帳號與群組角色、事件狀態不符者拒送；每筆事件/裝置以 `notificationDeliveryLedger` 作去重，`notificationSenderCursors` 只向前推進、每串流最多 40 筆、每 run 上限 30 個 Apple delivery、每帳號最多 3 個裝置；只有 Apple HTTP 201/202 才能標記 SENT。由於網路中斷時是否已送達的 ACK 可能不明確，這是防重複策略，並不保證絕對 exactly-once。
+- GitHub Actions **第一次正式連線 Firebase 的 live sender 煙霧驗證**：一次性 run `39877359035`、job `120166097350` SUCCESS，log `TEST_PUSH_SENDER_FINISHED_WITHOUT_EXPOSING_RECIPIENT_DATA`，且環境明確 `TEST_PUSH_SEND_ENABLED=EXPLICITLY_APPROVED`。此檢查實際通過公開雙重開關、GitHub Secrets 存在與 Firebase 真實 collections scans；**不表示那次已有新事件實際寄送**。驗證後移除一次性觸發 workflow（commit `8a85fd3fb916`），只保留正式 cron sender。
+- Cloud repo 最新 Auth-only 靜態保護測試 success（run `39877502544`）；Firestore TEST V4/V5 emulator ACL success（run `39876837081`、`39876837127`）。對手機端重新整理及免費正式狀態文案也已更新，不強制登出、不改已核准帳號、不清除既有記事資料。
+- 原本兩支 iPhone「通用推播收件與點擊」、第一支真實 `TASK_COMPLETED` 收件與點開已完成任務、第二支 CRM 內通知「查看」指定任務，均 PASS/FROZEN，不再重測。新啟用的自動 `TASK_ASSIGNED` 和 `SHARED_NOTE_CREATED` 送達尚須真正新事件驗收；不能把路由/啟用 PASS 說成全部 3 類都曾實機送達。
+- GitHub 公開標準執行器的免費性由 GitHub 官方文件確認；Firebase Spark 標準版每天限 50,000 reads／20,000 writes，額度滿會限制功能但不得自動改成 Blaze。**不用主動建立假測試記事或覆蓋任務；有真正新事件後按權限通知。**
 
 ## 2026-10-22 23:28+｜第一支 iPhone 真實 TASK_COMPLETED 推播「點擊進已完成任務」｜實機 PASS／FROZEN
 
