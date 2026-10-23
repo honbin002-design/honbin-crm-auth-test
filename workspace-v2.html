@@ -218,10 +218,10 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
   <div class="panel" id="pushReadiness">
    <h2>iPhone 通知</h2>
    <p class="hint">已啟用程式內通知：新共用記事、任務指派與完成通知。CRM 開啟時自動核對，開啟期間每 5 分鐘更新，或點左下角「重新整理」立即刷新。</p>
-   <p class="hint">iPhone 鎖定畫面系統通知尚未啟用；目前可以從 CRM 主畫面自願登記手機訂閱，正式發送仍關閉，不會自動要求通知權限或開啟付費服務。</p>
+   <p class="hint">iPhone 系統通知由 CRM 主畫面提供，成員從主畫面圖示啟動 CRM、登入自己的 Google 帳號後，可自行授權並登記手機。正式發送開關與最新狀態以 CRM 主畫面為準，絕不自動索取通知權限或開啟付費服務。</p>
    <button id="checkPush" class="alt" type="button">檢查手機推播準備狀態</button>
    <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
-   <p class="warning">背景通知發送仍未開通。若要驗證這支 iPhone 的訂閱，請從主畫面的 CRM 點選「登記這支 iPhone（測試）」並自行允許通知；只有本人點選後才會建立自己的加密訂閱資料。</p>
+   <p class="warning">要收背景通知，請從 iPhone 主畫面上的「鴻繽科技 CRM」開啟，在上方「雲端記事與任務」點選啟用這支 iPhone 通知並同意系統授權。只有本人主動登記才會建立私人裝置訂閱，背景送達可能受 GitHub 排程或 iPhone 通知設定影響。</p>
   </div>
   <div class="panel" id="liveRulesReadOnly" hidden>
    <h2>伺服器規則安全核對（唯讀）</h2>
@@ -1319,7 +1319,7 @@ async function checkPushReadiness(){
  if(!registration||!registration.pushManager)throw Error('SERVICE_WORKER_PUSH_UNAVAILABLE');
  out.textContent='主畫面 App 與 Service Worker 已準備完成；目前通知權限：'+
     ({granted:'已允許',denied:'已拒絕',default:'尚未要求'}[Notification.permission]||'未確認')+
-    '。正式發送端仍關閉；可從 CRM 主畫面由本人明確點選登記手機訂閱。';
+    '。此處僅測本網頁推播準備狀態；實際 CRM 訂閱與發送狀態請查看 CRM 主畫面標題右側。';
 }
 $('checkPush').onclick=()=>run(checkPushReadiness);
 async function checkLiveRulesReadOnly(){
