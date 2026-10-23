@@ -22,6 +22,9 @@ assert.match(worker,/verifiedPublicActivation\(process\.env\.TEST_VAPID_PUBLIC_K
 assert.match(worker,/confirmedLivePublicPushConfig\(data,publicVapidKey\)/);
 assert.match(worker,/TEST_PUSH_SEND_ENABLED/);
 assert.match(worker,/approved\(event\.actorUid\)/);
+assert.match(worker,/if\(!forceServerRead&&accountCache\.has\(uid\)\)/);
+assert.match(worker,/approved\(uid,true\)/);
+assert.match(worker,/approved\(event\.actorUid,true\)/);
 assert.match(worker,/status:'SKIPPED'/);
 assert.match(worker,/response\?\.statusCode!==201&&response\?\.statusCode!==202/);
 assert.match(worker,/notificationDeliveryLedger/);
