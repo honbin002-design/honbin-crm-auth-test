@@ -54,6 +54,8 @@ jobs:
         run: node firebase-offline-drafts-coalescing-preflight.mjs
       - name: Verify simplified TEST workspace and task security gates
         run: node workspace-v2-preflight.mjs
+      - name: Verify task submit closes the editor, prevents double taps and uses same ID on retry
+        run: node task-publish-return-preflight.mjs
       - name: Verify notebook create and owner-only retirement (synthetic)
         run: node notebook-lifecycle-preflight.mjs
       - name: Verify accepted invite directory recovery without network
