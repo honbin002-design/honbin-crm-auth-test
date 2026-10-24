@@ -21,7 +21,25 @@ for(const path of ['notes-preview.html','groups-preview.html']){
  assert.doesNotMatch(companion,/browserSessionPersistence/);
 }
 assert.match(page,/taskPublish" disabled/);
-assert.match(page,/只有明確按下「發布」並確認後才會儲存任務/);
+assert.match(page,/按「發布任務」並由伺服器確認後，會自動返回任務列表/);
+assert.match(page,/id="taskPublishFeedback" class="status" role="status" aria-live="polite" hidden/);
+assert.match(page,/let pendingTaskWrite=null,taskPublishSubmitting=false/);
+assert.match(page,/if\(taskPublishSubmitting\)return; \/\/ Guard double-tap/);
+assert.match(page,/if\(busy\)\{say\('目前有操作正在處理/);
+assert.match(page,/taskPublishSubmitting=true/);
+assert.match(page,/pendingTaskWrite=\{fingerprint,id:tasks\.newId\(payload\.groupId\)\}/);
+assert.match(page,/taskId:pendingTaskWrite\.id/);
+assert.match(page,/check\(ss\);/);
+assert.match(page,/pendingTaskWrite=null/);
+assert.match(page,/setTaskForm\(false\)/);
+assert.match(page,/taskStatus='OPEN';taskPageIndex=0;taskPageData=null/);
+assert.match(page,/tab\('Tasks',\{skipTaskLoad:true\}\)/);
+assert.match(page,/feedback\.textContent=confirmation;feedback\.hidden=false/);
+assert.match(page,/showPublishedTaskList\(\)/);
+assert.match(page,/HONBIN_CLOUD_TASK_PUBLISHED/);
+assert.match(page,/請按「重新整理」，不要重新發布/);
+assert.match(page,/taskPublishSubmitting=false/);
+assert.match(page,/taskPublishFeedback/);
 assert.match(page,/firebase-note-service\.mjs/);
 assert.match(page,/firebase-group-service\.mjs/);
 assert.match(page,/sdk\.getDocFromServer\(sdk\.doc\(db,'groups',group\.id,'tasks',itemId\)\)/);
