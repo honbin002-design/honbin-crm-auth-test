@@ -155,6 +155,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
  <section id="tasksPanel" hidden>
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2></div>
    <p class="hint">有效群組成員可發布及查看任務；執行人可回覆或申請延期。共用記事權限獨立維持。</p>
+   <p id="taskPublishFeedback" class="status" role="status" aria-live="polite" hidden></p>
    <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
    <div class="list-tabs" role="group" aria-label="任務狀態"><button id="taskOpenTab" type="button" class="active" aria-pressed="true">進行中</button><button id="taskDoneTab" type="button" aria-pressed="false">已完成</button></div>
@@ -175,7 +176,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
     <p class="hint">任務發布後會保留紀錄，發布前請確認內容。</p>
     <div class="row" style="margin-top:12px"><button type="submit" id="taskPublish" disabled>發布任務</button><button id="cancelTaskForm" class="alt" type="button">取消</button></div>
    </form>
-   <p class="hint">只有明確按下「發布」並確認後才會儲存任務；iPhone 背景通知尚未開通。</p>
+   <p class="hint">按「發布任務」並由伺服器確認後，會自動返回任務列表；背景通知由已登記的 iPhone 依群組權限接收。</p>
   </div>
  </section>
  <section id="settingsPanel">
@@ -269,7 +270,7 @@ const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
-let pendingTaskWrite=null;
+let pendingTaskWrite=null,taskPublishSubmitting=false;
 let cloudNotifier=null;
 let lastNonNotificationTab='Notes';
 const sharedNickCache=new Map();
@@ -1163,14 +1164,22 @@ function setTaskForm(open){
  $('toggleTaskForm').setAttribute('aria-expanded',String(open));
  $('toggleTaskForm').textContent=open?'收起表單':'＋ 發布任務';
 }
+// A confirmed task write can never be interrupted by opening/cancelling the form.
+function showPublishedTaskList(){
+ const panel=$('tasksPanel');
+ if(window.parent!==window&&document.documentElement.classList.contains('embedded')){
+  window.parent.postMessage({type:'HONBIN_CLOUD_TASK_PUBLISHED'},location.origin);
+ }else panel.scrollIntoView({block:'start',behavior:'instant'});
+}
 $('toggleTaskForm').onclick=()=>{
+ if(taskPublishSubmitting)return;
  const open=$('taskForm').hidden;
  if(!open&&($('taskTitle').value||$('taskDetail').value||$('taskExecuteDate').value||$('taskDue').value)&&
     !confirm('收起任務表單？尚未發布的輸入內容會保留在此頁。'))return;
  setTaskForm(open);
  if(open)$('taskTitle').focus();
 };
-$('cancelTaskForm').onclick=()=>setTaskForm(false);
+$('cancelTaskForm').onclick=()=>{if(!taskPublishSubmitting)setTaskForm(false)};
 async function changeNoteMode(mode){
  if(!authenticated)return;
  if($('mode').value===mode){if(focusedNote)await run(reload);return}
@@ -1272,35 +1281,62 @@ $('saveNick').onclick=()=>{
  });
 };
 $('taskForm').onsubmit=e=>{e.preventDefault();
+ if(taskPublishSubmitting)return; // Guard double-tap before the async call starts.
+ if(busy){say('目前有操作正在處理，請確認畫面狀態後再發布。');return}
  if(!TASK_RULES_ENABLED){say('指定任務尚未開放。');return}
+ taskPublishSubmitting=true;
  void run(async()=>{
-  if(!taskSelected||!(TASK_V3_RULES_ENABLED||['ADMIN','EDITOR'].includes(taskSelected.role)))
-   throw Error('沒有發布任務的權限');
-  const s=session(),payload={
-   groupId:taskSelected.id,title:$('taskTitle').value.trim(),
-   description:$('taskDetail').value.trim(),assignedUid:$('taskAssignee').value||null,
-   executeDate:$('taskExecuteDate').value,dueDate:$('taskDue').value
-  };
-  if(!payload.title)throw Error('請填寫任務名稱');
-  if(payload.executeDate&&payload.dueDate&&payload.executeDate>payload.dueDate)
-   throw Error('截止日期不可早於預定執行日期');
-  const fingerprint=JSON.stringify(payload);
-  if(pendingTaskWrite&&pendingTaskWrite.fingerprint!==fingerprint)
-   throw Error('上一次發布的伺服器結果尚未確認。請先核對任務列表或重新整理，不要改內容重試。');
-  if(!pendingTaskWrite){
-   if(!confirm('確定發布到群組「'+taskSelected.name+'」？\n任務暫時不能刪除，請確認不含敏感個資。'))
-    return;
-   pendingTaskWrite={fingerprint,id:tasks.newId(payload.groupId)};
-  }
-  $('taskPublish').disabled=true;
+  const publishButton=$('taskPublish');
   try{
+   if(!taskSelected||!(TASK_V3_RULES_ENABLED||['ADMIN','EDITOR'].includes(taskSelected.role)))
+    throw Error('沒有發布任務的權限');
+   const ss=session(),payload={
+    groupId:taskSelected.id,title:$('taskTitle').value.trim(),
+    description:$('taskDetail').value.trim(),assignedUid:$('taskAssignee').value||null,
+    executeDate:$('taskExecuteDate').value,dueDate:$('taskDue').value
+   };
+   if(!payload.title)throw Error('請填寫任務名稱');
+   if(payload.executeDate&&payload.dueDate&&payload.executeDate>payload.dueDate)
+    throw Error('截止日期不可早於預定執行日期');
+   const fingerprint=JSON.stringify(payload);
+   if(pendingTaskWrite&&pendingTaskWrite.fingerprint!==fingerprint)
+    throw Error('上一次發布的伺服器結果尚未確認。請先核對任務列表或重新整理，不要改內容重試。');
+   if(!pendingTaskWrite){
+    if(!confirm('確定發布到群組「'+taskSelected.name+'」？\\n任務暫時不能刪除，請確認不含敏感個資。'))
+     return;
+    pendingTaskWrite={fingerprint,id:tasks.newId(payload.groupId)};
+   }
+   publishButton.disabled=true;publishButton.textContent='發布中…';
    const result=await tasks.create({...payload,taskId:pendingTaskWrite.id});
-   check(s);pendingTaskWrite=null;
-   $('taskForm').reset();setTaskForm(false);
-   await loadTasks();check(s);
-   say(result.alreadyCreated?'已由伺服器確認原任務存在，未重複建立。':
-    '任務已發布，並由 Firestore 伺服器重新讀取確認。');
-  }finally{$('taskPublish').disabled=false}
+   check(ss);
+   // Only after Firestore has server-verified this same task ID:
+   pendingTaskWrite=null;
+   $('taskForm').reset();
+   setTaskForm(false);
+   taskStatus='OPEN';taskPageIndex=0;taskPageData=null;taskFocused=false;
+   $('taskSearch').value='';$('taskSearchField').value='all';
+   tab('Tasks',{skipTaskLoad:true});
+   const confirmation=result.alreadyCreated?
+    '原任務已由伺服器確認，不會重複建立；已返回任務列表。':
+    '任務發布成功！已返回任務列表。要新增另一筆，請重新按「＋ 發布任務」。';
+   const feedback=$('taskPublishFeedback');
+   feedback.textContent=confirmation;feedback.hidden=false;
+   say(confirmation);
+   // The write is already confirmed. A list refresh failure MUST NOT bring
+   // the user back to a live editor or invite a second task submission.
+   try{await loadTasks();check(ss)}
+   catch(error){
+    feedback.textContent='任務已成功發布，列表暫時未更新。請按「重新整理」，不要重新發布。';
+    say(feedback.textContent);
+   }
+   showPublishedTaskList();
+  }finally{
+   publishButton.textContent='發布任務';
+   // loadTasks may reenable the button during its server reads; the
+   // synchronous taskPublishSubmitting flag still protected every tap.
+   publishButton.disabled=false;
+   taskPublishSubmitting=false;
+  }
  });
 };
 async function checkPushReadiness(){
