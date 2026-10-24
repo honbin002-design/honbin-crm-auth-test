@@ -10,8 +10,7 @@ function fragment(start,end){
  return html.slice(a,b);
 }
 const helpers=fragment('function setTaskForm(open){',"$('toggleTaskForm').onclick=");
-const handler=fragment("$('taskForm').onsubmit=e=>{",'
-async function checkPushReadiness()');
+const handler=fragment("$('taskForm').onsubmit=e=>{",'\nasync function checkPushReadiness()');
 function createHarness(failRefresh=false){
  let resolveWrite,rejectWrite,operation=null,creations=0,ids=0,confirmationCount=0,refreshCount=0;
  const write=new Promise((res,rej)=>{resolveWrite=res;rejectWrite=rej});
