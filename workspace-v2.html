@@ -1177,7 +1177,8 @@ $('toggleTaskForm').onclick=()=>{
  if(!open&&($('taskTitle').value||$('taskDetail').value||$('taskExecuteDate').value||$('taskDue').value)&&
     !confirm('收起任務表單？尚未發布的輸入內容會保留在此頁。'))return;
  setTaskForm(open);
- if(open)$('taskTitle').focus();
+ if(open){$('taskPublishFeedback').hidden=true;$('taskTitle').focus()}
+
 };
 $('cancelTaskForm').onclick=()=>{if(!taskPublishSubmitting)setTaskForm(false)};
 async function changeNoteMode(mode){
