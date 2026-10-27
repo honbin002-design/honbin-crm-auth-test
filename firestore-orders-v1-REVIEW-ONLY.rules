@@ -32,6 +32,7 @@ match /orders/{orderId} {
       && (d.status!='RECEIVED' || d.arrivedQuantity==d.quantity)
       && (d.status!='PARTIAL' || (d.arrivedQuantity>0 && d.arrivedQuantity<d.quantity))
       && (!(d.status in ['PENDING','ORDERED']) || d.arrivedQuantity==0)
+      && (d.status=='PENDING' || (d.orderDate!='' && d.orderedByUid.size()>0))
       && (d.status!='PENDING' || (d.orderDate=='' && d.orderedByUid==''));
   }
   function auditMatches(order,prior,kind) {
@@ -106,3 +107,4 @@ match /orders/{orderId} {
     allow update,delete: if false;
   }
 }
+
