@@ -1,0 +1,14 @@
+{
+  "_comment": "REVIEW ONLY: merge with existing indexes only after emulator and quota checks.",
+  "indexes": [
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isCompleted", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"}
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
