@@ -1,12 +1,5 @@
 name: Orders candidate Firestore emulator
 on:
-  push:
-    branches: [feature/orders-calendar-b-20261027]
-    paths:
-      - 'firestore-orders-v1-REVIEW-ONLY.rules'
-      - 'firestore-orders-v1-emulator-test.mjs'
-      - 'prepare-firestore-orders-v1-emulator-rules.mjs'
-      - '.github/workflows/orders-emulator-candidate.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:
