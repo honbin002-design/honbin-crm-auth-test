@@ -52,6 +52,8 @@ match /orders/{orderId} {
     && request.resource.data.keys().hasAll(['details','isCompleted','revision','createdBy','createdAt',
       'updatedBy','updatedAt','lastAuditId'])
     && fieldsValid(request.resource.data.details)
+    && request.resource.data.details.requesterUid==request.auth.uid
+    && (request.resource.data.details.orderedByUid=='' || request.resource.data.details.orderedByUid==request.auth.uid)
     && request.resource.data.isCompleted==(request.resource.data.details.status=='RECEIVED')
     && request.resource.data.revision==1
     && request.resource.data.createdBy==request.auth.uid
@@ -64,6 +66,11 @@ match /orders/{orderId} {
       ['details','isCompleted','revision','updatedBy','updatedAt','lastAuditId'])
     && fieldsValid(request.resource.data.details)
     && request.resource.data.details!=resource.data.details
+    && request.resource.data.details.requesterUid==resource.data.details.requesterUid
+    && (request.resource.data.details.orderedByUid==resource.data.details.orderedByUid
+      || request.resource.data.details.orderedByUid==''
+      || (resource.data.details.orderedByUid==''
+        && request.resource.data.details.orderedByUid==request.auth.uid))
     && request.resource.data.isCompleted==(request.resource.data.details.status=='RECEIVED')
     && request.resource.data.revision==resource.data.revision+1
     && request.resource.data.updatedBy==request.auth.uid
