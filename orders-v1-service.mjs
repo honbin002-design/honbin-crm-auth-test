@@ -7,7 +7,8 @@ const FIELDS=['productName','specification','quantity','unit','supplierName','re
 const STATUS=['PENDING','ORDERED','PARTIAL','RECEIVED'];
 const str=(v,max=300)=>String(v??'').trim().slice(0,max);
 const validId=(v)=>typeof v==='string'&&ID.test(v);
-const date=(v)=>v===''||DATE.test(v);
+const date=(v)=>{if(v==='')return true;if(!DATE.test(v))return false;
+ const d=new Date(v+'T12:00:00Z');return !Number.isNaN(d.valueOf())&&d.toISOString().slice(0,10)===v;};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export const orderStatusLabels=Object.freeze({PENDING:'待訂貨',ORDERED:'已訂貨',
  PARTIAL:'部分到貨',RECEIVED:'已完成'});
