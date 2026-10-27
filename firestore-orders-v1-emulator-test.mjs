@@ -30,6 +30,7 @@ try{
  await assertFails(outsider.collection('groups/group_test/orders').get());
  await assertFails(outsider.doc(root).set(order(1,'a','uid_outside')));
  await assertFails(viewer.doc(root).set(order(1,'missing',uid)));
+ await assertFails(viewer.doc(root).set(order(1,'h-forged',uid,{...details,requesterUid:'uid_owner'})));
  await assertSucceeds(viewer.runTransaction(async tx=>{
   tx.set(viewer.doc(root),order(1,'h1',uid));
   tx.set(viewer.doc(root+'/history/h1'),audit(1,uid,'CREATE',{},details));
