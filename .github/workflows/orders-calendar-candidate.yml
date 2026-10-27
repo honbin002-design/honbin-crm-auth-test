@@ -1,7 +1,5 @@
 name: Orders candidate checks
 on:
-  push:
-    branches: [feature/orders-calendar-b-20261027]
   pull_request:
     branches: [main]
   workflow_dispatch:
