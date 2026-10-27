@@ -74,14 +74,14 @@ function render(){
  '<td><span class="pill '+esc(x.details.status)+'">'+esc(orderStatusLabels[x.details.status])+'</span></td>'+
  '<td>'+esc(x.details.dueDate||'—')+'</td><td>'+esc(stamp(x.updatedAt))+'</td>'+
  '<td><button data-id="'+esc(x.id)+'">明細</button></td></tr>').join('');
- $('count').textContent='目前已載入 '+items.length+' 筆；符合篩選 '+shown.length+' 筆';
+ $('count').textContent='此分類已載入 '+items.length+' 筆；符合搜尋 '+shown.length+' 筆';
  $('more').hidden=!hasMore;
 }
 async function load(resetFirst=false){
  if(!svc||!groupId)return;
  const e=epoch;if(resetFirst)reset();
  try{
-  const p=await svc.listPage(groupId,{cursor,size:30});
+  const p=await svc.listPage(groupId,{cursor,size:30,tab});
   if(e!==epoch)return;
   items.push(...p.items.filter(x=>!items.some(v=>v.id===x.id)));
   cursor=p.cursor;hasMore=p.hasMore;render();tell('已讀取訂貨紀錄（唯讀）。');
@@ -139,7 +139,7 @@ $('cancel').onclick=()=>{$('editor').hidden=true;editing=null};
 $('more').onclick=()=>load();
 $('search').oninput=render;
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
- tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));render();
+ tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));epoch++;load(true);
 });
 $('rows').onclick=e=>{const b=e.target.closest('button[data-id]');if(b)openEditor(b.dataset.id)};
 $('orderForm').onsubmit=async e=>{
