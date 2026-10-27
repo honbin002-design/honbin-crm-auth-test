@@ -54,7 +54,8 @@ export function orderService({db,sdk,currentUid}){
  const orderRef=(groupId,orderId)=>{if(!validId(orderId))throw Error('INVALID_ORDER_ID');return doc(orders(groupId),orderId)};
  const history=(groupId,orderId)=>collection(orderRef(groupId,orderId),'history');
  async function create(groupId,input){
-  const uid=actor(),details=normalizeOrder(input),ref=doc(orders(groupId));
+  const uid=actor(),details=normalizeOrder({...input,requesterUid:uid,
+   orderedByUid:input?.status==='PENDING'?'':(input?.orderedByUid?uid:'')}),ref=doc(orders(groupId));
   const audit=doc(history(groupId,ref.id));
   await runTransaction(db,async tx=>{
    if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
@@ -76,7 +77,12 @@ export function orderService({db,sdk,currentUid}){
    if(previous.revision!==expectedRevision)throw Error('ORDER_CHANGED_RELOAD');
    if(!patch||typeof patch!=='object'||Array.isArray(patch)||
     Object.keys(patch).some(k=>!FIELDS.includes(k)))throw Error('INVALID_PATCH');
-   const next=normalizeOrder({...previous.details,...patch});
+   const merged={...previous.details,...patch,requesterUid:previous.details.requesterUid};
+   // The ordering actor cannot be forged or reassigned by editing a form.
+   if(merged.status==='PENDING')merged.orderedByUid='';
+   else if(!previous.details.orderedByUid&&merged.orderedByUid)merged.orderedByUid=uid;
+   else merged.orderedByUid=previous.details.orderedByUid;
+   const next=normalizeOrder(merged);
    if(same(next,previous.details))return {changed:false,revision:expectedRevision};
    const revision=expectedRevision+1;
    tx.update(ref,{details:next,isCompleted:next.status==='RECEIVED',revision,updatedBy:uid,
