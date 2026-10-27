@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>鴻繽 CRM｜訂貨管理 TEST</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#19283d;background:#f5f7fb}
+*{box-sizing:border-box}body{margin:0}main{max-width:900px;margin:auto;padding:16px 12px 110px}
+h1{font-size:1.3rem;margin:4px 0 14px}.bar,.tabs,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+button,select,input,textarea{font:inherit;border:1px solid #c7d2df;border-radius:9px;padding:10px;min-height:43px;background:#fff;color:#19283d}
+button{cursor:pointer}button.primary{background:#165ca8;color:#fff;border-color:#165ca8}button:disabled{opacity:.55;cursor:default}
+.tabs button{flex:1;white-space:nowrap}.tabs button.active{background:#165ca8;color:#fff}
+#search{width:100%}.table-wrap{overflow:auto;background:white;border:1px solid #dbe3ed;border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:660px;font-size:.9rem}th,td{text-align:left;padding:11px 9px;border-bottom:1px solid #e7ecf2;white-space:nowrap}
+th{position:sticky;top:0;background:#eaf0f8}tr:last-child td{border-bottom:0}
+.pill{display:inline-block;padding:3px 8px;border-radius:12px;background:#e7ecf2;font-size:.8rem}
+.PENDING{background:#ffe4dd}.ORDERED{background:#dbeafe}.PARTIAL{background:#fff0bd}.RECEIVED{background:#d7f4df}
+.panel{border:1px solid #dbe3ed;background:white;border-radius:12px;padding:13px;margin:12px 0}
+.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:#45536a}
+label input,label select,label textarea{width:100%;color:#19283d}label.wide{grid-column:1/-1}
+small,.hint{color:#607087;font-size:.8rem}#status{white-space:pre-wrap;padding:9px;border-radius:8px;background:#eaf0f8}
+.history{font-size:.86rem;list-style:none;padding:0;margin:0}.history li{border-bottom:1px solid #e7ecf2;padding:10px 0}
+[hidden]{display:none!important}@media(max-width:420px){main{padding:12px 8px 90px}.formgrid{grid-template-columns:1fr}h1{font-size:1.18rem}}
+</style></head><body><main>
+<h1>訂貨管理 <small>TEST 候選版</small></h1>
+<div id="status" role="status">請登入 Google 帳號。此頁只連接既有 TEST 專案。</div>
+<div class="bar"><button id="login" class="primary">Google 登入</button><button id="logout" hidden>登出</button><span id="who"></span></div>
+<section id="app" hidden>
+<div class="bar"><label>共用群組<select id="group"></select></label><button id="refresh">重新整理</button><button class="primary" id="new">＋ 新增訂貨</button></div>
+<div class="tabs" role="tablist"><button class="active" data-tab="all">全部</button><button data-tab="done">已完成</button><button data-tab="open">未完成</button></div>
+<input id="search" placeholder="搜尋產品、供應商、訂貨人、備註" aria-label="搜尋訂貨">
+<p class="hint">一筆一列，點「明細」查看或修改；每次只讀取最多 30 筆，按「載入更多」繼續。</p>
+<div class="table-wrap"><table><thead><tr><th>品名／規格</th><th>數量</th><th>狀態</th><th>預計交期</th><th>最後更新</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="bar"><span id="count"></span><button id="more" hidden>載入更多</button></div>
+<section class="panel" id="editor" hidden>
+<h2 id="editTitle">新增訂貨</h2>
+<form id="orderForm"><div class="formgrid">
+<label>品名<input name="productName" maxlength="120" required></label>
+<label>規格<input name="specification" maxlength="200"></label>
+<label>數量<input name="quantity" type="number" step="any" min="0.001" required></label>
+<label>單位<input name="unit" maxlength="20" value="KG" required></label>
+<label>供應商<input name="supplierName" maxlength="120" required></label>
+<label>訂貨狀態<select name="status"><option value="PENDING">待訂貨</option><option value="ORDERED">已訂貨</option><option value="PARTIAL">部分到貨</option><option value="RECEIVED">已完成</option></select></label>
+<label>訂貨日期<input name="orderDate" type="date"></label>
+<label>預計交期<input name="dueDate" type="date"></label>
+<label>已到貨數量<input name="arrivedQuantity" type="number" step="any" min="0" value="0"></label>
+<label class="wide">備註<textarea name="note" rows="2" maxlength="2000"></textarea></label>
+</div><div class="actions"><button type="submit" class="primary" id="save">儲存</button><button type="button" id="cancel">取消</button></div></form>
+<h3 id="historyTitle" hidden>完整異動紀錄（最近 100 次）</h3><ul id="history" class="history"></ul>
+</section>
+</section>
+</main>
+<script type="module">
+import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import * as sdk from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+import {firebaseConfig} from './firebase-web-config.mjs';
+import {groupService} from './firebase-group-service.mjs';
+import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-service.mjs';
+const $=id=>document.getElementById(id),app=getApps().length?getApp():initializeApp(firebaseConfig);
+const auth=getAuth(app),db=sdk.getFirestore(app);
+let svc=null,groups=null,uid='',groupId='',items=[],cursor=null,hasMore=false,tab='all',editing=null,busy=false,epoch=0;
+const tell=s=>$('status').textContent=s;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const stamp=t=>t?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
+const groupNow=()=>{if(!groupId)throw Error('請先選擇群組');return groupId};
+const reset=()=>{items=[];cursor=null;hasMore=false;editing=null;$('editor').hidden=true;render()};
+function render(){
+ const q=$('search').value.trim().toLocaleLowerCase('zh-Hant');
+ const shown=items.filter(x=>(tab==='all'||(tab==='done'?x.details.status==='RECEIVED':x.details.status!=='RECEIVED'))&&
+  [x.details.productName,x.details.specification,x.details.supplierName,x.details.note,x.updatedBy]
+   .join(' ').toLocaleLowerCase('zh-Hant').includes(q));
+ $('rows').innerHTML=shown.map(x=>'<tr><td>'+esc(x.details.productName)+'<br><small>'+esc(x.details.specification)+'</small></td>'+
+ '<td>'+esc(x.details.quantity)+' '+esc(x.details.unit)+'</td>'+
+ '<td><span class="pill '+esc(x.details.status)+'">'+esc(orderStatusLabels[x.details.status])+'</span></td>'+
+ '<td>'+esc(x.details.dueDate||'—')+'</td><td>'+esc(stamp(x.updatedAt))+'</td>'+
+ '<td><button data-id="'+esc(x.id)+'">明細</button></td></tr>').join('');
+ $('count').textContent='目前已載入 '+items.length+' 筆；符合篩選 '+shown.length+' 筆';
+ $('more').hidden=!hasMore;
+}
+async function load(resetFirst=false){
+ if(!svc||!groupId)return;
+ const e=epoch;if(resetFirst)reset();
+ try{
+  const p=await svc.listPage(groupId,{cursor,size:30});
+  if(e!==epoch)return;
+  items.push(...p.items.filter(x=>!items.some(v=>v.id===x.id)));
+  cursor=p.cursor;hasMore=p.hasMore;render();tell('已讀取訂貨紀錄（唯讀）。');
+ }catch(err){tell('讀取失敗：'+err.message+'。可能尚未部署訂貨專用權限規則。')}
+}
+async function openEditor(id=null){
+ editing=id;
+ const x=items.find(x=>x.id===id);
+ $('editTitle').textContent=x?'訂貨明細與修改':'新增訂貨';
+ const f=$('orderForm');
+ f.reset();
+ for(const [k,v] of Object.entries(x?.details||{}))if(f.elements.namedItem(k))f.elements.namedItem(k).value=v;
+ if(!x){f.elements.namedItem('unit').value='KG';f.elements.namedItem('arrivedQuantity').value=0}
+ $('editor').hidden=false;$('history').replaceChildren();$('historyTitle').hidden=!x;
+ if(x){
+  try{
+   const hist=await svc.listHistory(groupNow(),x.id);
+   if(editing!==id)return;
+   for(const h of hist){
+    const li=document.createElement('li');
+    const changes=h.changes.map(c=>c.field+'：'+String(c.before??'（空）')+' → '+String(c.after??'（空）')).join('；');
+    li.textContent=stamp(h.changedAt)+'｜'+h.actorUid+'｜'+(changes||'建立訂貨');
+    $('history').append(li);
+   }
+  }catch(err){tell('歷史讀取失敗：'+err.message)}
+ }
+ $('editor').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('login').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){tell('登入失敗：'+e.code)}};
+$('logout').onclick=()=>signOut(auth);
+onAuthStateChanged(auth,async user=>{
+ epoch++;uid='';svc=null;groups=null;groupId='';reset();
+ $('app').hidden=true;$('logout').hidden=!user;$('login').hidden=!!user;
+ $('who').textContent=user?.email||'';
+ if(!user)return tell('請登入 Google 帳號。');
+ if(!user.emailVerified||!user.providerData.some(p=>p.providerId==='google.com'))
+  return tell('請使用已驗證的 Google 帳號。');
+ const e=epoch;uid=user.uid;
+ try{
+  groups=groupService({db,sdk,identity:{uid,email:user.email,emailVerified:user.emailVerified}});
+  svc=orderService({db,sdk,currentUid:()=>auth.currentUser?.uid});
+  const list=await groups.listGroups();if(e!==epoch)return;
+  $('group').replaceChildren();
+  for(const g of list){const o=document.createElement('option');o.value=g.id;o.textContent=g.name;$('group').append(o)}
+  groupId=list[0]?.id||'';
+  $('app').hidden=false;
+  if(!groupId)tell('目前沒有已加入的群組。');
+  else await load(true);
+ }catch(err){tell('群組讀取失敗：'+err.message)}
+});
+$('group').onchange=()=>{groupId=$('group').value;epoch++;load(true)};
+$('refresh').onclick=()=>{epoch++;load(true)};
+$('new').onclick=()=>openEditor();
+$('cancel').onclick=()=>{$('editor').hidden=true;editing=null};
+$('more').onclick=()=>load();
+$('search').oninput=render;
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
+ tab=b.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));render();
+});
+$('rows').onclick=e=>{const b=e.target.closest('button[data-id]');if(b)openEditor(b.dataset.id)};
+$('orderForm').onsubmit=async e=>{
+ e.preventDefault();if(busy)return;busy=true;$('save').disabled=true;
+ try{
+  const f=e.currentTarget,d=Object.fromEntries(new FormData(f));
+  const previous=items.find(x=>x.id===editing);
+  d.quantity=Number(d.quantity);d.arrivedQuantity=Number(d.arrivedQuantity);
+  d.requesterUid=previous?.details.requesterUid||uid;
+  d.orderedByUid=previous?.details.orderedByUid||'';
+  if(d.status==='PENDING'){d.orderedByUid='';d.orderDate='';d.arrivedQuantity=0}
+  if(d.status==='ORDERED'&&!d.orderedByUid)d.orderedByUid=uid;
+  if(d.status==='ORDERED'&&!d.orderDate)d.orderDate=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
+  if(d.status==='RECEIVED')d.arrivedQuantity=d.quantity;
+  if(previous)await svc.update(groupNow(),editing,d,previous.revision);
+  else await svc.create(groupNow(),d);
+  tell('訂貨已儲存，異動歷史已由同一筆交易寫入。');
+  epoch++;await load(true);
+ }catch(err){tell('儲存失敗：'+err.message)}
+ finally{busy=false;$('save').disabled=false}
+};
+</script></body></html>
