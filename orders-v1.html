@@ -59,6 +59,15 @@ import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-ser
 const $=id=>document.getElementById(id),app=getApps().length?getApp():initializeApp(firebaseConfig);
 const auth=getAuth(app),db=sdk.getFirestore(app);
 let svc=null,groups=null,uid='',groupId='',items=[],cursor=null,hasMore=false,tab='all',editing=null,busy=false,epoch=0;
+const names=new Map();
+async function nameFor(id){
+ if(!id)return '—';if(names.has(id))return names.get(id);
+ let name=id.slice(0,8)+'…';
+ try{const snap=await sdk.getDocFromServer(sdk.doc(db,'profiles',id));
+  if(snap.exists()&&snap.data().nickname)name=snap.data().nickname;
+ }catch{}
+ names.set(id,name);return name;
+}
 const tell=s=>$('status').textContent=s;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const stamp=t=>t?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
@@ -72,7 +81,7 @@ function render(){
  $('rows').innerHTML=shown.map(x=>'<tr><td>'+esc(x.details.productName)+'<br><small>'+esc(x.details.specification)+'</small></td>'+
  '<td>'+esc(x.details.quantity)+' '+esc(x.details.unit)+'</td>'+
  '<td><span class="pill '+esc(x.details.status)+'">'+esc(orderStatusLabels[x.details.status])+'</span></td>'+
- '<td>'+esc(x.details.dueDate||'—')+'</td><td>'+esc(stamp(x.updatedAt))+'</td>'+
+ '<td>'+esc(x.details.dueDate||'—')+'</td><td>'+esc(stamp(x.updatedAt))+'<br><small>'+esc(names.get(x.updatedBy)||x.updatedBy?.slice(0,8)||'—')+'</small></td>'+
  '<td><button data-id="'+esc(x.id)+'">明細</button></td></tr>').join('');
  $('count').textContent='此分類已載入 '+items.length+' 筆；符合搜尋 '+shown.length+' 筆';
  $('more').hidden=!hasMore;
@@ -85,6 +94,8 @@ async function load(resetFirst=false){
   if(e!==epoch)return;
   items.push(...p.items.filter(x=>!items.some(v=>v.id===x.id)));
   cursor=p.cursor;hasMore=p.hasMore;render();tell('已讀取訂貨紀錄（唯讀）。');
+  await Promise.all([...new Set(p.items.map(x=>x.updatedBy).filter(Boolean))].map(nameFor));
+  if(e===epoch)render();
  }catch(err){tell('讀取失敗：'+err.message+'。可能尚未部署訂貨專用權限規則。')}
 }
 async function openEditor(id=null){
@@ -103,7 +114,7 @@ async function openEditor(id=null){
    for(const h of hist){
     const li=document.createElement('li');
     const changes=h.changes.map(c=>c.field+'：'+String(c.before??'（空）')+' → '+String(c.after??'（空）')).join('；');
-    li.textContent=stamp(h.changedAt)+'｜'+h.actorUid+'｜'+(changes||'建立訂貨');
+    li.textContent=stamp(h.changedAt)+'｜'+await nameFor(h.actorUid)+'｜'+(changes||'建立訂貨');
     $('history').append(li);
    }
   }catch(err){tell('歷史讀取失敗：'+err.message)}
