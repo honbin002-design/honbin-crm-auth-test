@@ -29,7 +29,7 @@ small,.hint{color:#607087;font-size:.8rem}#status{white-space:pre-wrap;padding:9
 <div class="tabs" role="tablist"><button class="active" data-tab="all">全部</button><button data-tab="done">已完成</button><button data-tab="open">未完成</button></div>
 <input id="search" placeholder="搜尋產品、供應商、訂貨人、備註" aria-label="搜尋訂貨">
 <p class="hint">一筆一列，點「明細」查看或修改；每次只讀取最多 30 筆，按「載入更多」繼續。</p>
-<div class="table-wrap"><table><thead><tr><th>品名／規格</th><th>數量</th><th>狀態</th><th>預計交期</th><th>最後更新</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>品名／規格</th><th>數量</th><th>狀態</th><th>預計交期</th><th>訂貨人</th><th>最後更新</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="bar"><span id="count"></span><button id="more" hidden>載入更多</button></div>
 <section class="panel" id="editor" hidden>
 <h2 id="editTitle">新增訂貨</h2>
@@ -81,7 +81,7 @@ function render(){
  $('rows').innerHTML=shown.map(x=>'<tr><td>'+esc(x.details.productName)+'<br><small>'+esc(x.details.specification)+'</small></td>'+
  '<td>'+esc(x.details.quantity)+' '+esc(x.details.unit)+'</td>'+
  '<td><span class="pill '+esc(x.details.status)+'">'+esc(orderStatusLabels[x.details.status])+'</span></td>'+
- '<td>'+esc(x.details.dueDate||'—')+'</td><td>'+esc(stamp(x.updatedAt))+'<br><small>'+esc(names.get(x.updatedBy)||x.updatedBy?.slice(0,8)||'—')+'</small></td>'+
+ '<td>'+esc(x.details.dueDate||'—')+'</td><td>'+esc(names.get(x.details.orderedByUid)||x.details.orderedByUid?.slice(0,8)||'—')+'</td><td>'+esc(stamp(x.updatedAt))+'<br><small>'+esc(names.get(x.updatedBy)||x.updatedBy?.slice(0,8)||'—')+'</small></td>'+
  '<td><button data-id="'+esc(x.id)+'">明細</button></td></tr>').join('');
  $('count').textContent='此分類已載入 '+items.length+' 筆；符合搜尋 '+shown.length+' 筆';
  $('more').hidden=!hasMore;
@@ -94,7 +94,7 @@ async function load(resetFirst=false){
   if(e!==epoch)return;
   items.push(...p.items.filter(x=>!items.some(v=>v.id===x.id)));
   cursor=p.cursor;hasMore=p.hasMore;render();tell('已讀取訂貨紀錄（唯讀）。');
-  await Promise.all([...new Set(p.items.map(x=>x.updatedBy).filter(Boolean))].map(nameFor));
+  await Promise.all([...new Set(p.items.flatMap(x=>[x.updatedBy,x.details.orderedByUid]).filter(Boolean))].map(nameFor));
   if(e===epoch)render();
  }catch(err){tell('讀取失敗：'+err.message+'。可能尚未部署訂貨專用權限規則。')}
 }
