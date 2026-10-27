@@ -1,0 +1,20 @@
+name: Orders candidate checks
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check orders-v1-preflight.mjs
+      - run: node orders-v1-preflight.mjs
+
+      - run: node orders-v1-static-preflight.mjs

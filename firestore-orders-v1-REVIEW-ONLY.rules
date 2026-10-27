@@ -1,0 +1,108 @@
+// REVIEW ONLY — candidate insertion inside existing match /groups/{groupId}.
+// Do NOT deploy without merging into the currently deployed Firestore rules,
+// emulator authorization/denial tests, and owner approval.
+// Existing canViewGroup(groupId) must require ACTIVE membership.
+match /orders/{orderId} {
+  function orderPath() {
+    return /databases/$(database)/documents/groups/$(groupId)/orders/$(orderId);
+  }
+  function auditPath(auditId) {
+    return /databases/$(database)/documents/groups/$(groupId)/orders/$(orderId)/history/$(auditId);
+  }
+  function fieldsValid(d) {
+    return d is map
+      && d.keys().hasAll(['productName','specification','quantity','unit','supplierName',
+        'requesterUid','orderedByUid','orderDate','dueDate','arrivedQuantity','status','note'])
+      && d.keys().hasOnly(['productName','specification','quantity','unit','supplierName',
+        'requesterUid','orderedByUid','orderDate','dueDate','arrivedQuantity','status','note'])
+      && d.productName is string && d.productName.size()>0 && d.productName.size()<=120
+      && d.specification is string && d.specification.size()<=200
+      && d.supplierName is string && d.supplierName.size()>0 && d.supplierName.size()<=120
+      && d.unit is string && d.unit.size()>0 && d.unit.size()<=20
+      && d.quantity is number && d.quantity>0
+      && d.arrivedQuantity is number && d.arrivedQuantity>=0 && d.arrivedQuantity<=d.quantity
+      && d.note is string && d.note.size()<=2000
+      && d.requesterUid is string && d.requesterUid.size()<=150
+      && d.orderedByUid is string && d.orderedByUid.size()<=150
+      && d.orderDate is string && d.orderDate.size()<=10
+      && (d.orderDate=='' || d.orderDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+      && d.dueDate is string && d.dueDate.size()<=10
+      && (d.dueDate=='' || d.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+      && d.status in ['PENDING','ORDERED','PARTIAL','RECEIVED']
+      && (d.status!='RECEIVED' || d.arrivedQuantity==d.quantity)
+      && (d.status!='PARTIAL' || (d.arrivedQuantity>0 && d.arrivedQuantity<d.quantity))
+      && (!(d.status in ['PENDING','ORDERED']) || d.arrivedQuantity==0)
+      && (d.status!='PENDING' || (d.orderDate=='' && d.orderedByUid==''));
+  }
+  function auditMatches(order,prior,kind) {
+    return order.lastAuditId is string
+      && existsAfter(auditPath(order.lastAuditId))
+      && getAfter(auditPath(order.lastAuditId)).data.orderId==orderId
+      && getAfter(auditPath(order.lastAuditId)).data.revision==order.revision
+      && getAfter(auditPath(order.lastAuditId)).data.actorUid==request.auth.uid
+      && getAfter(auditPath(order.lastAuditId)).data.changedAt==request.time
+      && getAfter(auditPath(order.lastAuditId)).data.kind==kind
+      && getAfter(auditPath(order.lastAuditId)).data.before==prior
+      && getAfter(auditPath(order.lastAuditId)).data.after==order.details;
+  }
+  allow get,list: if canViewGroup(groupId);
+  allow create: if canViewGroup(groupId)
+    && request.resource.data.keys().hasOnly(['details','isCompleted','revision','createdBy','createdAt',
+      'updatedBy','updatedAt','lastAuditId'])
+    && request.resource.data.keys().hasAll(['details','isCompleted','revision','createdBy','createdAt',
+      'updatedBy','updatedAt','lastAuditId'])
+    && fieldsValid(request.resource.data.details)
+    && request.resource.data.details.requesterUid==request.auth.uid
+    && (request.resource.data.details.orderedByUid=='' || request.resource.data.details.orderedByUid==request.auth.uid)
+    && request.resource.data.isCompleted==(request.resource.data.details.status=='RECEIVED')
+    && request.resource.data.revision==1
+    && request.resource.data.createdBy==request.auth.uid
+    && request.resource.data.updatedBy==request.auth.uid
+    && request.resource.data.createdAt==request.time
+    && request.resource.data.updatedAt==request.time
+    && auditMatches(request.resource.data,{},'CREATE');
+  allow update: if canViewGroup(groupId)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+      ['details','isCompleted','revision','updatedBy','updatedAt','lastAuditId'])
+    && fieldsValid(request.resource.data.details)
+    && request.resource.data.details!=resource.data.details
+    && request.resource.data.details.requesterUid==resource.data.details.requesterUid
+    && (request.resource.data.details.orderedByUid==resource.data.details.orderedByUid
+      || request.resource.data.details.orderedByUid==''
+      || (resource.data.details.orderedByUid==''
+        && request.resource.data.details.orderedByUid==request.auth.uid))
+    && request.resource.data.isCompleted==(request.resource.data.details.status=='RECEIVED')
+    && request.resource.data.revision==resource.data.revision+1
+    && request.resource.data.updatedBy==request.auth.uid
+    && request.resource.data.updatedAt==request.time
+    && request.resource.data.lastAuditId!=resource.data.lastAuditId
+    && auditMatches(request.resource.data,resource.data.details,'UPDATE');
+  allow delete: if false;
+  match /history/{historyId} {
+    allow get,list: if canViewGroup(groupId);
+    allow create: if canViewGroup(groupId)
+      && request.resource.data.keys().hasAll(['orderId','revision','actorUid','changedAt',
+        'kind','before','after'])
+      && request.resource.data.keys().hasOnly(['orderId','revision','actorUid','changedAt',
+        'kind','before','after'])
+      && request.resource.data.orderId==orderId
+      && request.resource.data.actorUid==request.auth.uid
+      && request.resource.data.changedAt==request.time
+      && request.resource.data.kind in ['CREATE','UPDATE']
+      && getAfter(orderPath()).data.lastAuditId==historyId
+      && getAfter(orderPath()).data.revision==request.resource.data.revision
+      && getAfter(orderPath()).data.details==request.resource.data.after
+      && (
+        (request.resource.data.kind=='CREATE'
+          && !exists(orderPath())
+          && request.resource.data.revision==1
+          && request.resource.data.before=={})
+        ||
+        (request.resource.data.kind=='UPDATE'
+          && exists(orderPath())
+          && request.resource.data.revision==get(orderPath()).data.revision+1
+          && request.resource.data.before==get(orderPath()).data.details)
+      );
+    allow update,delete: if false;
+  }
+}
