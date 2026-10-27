@@ -16,3 +16,5 @@ jobs:
           node-version: '22'
       - run: node --check orders-v1-preflight.mjs
       - run: node orders-v1-preflight.mjs
+
+      - run: node orders-v1-static-preflight.mjs
