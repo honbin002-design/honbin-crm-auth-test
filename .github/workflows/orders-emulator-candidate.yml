@@ -7,6 +7,8 @@ on:
       - 'firestore-orders-v1-emulator-test.mjs'
       - 'prepare-firestore-orders-v1-emulator-rules.mjs'
       - '.github/workflows/orders-emulator-candidate.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
