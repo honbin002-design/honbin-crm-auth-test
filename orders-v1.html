@@ -88,7 +88,7 @@ function render(){
 }
 async function load(resetFirst=false){
  if(!svc||!groupId)return;
- const e=epoch;if(resetFirst)reset();
+ if(resetFirst)reset();const e=epoch;
  try{
   const p=await svc.listPage(groupId,{cursor,size:30,tab});
   if(e!==epoch)return;
@@ -101,6 +101,7 @@ async function load(resetFirst=false){
 async function openEditor(id=null){
  editing=id;
  const x=items.find(x=>x.id===id);
+ if(id&&!x)throw Error('ORDER_NOT_IN_CURRENT_PAGE');
  $('editTitle').textContent=x?'訂貨明細與修改':'新增訂貨';
  const f=$('orderForm');
  f.reset();
@@ -134,7 +135,7 @@ onAuthStateChanged(auth,async user=>{
  try{
   groups=groupService({db,sdk,identity:{uid,email:user.email,emailVerified:user.emailVerified}});
   svc=orderService({db,sdk,currentUid:()=>auth.currentUser?.uid});
-  const list=await groups.listGroups();if(e!==epoch)return;
+  const list=await groups.listGroupsFromServer();if(e!==epoch)return;
   $('group').replaceChildren();
   for(const g of list){const o=document.createElement('option');o.value=g.id;o.textContent=g.name;$('group').append(o)}
   groupId=list[0]?.id||'';
