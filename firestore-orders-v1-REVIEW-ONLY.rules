@@ -45,11 +45,12 @@ match /orders/{orderId} {
   }
   allow get,list: if canViewGroup(groupId);
   allow create: if canViewGroup(groupId)
-    && request.resource.data.keys().hasOnly(['details','revision','createdBy','createdAt',
+    && request.resource.data.keys().hasOnly(['details','isCompleted','revision','createdBy','createdAt',
       'updatedBy','updatedAt','lastAuditId'])
-    && request.resource.data.keys().hasAll(['details','revision','createdBy','createdAt',
+    && request.resource.data.keys().hasAll(['details','isCompleted','revision','createdBy','createdAt',
       'updatedBy','updatedAt','lastAuditId'])
     && fieldsValid(request.resource.data.details)
+    && request.resource.data.isCompleted==(request.resource.data.details.status=='RECEIVED')
     && request.resource.data.revision==1
     && request.resource.data.createdBy==request.auth.uid
     && request.resource.data.updatedBy==request.auth.uid
@@ -58,9 +59,10 @@ match /orders/{orderId} {
     && auditMatches(request.resource.data,{},'CREATE');
   allow update: if canViewGroup(groupId)
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-      ['details','revision','updatedBy','updatedAt','lastAuditId'])
+      ['details','isCompleted','revision','updatedBy','updatedAt','lastAuditId'])
     && fieldsValid(request.resource.data.details)
     && request.resource.data.details!=resource.data.details
+    && request.resource.data.isCompleted==(request.resource.data.details.status=='RECEIVED')
     && request.resource.data.revision==resource.data.revision+1
     && request.resource.data.updatedBy==request.auth.uid
     && request.resource.data.updatedAt==request.time
