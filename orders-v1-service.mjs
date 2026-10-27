@@ -35,6 +35,8 @@ export function normalizeOrder(input){
   throw Error('PARTIAL_REQUIRES_PARTIAL_QUANTITY');
  if((d.status==='PENDING'||d.status==='ORDERED')&&d.arrivedQuantity!==0)
   throw Error('ARRIVED_QUANTITY_REQUIRES_PARTIAL_OR_RECEIVED');
+ if(d.status!=='PENDING'&&(!d.orderDate||!d.orderedByUid))
+  throw Error('ORDERED_REQUIRES_DATE_AND_ACTOR');
  if(d.status==='PENDING'&&(d.orderDate||d.orderedByUid))
   throw Error('PENDING_CANNOT_BE_ORDERED');
  return d;
@@ -117,3 +119,4 @@ export function orderService({db,sdk,currentUid}){
  }
  return {create,update,listPage,listHistory};
 }
+

@@ -1,0 +1,24 @@
+name: Orders release safety against current baseline
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm install --no-package-lock --no-audit --no-fund
+      - run: node orders-v1-preflight.mjs && node orders-v1-static-preflight.mjs
+      - run: node prepare-orders-current-baseline-emulator.mjs
+      - run: npx firebase emulators:exec --config firebase.emulator.test.json --project demo-honbin-orders-v1 --only firestore 'node firestore-orders-v1-emulator-test.mjs && node orders-existing-acl-regression.mjs && node firestore-task-v5-bridge-emulator-test.mjs'

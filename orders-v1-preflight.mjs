@@ -10,8 +10,11 @@ assert.throws(()=>normalizeOrder({...base,arrivedQuantity:3}),/ARRIVED_QUANTITY_
 assert.throws(()=>normalizeOrder({...base,status:'RECEIVED',arrivedQuantity:10}),/RECEIVED_REQUIRES/);
 assert.throws(()=>normalizeOrder({...base,status:'PARTIAL',arrivedQuantity:0}),/PARTIAL_REQUIRES/);
 assert.throws(()=>normalizeOrder({...base,status:'PENDING',orderDate:'2026-11-01'}),/PENDING_CANNOT/);
-assert.equal(normalizeOrder({...base,status:'PARTIAL',arrivedQuantity:4}).arrivedQuantity,4);
-assert.equal(normalizeOrder({...base,status:'RECEIVED',arrivedQuantity:20}).arrivedQuantity,20);
+assert.equal(normalizeOrder({...base,status:'PARTIAL',arrivedQuantity:4,orderDate:'2026-10-27',orderedByUid:'u1'}).arrivedQuantity,4);
+assert.equal(normalizeOrder({...base,status:'RECEIVED',arrivedQuantity:20,orderDate:'2026-10-27',orderedByUid:'u1'}).arrivedQuantity,20);
 const diff=orderChangeSummary(base,{...base,status:'ORDERED',orderDate:'2026-10-27'});
 assert.deepEqual(diff.map(x=>x.field),['orderDate','status']);
 console.log('ORDERS_V1_VALIDATION_AND_AUDIT_DIFF_PASS');
+
+
+assert.throws(()=>normalizeOrder({...base,status:'ORDERED'}),/ORDERED_REQUIRES_DATE_AND_ACTOR/);

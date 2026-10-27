@@ -27,6 +27,7 @@ try{
   await db.doc('approvedAccounts/viewer@example.com').set({email:'viewer@example.com',status:'ACTIVE'});
   await db.doc('groups/group_test/members/'+uid).set({uid,role:'VIEWER',status:'ACTIVE',invitationId:'synthetic'});
  });
+ await env.withSecurityRulesDisabled(c=>c.firestore().doc('approvedAccounts/outside@example.com').set({email:'outside@example.com',status:'ACTIVE'}));
  await assertFails(outsider.collection('groups/group_test/orders').get());
  await assertFails(outsider.doc(root).set(order(1,'a','uid_outside')));
  await assertFails(viewer.doc(root).set(order(1,'missing',uid)));
@@ -39,6 +40,11 @@ try{
  await assertFails(viewer.doc(root).update({details:{...details,status:'RECEIVED',arrivedQuantity:20}}));
  await assertFails(viewer.doc(root+'/history/h1').delete());
  await assertFails(viewer.doc(root).delete());
+ const invalid={...details,status:'ORDERED'};
+ await assertFails(viewer.runTransaction(async tx=>{
+  tx.update(viewer.doc(root),{details:invalid,revision:2,updatedBy:uid,updatedAt:serverTime(),lastAuditId:'invalid'});
+  tx.set(viewer.doc(root+'/history/invalid'),audit(2,uid,'UPDATE',details,invalid));
+ }));
  const next={...details,status:'RECEIVED',arrivedQuantity:20,orderDate:'2026-10-27',orderedByUid:uid};
  await assertSucceeds(viewer.runTransaction(async tx=>{
   const current=await tx.get(viewer.doc(root));
@@ -52,3 +58,4 @@ try{
  await assertFails(viewer.doc(root+'/history/h2').update({actorUid:'uid_owner'}));
  console.log('ORDERS_V1_FIRESTORE_ATOMIC_AUDIT_AND_DENIAL_PASS');
 }finally{await env.cleanup()}
+

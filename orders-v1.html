@@ -60,6 +60,7 @@ const $=id=>document.getElementById(id),app=getApps().length?getApp():initialize
 const auth=getAuth(app),db=sdk.getFirestore(app);
 let svc=null,groups=null,uid='',groupId='',items=[],cursor=null,hasMore=false,tab='all',editing=null,busy=false,epoch=0;
 const names=new Map();
+let loading=false;
 async function nameFor(id){
  if(!id)return '—';if(names.has(id))return names.get(id);
  let name=id.slice(0,8)+'…';
@@ -70,13 +71,14 @@ async function nameFor(id){
 }
 const tell=s=>$('status').textContent=s;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fieldLabels={productName:'品名',specification:'規格',quantity:'數量',unit:'單位',supplierName:'供應商',requesterUid:'建立人',orderedByUid:'訂貨人',orderDate:'訂貨日期',dueDate:'預計交期',arrivedQuantity:'已到貨數量',status:'狀態',note:'備註'};
 const stamp=t=>t?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
 const groupNow=()=>{if(!groupId)throw Error('請先選擇群組');return groupId};
 const reset=()=>{items=[];cursor=null;hasMore=false;editing=null;$('editor').hidden=true;render()};
 function render(){
  const q=$('search').value.trim().toLocaleLowerCase('zh-Hant');
  const shown=items.filter(x=>(tab==='all'||(tab==='done'?x.details.status==='RECEIVED':x.details.status!=='RECEIVED'))&&
-  [x.details.productName,x.details.specification,x.details.supplierName,x.details.note,x.updatedBy]
+  [x.details.productName,x.details.specification,x.details.supplierName,x.details.note,names.get(x.updatedBy),names.get(x.details.orderedByUid),x.updatedBy]
    .join(' ').toLocaleLowerCase('zh-Hant').includes(q));
  $('rows').innerHTML=shown.map(x=>'<tr><td>'+esc(x.details.productName)+'<br><small>'+esc(x.details.specification)+'</small></td>'+
  '<td>'+esc(x.details.quantity)+' '+esc(x.details.unit)+'</td>'+
@@ -88,18 +90,20 @@ function render(){
 }
 async function load(resetFirst=false){
  if(!svc||!groupId)return;
- if(resetFirst)reset();const e=epoch;
+ if(loading&&!resetFirst)return;
+ if(resetFirst)reset();const e=epoch,g=groupId,service=svc;loading=true;$('more').disabled=true;
  try{
-  const p=await svc.listPage(groupId,{cursor,size:30,tab});
+  const p=await service.listPage(g,{cursor,size:30,tab});
   if(e!==epoch)return;
   items.push(...p.items.filter(x=>!items.some(v=>v.id===x.id)));
   cursor=p.cursor;hasMore=p.hasMore;render();tell('已讀取訂貨紀錄（唯讀）。');
   await Promise.all([...new Set(p.items.flatMap(x=>[x.updatedBy,x.details.orderedByUid]).filter(Boolean))].map(nameFor));
   if(e===epoch)render();
- }catch(err){tell('讀取失敗：'+err.message+'。可能尚未部署訂貨專用權限規則。')}
+ }catch(err){if(e===epoch)tell('讀取失敗：'+err.message)}
+ finally{if(e===epoch){loading=false;$('more').disabled=false}}
 }
 async function openEditor(id=null){
- editing=id;
+ editing=id;const e=epoch,g=groupId,service=svc;
  const x=items.find(x=>x.id===id);
  if(id&&!x)throw Error('ORDER_NOT_IN_CURRENT_PAGE');
  $('editTitle').textContent=x?'訂貨明細與修改':'新增訂貨';
@@ -110,22 +114,24 @@ async function openEditor(id=null){
  $('editor').hidden=false;$('history').replaceChildren();$('historyTitle').hidden=!x;
  if(x){
   try{
-   const hist=await svc.listHistory(groupNow(),x.id);
-   if(editing!==id)return;
+   const hist=await service.listHistory(g,x.id);
+   if(e!==epoch||editing!==id||g!==groupId)return;
    for(const h of hist){
     const li=document.createElement('li');
-    const changes=h.changes.map(c=>c.field+'：'+String(c.before??'（空）')+' → '+String(c.after??'（空）')).join('；');
-    li.textContent=stamp(h.changedAt)+'｜'+await nameFor(h.actorUid)+'｜'+(changes||'建立訂貨');
+    const changes=h.changes.map(c=>(fieldLabels[c.field]||c.field)+'：'+String(c.before??'（空）')+' → '+String(c.after??'（空）')).join('；');
+    const actorName=await nameFor(h.actorUid);
+    if(e!==epoch||editing!==id||g!==groupId)return;
+    li.textContent=stamp(h.changedAt)+'｜'+actorName+'｜'+(changes||'建立訂貨');
     $('history').append(li);
    }
-  }catch(err){tell('歷史讀取失敗：'+err.message)}
+  }catch(err){if(e===epoch)tell('歷史讀取失敗：'+err.message)}
  }
  $('editor').scrollIntoView({behavior:'smooth',block:'start'});
 }
 $('login').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){tell('登入失敗：'+e.code)}};
 $('logout').onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
- epoch++;uid='';svc=null;groups=null;groupId='';reset();
+ epoch++;loading=false;names.clear();uid='';svc=null;groups=null;groupId='';reset();
  $('app').hidden=true;$('logout').hidden=!user;$('login').hidden=!!user;
  $('who').textContent=user?.email||'';
  if(!user)return tell('請登入 Google 帳號。');
@@ -156,6 +162,7 @@ document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
 $('rows').onclick=e=>{const b=e.target.closest('button[data-id]');if(b)openEditor(b.dataset.id)};
 $('orderForm').onsubmit=async e=>{
  e.preventDefault();if(busy)return;busy=true;$('save').disabled=true;
+ const savedEpoch=epoch,savedUid=uid,savedGroup=groupId,service=svc;
  try{
   const f=e.currentTarget,d=Object.fromEntries(new FormData(f));
   const previous=items.find(x=>x.id===editing);
@@ -163,14 +170,15 @@ $('orderForm').onsubmit=async e=>{
   d.requesterUid=previous?.details.requesterUid||uid;
   d.orderedByUid=previous?.details.orderedByUid||'';
   if(d.status==='PENDING'){d.orderedByUid='';d.orderDate='';d.arrivedQuantity=0}
-  if(d.status==='ORDERED'&&!d.orderedByUid)d.orderedByUid=uid;
-  if(d.status==='ORDERED'&&!d.orderDate)d.orderDate=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
+  if(d.status!=='PENDING'&&!d.orderedByUid)d.orderedByUid=uid;
+  if(d.status!=='PENDING'&&!d.orderDate)d.orderDate=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
   if(d.status==='RECEIVED')d.arrivedQuantity=d.quantity;
-  if(previous)await svc.update(groupNow(),editing,d,previous.revision);
-  else await svc.create(groupNow(),d);
+  if(previous)await service.update(savedGroup,editing,d,previous.revision);
+  else await service.create(savedGroup,d);
+  if(savedEpoch!==epoch||savedUid!==uid||savedGroup!==groupId)return;
   tell('訂貨已儲存，異動歷史已由同一筆交易寫入。');
   epoch++;await load(true);
- }catch(err){tell('儲存失敗：'+err.message)}
+ }catch(err){if(savedEpoch===epoch)tell('儲存失敗：'+err.message)}
  finally{busy=false;$('save').disabled=false}
 };
 </script></body></html>
