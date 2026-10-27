@@ -44,9 +44,9 @@ export function orderChangeSummary(before,after){
 }
 export function orderService({db,sdk,currentUid}){
  const {collection,doc,runTransaction,serverTimestamp,getDocsFromServer,
-  query,orderBy,limit,startAfter}=sdk||{};
+  query,orderBy,limit,startAfter,where}=sdk||{};
  if(!db||typeof currentUid!=='function'||
-  ![collection,doc,runTransaction,serverTimestamp,getDocsFromServer,query,orderBy,limit,startAfter]
+  ![collection,doc,runTransaction,serverTimestamp,getDocsFromServer,query,orderBy,limit,startAfter,where]
    .every(x=>typeof x==='function'))throw Error('ORDER_SDK_REQUIRED');
  const actor=()=>{const uid=currentUid();if(!validId(uid))throw Error('AUTH_REQUIRED');return uid};
  const orders=groupId=>{if(!validId(groupId))throw Error('INVALID_GROUP');return collection(db,'groups',groupId,'orders')};
@@ -57,7 +57,7 @@ export function orderService({db,sdk,currentUid}){
   const audit=doc(history(groupId,ref.id));
   await runTransaction(db,async tx=>{
    if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
-   tx.set(ref,{details,revision:1,createdBy:uid,createdAt:serverTimestamp(),
+   tx.set(ref,{details,isCompleted:details.status==='RECEIVED',revision:1,createdBy:uid,createdAt:serverTimestamp(),
     updatedBy:uid,updatedAt:serverTimestamp(),lastAuditId:audit.id});
    tx.set(audit,{orderId:ref.id,revision:1,actorUid:uid,changedAt:serverTimestamp(),
     kind:'CREATE',before:{},after:details});
@@ -78,17 +78,20 @@ export function orderService({db,sdk,currentUid}){
    const next=normalizeOrder({...previous.details,...patch});
    if(same(next,previous.details))return {changed:false,revision:expectedRevision};
    const revision=expectedRevision+1;
-   tx.update(ref,{details:next,revision,updatedBy:uid,
+   tx.update(ref,{details:next,isCompleted:next.status==='RECEIVED',revision,updatedBy:uid,
     updatedAt:serverTimestamp(),lastAuditId:audit.id});
    tx.set(audit,{orderId,revision,actorUid:uid,changedAt:serverTimestamp(),
     kind:'UPDATE',before:previous.details,after:next});
    return {changed:true,revision};
   });
  }
- async function listPage(groupId,{cursor=null,size=30}={}){
+ async function listPage(groupId,{cursor=null,size=30,tab='all'}={}){
   const uid=actor();
   if(!Number.isInteger(size)||size<1||size>30)throw Error('INVALID_PAGE_SIZE');
-  const clauses=[orderBy('updatedAt','desc')];
+  if(!['all','done','open'].includes(tab))throw Error('INVALID_TAB');
+  const clauses=[];
+  if(tab!=='all')clauses.push(where('isCompleted','==',tab==='done'));
+  clauses.push(orderBy('updatedAt','desc'));
   if(cursor)clauses.push(startAfter(cursor));
   clauses.push(limit(size+1));
   const snap=await getDocsFromServer(query(orders(groupId),...clauses));
