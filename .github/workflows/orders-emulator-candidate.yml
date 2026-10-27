@@ -27,4 +27,5 @@ jobs:
           java-version: '21'
       - run: npm install --no-package-lock --no-audit --no-fund
       - run: node prepare-firestore-orders-v1-emulator-rules.mjs
+      - run: nl -ba .test-rules/firestore.emulator.rules | sed -n '340,380p'
       - run: npx firebase emulators:exec --config firebase.emulator.test.json --project demo-honbin-orders-v1 --only firestore 'node firestore-orders-v1-emulator-test.mjs'
