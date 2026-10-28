@@ -175,7 +175,14 @@ onAuthStateChanged(auth,async user=>{
  try{
   groups=groupService({db,sdk,identity:{uid,email:user.email,emailVerified:user.emailVerified}});
   svc=orderService({db,sdk,currentUid:()=>auth.currentUser?.uid});
-  const list=await groups.listGroupsFromServer();if(e!==epoch)return;
+  let list;
+  try{list=await groups.listGroupsFromServer()}
+  catch(err){
+   if(err?.code!=='permission-denied')throw err;
+   await user.getIdToken(true);if(e!==epoch)return;
+   list=await groups.listGroupsFromServer();
+  }
+  if(e!==epoch)return;
   $('group').replaceChildren();
   for(const g of list){const o=document.createElement('option');o.value=g.id;o.textContent=g.name;$('group').append(o)}
   groupId=list[0]?.id||'';
