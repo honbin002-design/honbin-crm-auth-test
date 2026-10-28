@@ -34,13 +34,13 @@ const markup=`<style>
  <label class="wide">備註<textarea name="note" rows="2" maxlength="2000"></textarea></label>
  </div><div class="actions"><button id="save" type="submit" class="primary">儲存</button><button id="cancel" type="button">取消</button></div></form></section>`;
 
-export function mountOrdersWorkspace({container,db,sdk,auth,groups}){
+export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedGroups,onGroupReady}){
  if(!container||!auth?.currentUser||!groups)throw Error('ORDER_AUTH_REQUIRED');
  const root=container.shadowRoot||container.attachShadow({mode:'open'});
  root.innerHTML=markup;
  const $=id=>root.getElementById(id),svc=orderService({db,sdk,currentUid:()=>auth.currentUser?.uid});
  const owner=auth.currentUser.uid;
- let groupItems=[],groupId='',items=[],cursor=null,hasMore=false,filter='all',epoch=0,loading=false,saving=false,editing=null,disposed=false;
+ let groupId='',items=[],cursor=null,hasMore=false,filter='all',epoch=0,loading=false,saving=false,editing=null,disposed=false;
  const names=new Map();
  const live=check=>!disposed&&auth.currentUser?.uid===owner&&check===epoch;
  const showStatus=(text,error=false)=>{$('status').textContent=text;$('status').classList.toggle('error',error)};
@@ -102,14 +102,14 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups}){
  }
  async function initialize(){
   let list;
-  try{list=await groups.listGroupsFromServer()}
+  try{list=await (listVerifiedGroups?.()||groups.listGroupsFromServer())}
   catch(error){if(error?.code!=='permission-denied')throw error;await auth.currentUser?.getIdToken(true);list=await groups.listGroupsFromServer()}
   if(disposed||auth.currentUser?.uid!==owner)throw Error('ACCOUNT_CHANGED');
-  groupItems=list;$('group').replaceChildren();
+  $('group').replaceChildren();
   for(const group of list){const option=document.createElement('option');option.value=group.id;option.textContent=group.name;$('group').append(option)}
   groupId=list[0]?.id||'';
-  if(!groupId){showStatus('目前沒有已加入的群組。');return}
-  await load(true);
+  if(!groupId){showStatus('目前沒有已加入的群組。');onGroupReady?.();return}
+  onGroupReady?.();await load(true);
  }
  $('group').onchange=()=>{groupId=$('group').value;load(true)};
  $('refresh').onclick=()=>load(true);$('new').onclick=()=>openEditor();$('more').onclick=()=>load();$('search').oninput=render;
