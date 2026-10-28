@@ -78,12 +78,15 @@ assert.doesNotMatch(page,/<p class="hint">有效群組成員可發布及查看�
 assert.match(page,/id="tabOrders"/);
 assert.match(page,/id="ordersPanel"/);
 assert.match(page,/id="ordersMount"/);
-assert.match(page,/orders-workspace-ui\.mjs\?v=20261028-single-document/);
+assert.match(page,/orders-workspace-ui\.mjs\?v=20261028-shared-group-read/);
 assert.doesNotMatch(page,/id="ordersFrame"/);
 const ordersUi=readFileSync('orders-workspace-ui.mjs','utf8');
 assert.match(ordersUi,/orderService\(\{db,sdk,currentUid:/);
 assert.match(ordersUi,/auth\.currentUser\?\.uid===owner/);
 assert.match(ordersUi,/listGroupsFromServer/);
+assert.match(page,/verifiedOrderGroups\(\)/);
+assert.match(page,/membershipProof\.expires/);
+assert.match(ordersUi,/listVerifiedGroups\?\.\(\)/);
 assert.doesNotMatch(ordersUi,/getAuth|signInWithPopup|<iframe/);
 const ordersSyntax=spawnSync(process.execPath,['--check','orders-workspace-ui.mjs'],{encoding:'utf8'});
 assert.equal(ordersSyntax.status,0,ordersSyntax.stderr);
