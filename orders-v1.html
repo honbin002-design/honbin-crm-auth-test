@@ -63,13 +63,16 @@ html.embedded{background:transparent}html.embedded body{background:transparent}h
 <script>if(window.self!==window.top)document.getElementById('backWorkspace').href='./workspace-v2.html?embedded=1';</script>
 <script type="module">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
-import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
 import * as sdk from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
 import {firebaseConfig} from './firebase-web-config.mjs';
 import {groupService} from './firebase-group-service.mjs';
 import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-service.mjs';
 const $=id=>document.getElementById(id),app=getApps().length?getApp():initializeApp(firebaseConfig);
 const auth=getAuth(app),db=sdk.getFirestore(app);
+// Match the parent workspace persistence before observing auth, so opening this
+// iframe cannot migrate the saved session to a different persistence backend.
+await setPersistence(auth,browserLocalPersistence);
 let svc=null,groups=null,uid='',groupId='',items=[],cursor=null,hasMore=false,tab='all',editing=null,busy=false,epoch=0;
 const names=new Map();
 let loading=false;
