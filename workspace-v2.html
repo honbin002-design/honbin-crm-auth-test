@@ -346,7 +346,8 @@ async function ensureOrders(){
   try{
    const module=await import('./orders-workspace-ui.mjs?v=20261028-shared-group-read');
    if(generation!==ordersGeneration||!authenticated||!auth?.currentUser)return;
-   instance=module.mountOrdersWorkspace({container:$('ordersMount'),db,sdk,auth,groups,listVerifiedGroups:verifiedOrderGroups});
+   instance=module.mountOrdersWorkspace({container:$('ordersMount'),db,sdk,auth,groups,listVerifiedGroups:verifiedOrderGroups,
+     onGroupReady:()=>{if(generation===ordersGeneration)$('ordersLoading').hidden=true}});
    ordersUi=instance;await instance.ready;
    if(generation===ordersGeneration)$('ordersLoading').hidden=true;
   }catch(error){
