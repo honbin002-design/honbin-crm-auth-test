@@ -1539,6 +1539,8 @@ async function start(){
   $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();$('rulesOwnerLink').hidden=true;
   // Device/notification ACL probes are owner-only diagnostics, never public settings.
   $('liveRulesReadOnly').hidden=true;$('liveDenialReadOnly').hidden=true;$('pushWriteProbe').hidden=true;
+  closeCloudRecord(false);availableNoteDraft=null;$('resumeNoteDraft').hidden=true;
+  $('notesList').replaceChildren();$('tasksList').replaceChildren();
   items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
   if(!user){
