@@ -40,7 +40,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .task-section{border-top:0}.task-section h3{padding:12px 14px;border-radius:11px;background:#edf3fa;color:#203d5b;border-left:5px solid #205a9a}
 .task-section[data-category="overdue"] h3{background:#fceaea;color:#842828;border-color:#ad3838}.task-section[data-category="soon"] h3{background:#fff2dd;color:#805000;border-color:#b46a0a}.task-section[data-category="pending"] h3{background:#f0eafa;color:#593681;border-color:#7352a6}.task-section[data-category="done"] h3{background:#e9f5ee;color:#286544;border-color:#377957}
 .task-card{box-shadow:0 3px 12px #20334d0d}.task-card[data-category="overdue"]{background:#fffafa}.task-card[data-category="soon"]{background:#fffdf8}.task-card[data-category="pending"]{background:#fcfaff}.task-card[data-category="done"]{background:#fbfefc}
-.task-title-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;padding:5px 0;text-align:left;color:#173d61;background:transparent;font-size:1.08rem;line-height:1.45}.task-title-button::after{content:'＋';font-size:1.35rem;color:#286544;flex:none}.task-title-button[aria-expanded="true"]::after{content:'−'}.task-title-button:hover{color:#0c5796}
+.task-title-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;padding:5px 0;text-align:left;color:#173d61;background:transparent;font-size:1.08rem;line-height:1.45}.task-title-button::after{content:'›';font-size:1.35rem;color:#286544;flex:none}.task-title-button[aria-expanded="true"]::after{content:'−'}.task-title-button:hover{color:#0c5796}
 .task-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px;margin:6px 0 0}.task-summary p{margin:0;min-width:0}.task-summary strong{display:block;color:#52657b;font-size:.9rem}.task-summary span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.task-detail-panel{margin-top:12px;padding-top:12px;border-top:1px solid #d8e5de}
 .list-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0}.list-tabs button{background:#e7eff9;color:#24486c}.list-tabs button.active{background:#205a9a;color:#fff}.list-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}.list-controls label{margin:3px 0}.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0}.pager button{flex:0 0 auto}.pager span{text-align:center;color:#52657b}.task-card .task-title-button{margin-bottom:0}
 .note-card strong{display:block;font-size:1.06rem}.note-card small{display:block;margin-top:4px}.note-card button{margin-top:6px}#message{white-space:pre-wrap}#taskForm{border-top:2px solid #dbe5f0;padding-top:16px;margin-top:18px}
@@ -99,6 +99,13 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
  #notesPanel .note-card button{width:100%;margin:5px 0}
  #notebookCreateForm>.row{grid-template-columns:1fr}
 }
+.note-title-button{display:block;width:100%;min-height:44px;background:transparent;color:#173d61;text-align:left;padding:3px 0;font-size:1.06rem;font-weight:700}
+#notesPanel.note-editing>.panel:not(#noteEditor){display:none!important}
+#cloudRecordView[data-mode="view"] [data-task-edit]{display:none!important}
+#cloudRecordBody{white-space:normal;overflow-wrap:anywhere}
+#cloudRecordBody .note-content{white-space:pre-wrap;font-size:1.05rem;line-height:1.7}
+#cloudRecordBody .task-detail-panel{border:0;margin:0;padding:0}
+#cloudRecordView .record-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
 [hidden]{display:none!important}
 </style><script>if(new URLSearchParams(location.search).get('embedded')==='1'&&window.self!==window.top)document.documentElement.classList.add('embedded')</script></head><body>
 <header><div><h1>鴻繽記事與任務</h1></div><span class="pill" id="who">未登入</span></header>
@@ -112,6 +119,12 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
   <button id="tabNotifications" type="button">通知 <span class="notice-count" id="notificationCount" hidden>0</span></button>
   <button id="tabSettings" type="button">設定</button>
  </div></div>
+ <section class="panel" id="cloudRecordView" data-mode="view" hidden aria-label="記事與任務詳細資料">
+  <p id="cloudRecordMode" class="hint">資料檢視 · 唯讀</p>
+  <h2 id="cloudRecordTitle"></h2>
+  <div class="record-actions"><button id="cloudRecordBack" class="alt" type="button">返回列表</button><button id="cloudRecordEdit" type="button">編輯</button></div>
+  <div id="cloudRecordBody"></div>
+ </section>
  <section class="notification-page" id="notificationOverview" hidden aria-label="訊息通知頁面">
   <div class="panel">
    <div class="notification-overview">
@@ -142,7 +155,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
   <p id="notebookActionStatus" class="hint" role="status" aria-live="polite"></p>
  </div>
   </div>
-  <div class="panel"><div class="row" style="justify-content:space-between"><h2>記事列表</h2><button class="alt" id="newNote">＋ 新記事</button></div>
+  <div class="panel"><div class="row" style="justify-content:space-between"><h2>記事列表</h2><button class="alt" id="newNote">＋ 新記事</button><button class="alt" id="resumeNoteDraft" type="button" hidden>繼續編輯草稿</button></div>
   <label for="search">搜尋記事</label><input id="search" type="search" placeholder="搜尋標題或內容">
   <p class="hint">每批最多 10 筆；搜尋目前批次。按「下一批」可查找更舊記事。</p>
   <div id="notesList"></div><div class="pager"><button class="alt" id="notePrev" type="button">上一批</button><span id="notePageStatus" role="status">第 1 批</span><button class="alt" id="noteNext" type="button">下一批</button></div></div>
@@ -297,6 +310,7 @@ async function showNick(){
  $('nickname').value=name;$('who').textContent=name||'未設定暱稱';
 }
 function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
+ closeCloudRecord(false);clearEditor();
  if(!authenticated&&name!=='Settings'){
   say('請先到設定頁使用核准的 Google 帳號登入。');name='Settings';
  }
@@ -318,21 +332,81 @@ function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
   if(!receivedLoaded)void loadReceivedInvitations().catch(e=>say('讀取收到的邀請失敗：'+String(e?.code||e?.message||e)));
  }
 }
-function clearEditor(){$('noteEditor').hidden=true;current=null;pendingId=null;$('noteTitle').value='';$('noteContent').value=''}
+function clearEditor(){$('noteEditor').hidden=true;$('notesPanel').classList.remove('note-editing');current=null;pendingId=null;noteEditOrigin=null;$('noteTitle').value='';$('noteContent').value=''}
 function draftSnap(){return {title:$('noteTitle').value,content:$('noteContent').value,active:current?{...current}:null,pendingCreateId:pendingId}}
 function saveDraft(){const c=context();if(!c||!drafts||!mayWrite()||$('noteEditor').hidden)return;void drafts.save(c,draftSnap()).catch(()=>say('本機草稿保存失敗，請先複製內容備份。'))}
+let availableNoteDraft=null,noteEditOrigin=null,cloudView=null;
+function scrollCloudRecord(){
+ requestAnimationFrame(()=>{
+  if(window.parent!==window&&document.documentElement.classList.contains('embedded')){
+   window.parent.postMessage({type:'HONBIN_CLOUD_RECORD_VIEW'},location.origin);
+  }else $('cloudRecordView').scrollIntoView({block:'start',behavior:'instant'});
+ });
+}
+function restoreTaskInputs(){
+ for(const [field,value,checked] of cloudView?.inputSnapshot||[]){field.value=value;if('checked' in field)field.checked=checked}
+}
+function closeCloudRecord(restorePanel=true){
+ if(!cloudView){$('cloudRecordView').hidden=true;return}
+ const view=cloudView;restoreTaskInputs();cloudView=null;
+ if(view.home?.isConnected){view.body.hidden=true;view.home.append(view.body)}
+ $('cloudRecordBody').replaceChildren();$('cloudRecordView').hidden=true;
+ if(restorePanel)$(view.kind==='note'?'notesPanel':'tasksPanel').hidden=false;
+}
+function showCloudRecord({kind,item,body,canEdit,onEdit}){
+ closeCloudRecord();clearEditor();
+ cloudView={kind,item,body,home:body.parentNode,canEdit,onEdit,editing:false,inputSnapshot:[]};
+ $('notesPanel').hidden=true;$('tasksPanel').hidden=true;
+ $('cloudRecordView').dataset.mode='view';
+ $('cloudRecordMode').textContent='資料檢視 · 唯讀';
+ $('cloudRecordTitle').textContent=item.title||'未命名記事';
+ $('cloudRecordBack').textContent='返回列表';$('cloudRecordEdit').hidden=!canEdit;
+ body.hidden=false;$('cloudRecordBody').replaceChildren(body);$('cloudRecordView').hidden=false;
+ scrollCloudRecord();
+}
+function openNoteView(item){
+ const body=mk('div'),content=mk('p',item.content||'');content.className='note-content';
+ body.append(content);
+ for(const [label,value] of [['建立時間',item.createdAt],['更新時間',item.updatedAt]]){
+  if(value?.toDate)body.append(mk('small',label+'：'+value.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
+ }
+ showCloudRecord({kind:'note',item,body,canEdit:mayWrite(),onEdit:()=>openEditor(item)});
+}
+function editCloudRecord(){
+ const view=cloudView;if(!view?.canEdit)return;
+ if(view.kind==='note'){view.onEdit();return}
+ view.editing=true;view.inputSnapshot=[...view.body.querySelectorAll('input,textarea,select')].map(el=>[el,el.value,el.checked]);
+ $('cloudRecordView').dataset.mode='edit';$('cloudRecordMode').textContent='編輯任務';
+ $('cloudRecordEdit').hidden=true;$('cloudRecordBack').textContent='取消編輯';scrollCloudRecord();
+}
+function backCloudRecord(){
+ if(cloudView?.editing){
+  restoreTaskInputs();cloudView.editing=false;cloudView.inputSnapshot=[];
+  $('cloudRecordView').dataset.mode='view';$('cloudRecordMode').textContent='資料檢視 · 唯讀';
+  $('cloudRecordEdit').hidden=!cloudView.canEdit;$('cloudRecordBack').textContent='返回列表';return;
+ }
+ closeCloudRecord();
+}
+function taskEditAllowed(item){return cloudView?.kind==='task'&&cloudView.item.id===item.id&&cloudView.editing===true}
+function taskEditControls(...nodes){const box=mk('div');box.dataset.taskEdit='';box.append(...nodes);if(cloudView?.editing)for(const el of box.querySelectorAll('input,textarea,select'))cloudView.inputSnapshot.push([el,el.value,el.checked]);return box}
 async function restoreDraft(){
- const c=context();if(!c||!drafts||!mayWrite())return;
- const s=session(),draft=await drafts.read(c);check(s);
+ const c=context();availableNoteDraft=null;$('resumeNoteDraft').hidden=true;
+ if(!c||!drafts||!mayWrite())return;
+ const ss=session(),draft=await drafts.read(c);check(ss);
  if(!draft||(!draft.title&&!draft.content))return;
+ availableNoteDraft=draft;$('resumeNoteDraft').hidden=false;
+}
+function resumeNoteDraft(){
+ if(!availableNoteDraft||!mayWrite())return;
+ const draft=availableNoteDraft;
+ openEditor(draft.active?items.find(x=>x.id===draft.active.id)||null:null);
  current=draft.active||null;pendingId=draft.pendingCreateId||null;
  $('noteTitle').value=draft.title||'';$('noteContent').value=draft.content||'';
  $('noteHeading').textContent=current?'繼續編輯未上傳草稿':'繼續未上傳的新記事';
- $('noteEditor').hidden=false;
- say('已恢復這支手機先前未上傳的草稿。');
 }
 function openEditor(item=null){
  if(!mayWrite()){say('此共用記事簿為唯讀，無法修改記事。');return}
+ closeCloudRecord();noteEditOrigin=item;$('notesPanel').hidden=false;$('notesPanel').classList.add('note-editing');
  current=item?{id:item.id,version:item.version}:null;pendingId=null;
  $('noteTitle').value=item?.title||'';$('noteContent').value=item?.content||'';
  $('noteHeading').textContent=item?'編輯記事':'新增記事';
@@ -349,6 +423,7 @@ function openEditor(item=null){
  });
 }
 async function loadNotes({reset=true}={}){
+ if(cloudView?.kind==='note')closeCloudRecord();
  focusedNote=false;
  const s=session(),sc=scope();if(sc.mode==='SHARED'&&!selected){$('notesList').textContent='尚未加入共用記事簿。';return}
  if(reset){notePageIndex=0;noteCursors=[null]}
@@ -369,16 +444,13 @@ function renderNotes(){
  const visible=items.filter(x=>(x.title+' '+x.content).toLowerCase().includes(term));
  if(!visible.length){root.append(mk('p',term?'目前批次沒有符合的記事；可檢查下一批。':'目前批次沒有記事。'));return}
  for(const item of visible){
-  const line=mk('article');line.className='note-card';line.dataset.noteId=item.id;line.append(mk('strong',item.title));
+  const line=mk('article');line.className='note-card';line.dataset.noteId=item.id;const title=mk('button',item.title||'未命名記事');title.type='button';title.className='note-title-button';title.onclick=()=>openNoteView(item);line.append(title);
   if(PROFILE_RULES_ENABLED&&item.ownerUid){
    const author=sharedNickCache.get(item.ownerUid);
    line.append(mk('small','建立者：'+(author||'未設定暱稱')));
   }
   const body=mk('p',item.content.slice(0,60)+(item.content.length>60?'…':''));body.className='note-content';line.append(body);
-  const btn=mk('button',mayWrite()?'開啟／編輯':'查看');btn.className='alt';btn.addEventListener('click',()=>{
-   if(mayWrite())openEditor(item);
-   else {const p=mk('p',item.content);p.className='note-content';p.style.marginTop='8px';line.append(p);btn.disabled=true}
-  });line.append(btn);
+  const btn=mk('button','查看');btn.className='alt';btn.type='button';btn.onclick=()=>openNoteView(item);line.append(btn);
   if($('mode').value==='PRIVATE'||selected?.role==='ADMIN'){
    const del=mk('button','刪除記事');del.className='alt';
    del.setAttribute('aria-label','刪除記事：'+item.title);
@@ -415,7 +487,7 @@ async function openPushDeepLink(){
   tab('Tasks',{skipTaskLoad:true,fromNotification:true});await loadTasks({focusItem:{id:snap.id,...snap.data()}});check(s);
   const row=[...$('tasksList').querySelectorAll('[data-task-id]')]
     .find(e=>e.dataset.taskId===itemId);
-  if(row){row.querySelector('.task-title-button')?.click();row.scrollIntoView({block:'start'});say('已開啟通知指定的任務。')}
+  if(row){row.querySelector('.task-title-button')?.click();say('已開啟通知指定的任務。')}
   else say('任務已不存在或目前無法讀取。');
  }else{
   const snap=await sdk.getDocFromServer(sdk.doc(db,'groups',group.id,'notes',itemId));check(s);
@@ -430,8 +502,7 @@ async function openPushDeepLink(){
     .find(e=>e.dataset.noteId===itemId);
   if(row){
    const note=items.find(x=>x.id===itemId);
-   if(note){const preview=mk('p',note.content);preview.className='note-content';row.append(preview)}
-   row.scrollIntoView({block:'start'});say('已開啟通知指定的共用記事。');
+   if(note)openNoteView(note);say('已開啟通知指定的共用記事。');
   }else say('記事已不存在或目前無法讀取。');
  }
  return true;
@@ -472,6 +543,7 @@ function taskCategory(item){
 }
 async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
  taskFocused=!!focusItem;
+ if(cloudView?.kind==='task')closeCloudRecord();
  const s=session(),root=$('tasksList');root.replaceChildren();
  if(reset){taskPageIndex=0;taskCursors[taskStatus]=[null];taskPageData=null}
  $('taskOpenTab').classList.toggle('active',taskStatus==='OPEN');$('taskDoneTab').classList.toggle('active',taskStatus==='DONE');
@@ -574,9 +646,9 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
   let openTaskHistory=()=>{};
   box.append(Object.assign(mk('span',({pending:'延期待審',overdue:'已逾期',soon:'即將到期',open:'進行中',done:'已完成'})[category]),{className:'task-badge'}));
   const heading=mk('h4'),title=mk('button',item.title);title.type='button';title.className='task-title-button';
-  title.setAttribute('aria-expanded','false');detail.id='task-detail-'+item.id;detail.className='task-detail-panel';detail.hidden=true;
-  title.setAttribute('aria-controls',detail.id);
-  title.onclick=()=>{detail.hidden=!detail.hidden;title.setAttribute('aria-expanded',String(!detail.hidden));if(!detail.hidden)openTaskHistory()};
+  detail.id='task-detail-'+item.id;detail.className='task-detail-panel';detail.hidden=true;
+  title.setAttribute('aria-label','檢視任務：'+item.title);
+  title.onclick=()=>{showCloudRecord({kind:'task',item,body:detail,canEdit:!done&&(taskCanComplete(item,uid)||!!item.extensionPendingId&&item.createdBy===uid)});openTaskHistory()};
   heading.append(title);box.append(heading);
   const summary=mk('div');summary.className='task-summary';
   for(const [label,value] of done
@@ -616,6 +688,7 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
    const reply=mk('textarea');reply.id='reply-'+item.id;replyLabel.htmlFor=reply.id;reply.placeholder='輸入處理結果';reply.maxLength=3000;
    const button=mk('button','回覆並完成');
    button.onclick=()=>run(async()=>{
+    if(!taskEditAllowed(item))throw Error('請先按編輯');
     if(!reply.value.trim())throw Error('請先輸入處理結果');
     if(!confirm('確定標記任務已完成？完成者與伺服器時間將被記錄，不能自行覆蓋。'))return;
     button.disabled=true;
@@ -623,7 +696,7 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
       await loadTasks();say('已由伺服器確認任務完成。')}
     finally{button.disabled=false}
    });
-   body.append(replyLabel,reply,button);
+   body.append(taskEditControls(replyLabel,reply,button));
   }else body.append(mk('small','尚未完成｜此任務不是指派給你'));
   if(TASK_V3_RULES_ENABLED&&extensions){
    const canExecute=item.status==='OPEN'&&taskCanComplete(item,uid);
@@ -665,6 +738,7 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
     form.append(reasonLabel,reason,dateLabel,newDate,send);
     toggle.onclick=()=>{form.hidden=!form.hidden;toggle.textContent=form.hidden?'申請延期':'收起延期申請'};
     form.onsubmit=event=>{event.preventDefault();run(async()=>{
+     if(!taskEditAllowed(item))throw Error('請先按編輯');
      if(!reason.value.trim()||!newDate.value||newDate.value<=item.dueDate)
       throw Error('請填寫原因，並選擇晚於原截止日的新日期');
      if(!confirm('送出延期申請？原截止日期維持不變，需由發布人核准。'))return;
@@ -675,14 +749,14 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
       await loadTasks();say('延期申請已送出，等待發布人審核。');
      }finally{send.disabled=false}
     })};
-    body.append(toggle,form);
+    body.append(taskEditControls(toggle,form));
    }
    if(item.dueDate||pending){
-    const historyButton=mk('button',pending&&item.createdBy===uid?'審核延期申請':'查看延期紀錄');
+    const historyButton=mk('button','查看延期紀錄');
     historyButton.type='button';historyButton.className='alt';
     const history=mk('div');history.hidden=true;
     historyButton.onclick=()=>run(async()=>{
-     if(!history.hidden){history.hidden=true;historyButton.textContent=pending&&item.createdBy===uid?'審核延期申請':'查看延期紀錄';return}
+     if(!history.hidden){history.hidden=true;historyButton.textContent='查看延期紀錄';return}
      historyButton.disabled=true;
      try{
       history.replaceChildren();
@@ -711,17 +785,18 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
         finalDate.value=req.newDueDate;
         finalDate.min=new Date(Date.parse(item.dueDate+'T00:00:00Z')+86400000).toISOString().slice(0,10);
         finalDate.disabled=!TASK_V4_PUBLISHER_DATE_ENABLED;
-        entry.append(dateLabel,finalDate);
+        const editReview=taskEditControls(dateLabel,finalDate);entry.append(editReview);
         const note=mk('small',TASK_V4_PUBLISHER_DATE_ENABLED
          ?'必須晚於原截止日期 '+item.dueDate+'；核准後以這個日期為準，原申請日期保留在紀錄。'
          :'無法確認發布人調整日期的權限，為避免直接套用申請日期，暫停核准。');
-        entry.append(note);
+        editReview.append(note);
         const row=mk('div');row.className='review-actions';
         for(const decision of ['APPROVED','REJECTED']){
          const action=mk('button',decision==='APPROVED'?'核准此日期':'拒絕延期');
          action.type='button';if(decision==='REJECTED')action.className='reject';
          if(decision==='APPROVED'&&!TASK_V4_PUBLISHER_DATE_ENABLED)action.disabled=true;
          action.onclick=()=>run(async()=>{
+          if(!taskEditAllowed(item))throw Error('請先按編輯');
           if(decision==='APPROVED'&&!TASK_V4_PUBLISHER_DATE_ENABLED)
            throw Error('TEST_V4_RULES_NOT_VERIFIED');
           const approvedDueDate=decision==='APPROVED'?finalDate.value:undefined;
@@ -744,7 +819,7 @@ async function loadTasks({reset=true,reuse=false,focusItem=null}={}){
          });
          row.append(action);
         }
-        entry.append(row);
+        editReview.append(row);
        }
        history.append(entry);
       }
@@ -1252,8 +1327,11 @@ $('taskNext').onclick=()=>run(async()=>{if(taskHasMore){taskPageIndex++;taskPage
 $('taskSearchButton').onclick=()=>run(()=>loadTasks({reset:false,reuse:true}));
 $('taskSearch').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('taskSearchButton').click()}};
 $('newNote').onclick=()=>openEditor();
+$('resumeNoteDraft').onclick=resumeNoteDraft;
+$('cloudRecordEdit').onclick=editCloudRecord;
+$('cloudRecordBack').onclick=backCloudRecord;
 $('noteTitle').oninput=saveDraft;$('noteContent').oninput=saveDraft;
-$('closeNote').onclick=()=>{if(($('noteTitle').value||$('noteContent').value)&&!confirm('返回列表？未上傳的草稿會留在本機。'))return;clearEditor()};
+$('closeNote').onclick=()=>{const origin=noteEditOrigin;clearEditor();if(origin)openNoteView(origin);void restoreDraft().catch(()=>{});};
 $('saveNote').onclick=()=>run(async()=>{
  if(!mayWrite())throw Error('READ_ONLY');const s=session(),sc=scope(),title=$('noteTitle').value,content=$('noteContent').value;
  if(!drafts)throw Error('LOCAL_DRAFT_UNAVAILABLE');
@@ -1262,11 +1340,13 @@ $('saveNote').onclick=()=>run(async()=>{
  try{
   await drafts.save(context(),draftSnap());check(s);
   const local=Date.now()-t;$('noteTiming').textContent='本機已保存，正在等待雲端確認……';
+  const savedId=current?.id||pendingId;
   const result=current?await notes.update({...sc,noteId:current.id,expectedVersion:current.version,title,content}):
     await notes.create({...sc,noteId:pendingId,title,content});
   check(s);const cloud=Date.now()-t-local;
   await drafts.remove(context());check(s);
-  clearEditor();await loadNotes();check(s);
+  availableNoteDraft=null;$('resumeNoteDraft').hidden=true;clearEditor();await loadNotes();check(s);
+  const saved=items.find(x=>x.id===savedId);if(saved)openNoteView(saved);
   say('儲存成功，版本 '+result.version+'。');
   $('noteTiming').textContent='本機 '+(local/1000).toFixed(1)+' 秒｜雲端 '+(cloud/1000).toFixed(1)+' 秒｜總計 '+((Date.now()-t)/1000).toFixed(1)+' 秒';
  }catch(error){$('noteTiming').textContent='雲端儲存未確認；輸入內容仍在本機草稿，請檢查訊息後重試。';throw error}
@@ -1459,6 +1539,8 @@ async function start(){
   $('ownerManagement').hidden=true;$('ownerMembers').replaceChildren();$('rulesOwnerLink').hidden=true;
   // Device/notification ACL probes are owner-only diagnostics, never public settings.
   $('liveRulesReadOnly').hidden=true;$('liveDenialReadOnly').hidden=true;$('pushWriteProbe').hidden=true;
+  closeCloudRecord(false);availableNoteDraft=null;$('resumeNoteDraft').hidden=true;
+  $('notesList').replaceChildren();$('tasksList').replaceChildren();
   items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
   if(!user){
@@ -1552,3 +1634,4 @@ async function start(){
 }
 start().catch(e=>say(String(e?.message||e)));
 </script></body></html>
+

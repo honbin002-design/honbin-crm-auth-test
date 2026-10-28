@@ -17,7 +17,9 @@ assert.match(page,/async function openPushDeepLink\(\)/);
 assert.match(page,/groupItems\.find\(x=>x\.id===groupId\)/);
 assert.match(page,/await loadNotes\(\);check\(s\)/);
 assert.match(page,/await loadTasks\(\);check\(s\)/);
-assert.match(page,/row\.scrollIntoView/);
+assert.match(page,/function scrollCloudRecord\(\)/);
+assert.match(page,/HONBIN_CLOUD_RECORD_VIEW/);
+assert.match(page,/if\(note\)openNoteView\(note\)/);
 assert.match(page,/if\(!standalone\)/);
 assert.doesNotMatch(page,/Notification\.requestPermission\(/);
 assert.doesNotMatch(page,/\.pushManager\.subscribe\(/);
@@ -67,3 +69,4 @@ events.get('notificationclick')({
 await operation;
 assert.equal(opened.at(-1),task.options.data.url);
 console.log('PWA_STANDALONE_PUSH_HANDLER_NO_SECRETS_TEST_PASS');
+

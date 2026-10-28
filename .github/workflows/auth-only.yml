@@ -1,5 +1,7 @@
 name: Auth-only static safety checks
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -54,6 +56,8 @@ jobs:
         run: node firebase-offline-drafts-coalescing-preflight.mjs
       - name: Verify simplified TEST workspace and task security gates
         run: node workspace-v2-preflight.mjs
+      - name: Verify note and task view/edit separation without writes
+        run: node workspace-view-modes-preflight.mjs
       - name: Verify task submit closes the editor, prevents double taps and uses same ID on retry
         run: node task-publish-return-preflight.mjs
       - name: Verify notebook create and owner-only retirement (synthetic)
@@ -102,3 +106,4 @@ jobs:
         run: node invited-account-approval-preflight.mjs
       - name: Verify TEST-only exact task V3 rule upgrade preserves existing ACL
         run: node firestore-task-v3-upgrade-preflight.mjs
+
