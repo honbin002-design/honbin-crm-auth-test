@@ -115,6 +115,11 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
 /* iPhone: keep all five destinations on one row; remove nested task card. */
 #message.routine{display:none}.task-scope{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:6px 10px;align-items:center;margin:8px 0 12px;padding:7px 0;border-bottom:1px solid #e1e8f0}.task-scope label{margin:0}.task-scope .hint{grid-column:1/-1;margin:0}.task-scope select{min-width:0}
 @media(max-width:520px){.nav{grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}.nav button,.nav-link{font-size:12px;line-height:1.15;min-width:0;min-height:45px;padding:5px 2px;overflow-wrap:anywhere}.task-scope{grid-template-columns:1fr 2fr}.task-scope .hint{font-size:12px}.list-controls{gap:7px}.task-section h3{margin-bottom:6px}}
+
+/* Orders shares this navigation and scroll surface. */
+#ordersPanel{margin:0;min-width:0}#ordersFrame{display:block;width:100%;min-width:0;min-height:160px;height:160px;border:0;overflow:hidden;background:transparent}#ordersLoading{margin:8px 0;padding:9px 12px;background:#eaf2fb;border-radius:9px}
+#tasksPanel>.panel{padding-top:10px}.task-scope{margin:3px 0 7px;padding:3px 0 7px}.task-scope .hint{font-size:.78rem}.list-tabs{margin:6px 0}.list-controls label{font-size:.86rem}.pager{margin:8px 0}.pager span{font-size:.86rem}
+@media(max-width:520px){#tasksPanel>.panel{padding:9px}.task-scope{gap:4px 7px}.task-scope label{font-size:.9rem}.task-scope select{min-height:43px}.task-section{margin-top:8px}.list-tabs button{min-height:43px}.task-summary{gap:3px 7px}}
 </style><script>if(new URLSearchParams(location.search).get('embedded')==='1'&&window.self!==window.top)document.documentElement.classList.add('embedded')</script></head><body>
 <header><div><h1>鴻繽記事與任務</h1></div><span class="pill" id="who">未登入</span></header>
 <a class="crm-return" href="/-hongbin-personal-crm-beta/">← 返回鴻繽 CRM</a>
@@ -123,10 +128,11 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
  <div class="panel"><div class="nav">
   <button id="tabNotes" class="active" type="button">記事</button>
   <button id="tabTasks" type="button">任務</button>
-  <a href="./orders-v1.html" class="nav-link">訂貨管理</a>
+  <button id="tabOrders" type="button">訂貨管理</button>
   <button id="tabNotifications" type="button">通知 <span class="notice-count" id="notificationCount" hidden>0</span></button>
   <button id="tabSettings" type="button">設定</button>
  </div></div>
+ <section id="ordersPanel" hidden aria-label="訂貨管理"><p id="ordersLoading" class="hint" role="status">訂貨資料載入中……</p><iframe id="ordersFrame" title="訂貨管理" src="./orders-v1.html?embedded=1" scrolling="no" hidden></iframe></section>
  <section class="panel" id="cloudRecordView" data-mode="view" hidden aria-label="記事與任務詳細資料">
   <p id="cloudRecordMode" class="hint">資料檢視 · 唯讀</p>
   <h2 id="cloudRecordTitle"></h2>
@@ -321,16 +327,21 @@ function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
  if(!authenticated&&name!=='Settings'){
   say('請先到設定頁使用核准的 Google 帳號登入。');name='Settings';
  }
- if(!['Notes','Tasks','Notifications','Settings'].includes(name))name='Notes';
+ if(!['Notes','Tasks','Orders','Notifications','Settings'].includes(name))name='Notes';
  if(name!=='Notifications'&&!fromNotification)lastNonNotificationTab=name;
  // A navigation tab represents exactly one full page, never a stacked
  // notification panel floating over the notes or task content.
- for(const n of ['Notes','Tasks','Notifications','Settings']){
+ for(const n of ['Notes','Tasks','Orders','Notifications','Settings']){
   $('tab'+n).classList.toggle('active',n===name);
   (n==='Notifications'?$('notificationOverview'):
    $(n.toLowerCase()+'Panel')).hidden=n!==name;
  }
  $('notificationCenter').hidden=name!=='Notifications';
+ if(name==='Orders'){
+  const ready=$('ordersFrame').dataset.ready==='1';
+  $('ordersLoading').hidden=ready;$('ordersFrame').hidden=!ready;
+  if(ready)$('ordersFrame').contentWindow?.postMessage({type:'HONBIN_ORDERS_MEASURE'},location.origin);
+ }
  cloudNotifier?.onTabChange(name);
  if(name==='Tasks'&&authenticated&&!skipTaskLoad)void run(async()=>{await loadGroups();await loadTasks()});
  if(name==='Settings'&&authenticated){
@@ -1239,8 +1250,18 @@ $('ownerGroup').onchange=()=>run(async()=>{
 $('ownerRefresh').onclick=()=>run(loadOwnerManagement);
 async function reload(){const s=session();if($('mode').value==='SHARED')await loadGroups();check(s);clearEditor();await loadNotes();check(s);await restoreDraft();check(s)}
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
-$('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');
+$('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabOrders').onclick=()=>tab('Orders');
 $('tabNotifications').onclick=()=>tab('Notifications');$('tabSettings').onclick=()=>tab('Settings');
+addEventListener('message',e=>{
+ const frame=$('ordersFrame');
+ if(e.origin!==location.origin||e.source!==frame.contentWindow||!e.data)return;
+ if(e.data.type==='HONBIN_ORDERS_HEIGHT'&&Number.isFinite(e.data.height))frame.style.height=Math.max(160,Math.ceil(e.data.height))+'px';
+ if(e.data.type==='HONBIN_ORDERS_READY'){
+  frame.dataset.ready='1';
+  if(!$('ordersPanel').hidden){frame.hidden=false;$('ordersLoading').hidden=true;frame.contentWindow?.postMessage({type:'HONBIN_ORDERS_MEASURE'},location.origin)}
+ }
+ if(e.data.type==='HONBIN_ORDERS_AUTH_RESET'){frame.dataset.ready='0';frame.hidden=true;$('ordersLoading').hidden=false}
+});
 $('backTop').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
 function setTaskForm(open){
  $('taskForm').hidden=!open;

@@ -26,7 +26,11 @@ main{padding-top:10px}.back-link{margin-bottom:7px}.bar,.tabs,.actions{margin:7p
 @media(max-width:600px){main{padding:8px 8px 90px}.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.tabs button{min-width:0;padding:8px 3px}.formgrid{grid-template-columns:1fr}.formgrid label{font-size:.94rem}.actions button{flex:1}#editor{scroll-margin-top:12px}}
 
 #status.routine{display:none}@media(max-width:600px){#status{font-size:.85rem}.bar:first-of-type{margin-top:3px}.table-wrap{margin-top:6px}#count{font-size:.88rem;color:#52657b}}
-</style></head><body><main>
+
+/* Embedded Orders uses the workspace navigation and authentication shell. */
+html.embedded{background:transparent}html.embedded body{background:transparent}html.embedded main{max-width:none;margin:0;padding:0 1px 10px}html.embedded h1,html.embedded #backWorkspace,html.embedded main>.bar,html.embedded #status.routine{display:none}html.embedded #app{border:0;background:transparent}html.embedded #app>.bar:first-child{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:end}html.embedded #app>.bar:first-child label{margin:0}html.embedded #app>.bar:first-child button{white-space:nowrap}html.embedded .tabs{margin:9px 0}html.embedded #count{margin:2px 0}html.embedded #editor{margin:9px 0}
+@media(max-width:600px){html.embedded #app>.bar:first-child{grid-template-columns:1fr 1fr}html.embedded #app>.bar:first-child label{grid-column:1/-1}html.embedded #app>.bar:first-child button{width:100%}html.embedded #app>.bar:first-child label select{min-width:0}html.embedded .tabs button{min-height:43px}}
+</style><script>if(new URLSearchParams(location.search).get("embedded")==="1"&&self!==top)document.documentElement.classList.add("embedded")</script></head><body><main>
 <h1>訂貨管理</h1>
 <a id="backWorkspace" class="back-link" href="./workspace-v2.html">← 返回雲端記事與任務</a>
 <div id="status" role="status">請登入已核准的 Google 帳號。</div>
@@ -69,6 +73,12 @@ const auth=getAuth(app),db=sdk.getFirestore(app);
 let svc=null,groups=null,uid='',groupId='',items=[],cursor=null,hasMore=false,tab='all',editing=null,busy=false,epoch=0;
 const names=new Map();
 let loading=false;
+const embedded=document.documentElement.classList.contains('embedded');
+function reportHeight(){if(embedded)parent.postMessage({type:'HONBIN_ORDERS_HEIGHT',height:document.querySelector('main').scrollHeight},location.origin)}
+if(embedded){
+ new ResizeObserver(reportHeight).observe(document.querySelector('main'));
+ addEventListener('message',e=>{if(e.source===parent&&e.origin===location.origin&&e.data?.type==='HONBIN_ORDERS_MEASURE')reportHeight()});
+}
 async function nameFor(id){
  if(!id)return '—';if(names.has(id))return names.get(id);
  let name=id.slice(0,8)+'…';
@@ -154,6 +164,7 @@ if(window.visualViewport)window.visualViewport.addEventListener('resize',()=>{
 $('login').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){tell('登入失敗：'+e.code)}};
 $('logout').onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
+ if(embedded)parent.postMessage({type:'HONBIN_ORDERS_AUTH_RESET'},location.origin);
  epoch++;loading=false;names.clear();uid='';svc=null;groups=null;groupId='';reset();
  $('app').hidden=true;$('logout').hidden=!user;$('login').hidden=!!user;
  $('who').textContent=user?.email||'';
@@ -171,7 +182,8 @@ onAuthStateChanged(auth,async user=>{
   $('app').hidden=false;
   if(!groupId)tell('目前沒有已加入的群組。');
   else await load(true);
- }catch(err){tell('群組讀取失敗：'+err.message)}
+  if(embedded){parent.postMessage({type:'HONBIN_ORDERS_READY'},location.origin);reportHeight()}
+ }catch(err){tell('群組讀取失敗：'+err.message);if(embedded){parent.postMessage({type:'HONBIN_ORDERS_READY'},location.origin);reportHeight()}}
 });
 $('group').onchange=()=>{groupId=$('group').value;epoch++;load(true)};
 $('refresh').onclick=()=>{epoch++;load(true)};

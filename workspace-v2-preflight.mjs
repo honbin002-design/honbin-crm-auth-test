@@ -76,6 +76,10 @@ assert.match(page,/!taskSelected\|\|!\(TASK_V3_RULES_ENABLED\|\|\['ADMIN','EDITO
 assert.match(page,/const canPublish=TASK_V3_RULES_ENABLED/);
 assert.match(page,/class="task-scope"/);
 assert.doesNotMatch(page,/<p class="hint">有效群組成員可發布及查看任務/);
+assert.match(page,/id="tabOrders"/);
+assert.match(page,/id="ordersPanel"/);
+assert.match(page,/HONBIN_ORDERS_READY/);
+assert.doesNotMatch(page,/<a href="\.\/orders-v1\.html" class="nav-link">/);
 assert.match(page,/taskExtensionService\(\{db,sdk,currentUid:/);
 assert.match(page,/TASK_V3_RULES_ENABLED&&extensions/);
 assert.match(page,/extensions\.request\(\{/);
