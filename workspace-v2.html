@@ -132,7 +132,7 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
   <button id="tabNotifications" type="button">通知 <span class="notice-count" id="notificationCount" hidden>0</span></button>
   <button id="tabSettings" type="button">設定</button>
  </div></div>
- <section id="ordersPanel" hidden aria-label="訂貨管理"><p id="ordersLoading" class="hint" role="status">訂貨資料載入中……</p><iframe id="ordersFrame" title="訂貨管理" data-src="./orders-v1.html?embedded=1&v=20261028-auth-persistence" scrolling="no" hidden></iframe></section>
+ <section id="ordersPanel" hidden aria-label="訂貨管理"><p id="ordersLoading" class="hint" role="status">訂貨資料載入中……</p><div id="ordersMount"></div></section>
  <section class="panel" id="cloudRecordView" data-mode="view" hidden aria-label="記事與任務詳細資料">
   <p id="cloudRecordMode" class="hint">資料檢視 · 唯讀</p>
   <h2 id="cloudRecordTitle"></h2>
@@ -295,6 +295,7 @@ const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator AC
 const $=id=>document.getElementById(id),say=s=>{const el=$('message');el.textContent=s;el.classList.toggle('routine',s.startsWith('已登入，請選擇'))};
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
+let ordersUi=null,ordersPromise=null,ordersGeneration=0;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
 let pendingTaskWrite=null,taskPublishSubmitting=false;
 let cloudNotifier=null;
@@ -321,6 +322,33 @@ async function showNick(){
  const name=await nicknameFor(uid);
  $('nickname').value=name;$('who').textContent=name||'未設定暱稱';
 }
+function clearOrders(){
+ ++ordersGeneration;ordersUi?.dispose();ordersUi=null;ordersPromise=null;
+ $('ordersMount').shadowRoot?.replaceChildren();
+ $('ordersLoading').textContent='訂貨資料載入中……';$('ordersLoading').hidden=false;
+}
+async function ensureOrders(){
+ if(ordersUi||ordersPromise)return ordersPromise;
+ const generation=ordersGeneration;
+ $('ordersLoading').hidden=false;$('ordersLoading').textContent='訂貨資料載入中……';
+ ordersPromise=(async()=>{
+  let instance;
+  try{
+   const module=await import('./orders-workspace-ui.mjs?v=20261028-single-document');
+   if(generation!==ordersGeneration||!authenticated||!auth?.currentUser)return;
+   instance=module.mountOrdersWorkspace({container:$('ordersMount'),db,sdk,auth,groups});
+   ordersUi=instance;await instance.ready;
+   if(generation===ordersGeneration)$('ordersLoading').hidden=true;
+  }catch(error){
+   if(generation!==ordersGeneration)return;
+   instance?.dispose();ordersUi=null;
+   const status=$('ordersLoading');status.replaceChildren(document.createTextNode('訂貨載入未完成。'));
+   const retry=document.createElement('button');retry.type='button';retry.textContent='重試';
+   retry.onclick=()=>void ensureOrders();status.append(' ',retry);status.hidden=false;
+  }finally{if(generation===ordersGeneration)ordersPromise=null}
+ })();
+ return ordersPromise;
+}
 function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
  closeCloudRecord(false);clearEditor();
  if(!authenticated&&name!=='Settings'){
@@ -336,13 +364,7 @@ function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
    $(n.toLowerCase()+'Panel')).hidden=n!==name;
  }
  $('notificationCenter').hidden=name!=='Notifications';
- if(name==='Orders'){
-  const frame=$('ordersFrame');
-  if(!frame.getAttribute('src'))frame.src=frame.dataset.src;
-  const ready=frame.dataset.ready==='1';
-  $('ordersLoading').hidden=ready;$('ordersFrame').hidden=!ready;
-  if(ready)$('ordersFrame').contentWindow?.postMessage({type:'HONBIN_ORDERS_MEASURE'},location.origin);
- }
+ if(name==='Orders'&&authenticated)void ensureOrders();
  cloudNotifier?.onTabChange(name);
  if(name==='Tasks'&&authenticated&&!skipTaskLoad)void run(async()=>{await loadGroups();await loadTasks()});
  if(name==='Settings'&&authenticated){
@@ -1253,16 +1275,6 @@ async function reload(){const s=session();if($('mode').value==='SHARED')await lo
 async function run(action){if(busy)return;busy=true;try{await action()}catch(e){say('操作未完成：'+String(e?.code||e?.message||e))}finally{busy=false}}
 $('tabNotes').onclick=()=>tab('Notes');$('tabTasks').onclick=()=>tab('Tasks');$('tabOrders').onclick=()=>tab('Orders');
 $('tabNotifications').onclick=()=>tab('Notifications');$('tabSettings').onclick=()=>tab('Settings');
-addEventListener('message',e=>{
- const frame=$('ordersFrame');
- if(e.origin!==location.origin||e.source!==frame.contentWindow||!e.data)return;
- if(e.data.type==='HONBIN_ORDERS_HEIGHT'&&Number.isFinite(e.data.height))frame.style.height=Math.max(160,Math.ceil(e.data.height))+'px';
- if(e.data.type==='HONBIN_ORDERS_READY'){
-  frame.dataset.ready='1';
-  if(!$('ordersPanel').hidden){frame.hidden=false;$('ordersLoading').hidden=true;frame.contentWindow?.postMessage({type:'HONBIN_ORDERS_MEASURE'},location.origin)}
- }
- if(e.data.type==='HONBIN_ORDERS_AUTH_RESET'){frame.dataset.ready='0';frame.hidden=true;$('ordersLoading').hidden=false}
-});
 $('backTop').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});
 function setTaskForm(open){
  $('taskForm').hidden=!open;
@@ -1560,6 +1572,7 @@ async function start(){
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
   if(cloudNotifier){cloudNotifier.stop();cloudNotifier=null}
+  clearOrders();
   const generation=++epoch;uid='';authenticated=false;extensions=null;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
   inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
