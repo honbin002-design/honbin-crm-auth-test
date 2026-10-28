@@ -129,7 +129,21 @@ async function openEditor(id=null){
   }catch(err){if(e===epoch)tell('歷史讀取失敗：'+err.message)}
  }
  $('editor').scrollIntoView({behavior:'smooth',block:'start'});
+ if(!x){
+  const first=f.elements.namedItem('productName');
+  first.focus({preventScroll:true});
+  revealOrderField(first);
+ }
 }
+function revealOrderField(field){
+ if($('editor').hidden||!field||!field.closest('#orderForm'))return;
+ requestAnimationFrame(()=>field.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'}));
+}
+$('orderForm').addEventListener('focusin',e=>revealOrderField(e.target));
+if(window.visualViewport)window.visualViewport.addEventListener('resize',()=>{
+ const field=document.activeElement;
+ if(field?.matches('#orderForm input,#orderForm select,#orderForm textarea'))revealOrderField(field);
+});
 $('login').onclick=async()=>{try{await signInWithPopup(auth,new GoogleAuthProvider())}catch(e){tell('登入失敗：'+e.code)}};
 $('logout').onclick=()=>signOut(auth);
 onAuthStateChanged(auth,async user=>{
