@@ -24,6 +24,8 @@ small,.hint{color:#607087;font-size:.8rem}#status{white-space:pre-wrap;padding:9
 /* Compact list and form, retaining 44px touch targets. */
 main{padding-top:10px}.back-link{margin-bottom:7px}.bar,.tabs,.actions{margin:7px 0}.panel{padding:12px;margin:9px 0}.formgrid{gap:8px}label{gap:3px}h1{margin:2px 0 9px}.table-wrap{margin-top:8px}#status{margin:7px 0;padding:7px 9px}.hint{line-height:1.45}
 @media(max-width:600px){main{padding:8px 8px 90px}.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.tabs button{min-width:0;padding:8px 3px}.formgrid{grid-template-columns:1fr}.formgrid label{font-size:.94rem}.actions button{flex:1}#editor{scroll-margin-top:12px}}
+
+#status.routine{display:none}@media(max-width:600px){#status{font-size:.85rem}.bar:first-of-type{margin-top:3px}.table-wrap{margin-top:6px}#count{font-size:.88rem;color:#52657b}}
 </style></head><body><main>
 <h1>訂貨管理</h1>
 <a id="backWorkspace" class="back-link" href="./workspace-v2.html">← 返回雲端記事與任務</a>
@@ -75,7 +77,7 @@ async function nameFor(id){
  }catch{}
  names.set(id,name);return name;
 }
-const tell=s=>$('status').textContent=s;
+const tell=s=>{const el=$('status');el.textContent=s;el.classList.toggle('routine',s==='已讀取訂貨紀錄（唯讀）。')};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fieldLabels={productName:'品名',specification:'規格',quantity:'數量',unit:'單位',supplierName:'供應商',requesterUid:'建立人',orderedByUid:'訂貨人',orderDate:'訂貨日期',dueDate:'預計交期',arrivedQuantity:'已到貨數量',status:'狀態',note:'備註'};
 const stamp=t=>t?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
@@ -91,7 +93,8 @@ function render(){
  '<td><span class="pill '+esc(x.details.status)+'">'+esc(orderStatusLabels[x.details.status])+'</span></td>'+
  '<td>'+esc(x.details.dueDate||'—')+'</td><td>'+esc(names.get(x.details.orderedByUid)||x.details.orderedByUid?.slice(0,8)||'—')+'</td><td>'+esc(stamp(x.updatedAt))+'<br><small>'+esc(names.get(x.updatedBy)||x.updatedBy?.slice(0,8)||'—')+'</small></td>'+
  '<td><button data-id="'+esc(x.id)+'">明細</button></td></tr>').join('');
- $('count').textContent='此分類已載入 '+items.length+' 筆；符合搜尋 '+shown.length+' 筆';
+ $('count').textContent=shown.length?'顯示 '+shown.length+' 筆（已載入 '+items.length+' 筆）':(items.length?'沒有符合的訂貨':'尚無訂貨紀錄');
+ $('rows').closest('.table-wrap').hidden=!shown.length;
  $('more').hidden=!hasMore;
 }
 async function load(resetFirst=false){

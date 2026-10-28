@@ -111,6 +111,10 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
 /* Compact, readable layout across note, task and settings screens. */
 body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:8px}.task-card,.note-card{padding:12px;margin:8px 0}.task-section{margin-top:13px;padding-top:8px}.task-section h3{padding:8px 11px}.line{padding:9px 0}.list-tabs{margin:10px 0}.pager{margin:9px 0}.row{gap:7px}.compact-help{margin:6px 0;color:#52657b;font-size:.88rem}.compact-help summary{cursor:pointer;display:list-item;padding:5px 0;font-weight:600}.compact-help p{margin:3px 0 8px}.task-summary{gap:4px 9px}.task-meta{margin:7px 0}.nav{gap:5px}.nav button,.nav-link{min-height:44px;padding:8px 5px}
 @media(max-width:520px){body{padding:7px 8px calc(88px + env(safe-area-inset-bottom))}.panel{padding:11px;margin:8px 0}.task-card,.note-card{padding:11px}.nav button,.nav-link{font-size:.88rem;padding:7px 3px}}
+
+/* iPhone: keep all five destinations on one row; remove nested task card. */
+#message.routine{display:none}.task-scope{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:6px 10px;align-items:center;margin:8px 0 12px;padding:7px 0;border-bottom:1px solid #e1e8f0}.task-scope label{margin:0}.task-scope .hint{grid-column:1/-1;margin:0}.task-scope select{min-width:0}
+@media(max-width:520px){.nav{grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}.nav button,.nav-link{font-size:12px;line-height:1.15;min-width:0;min-height:45px;padding:5px 2px;overflow-wrap:anywhere}.task-scope{grid-template-columns:1fr 2fr}.task-scope .hint{font-size:12px}.list-controls{gap:7px}.task-section h3{margin-bottom:6px}}
 </style><script>if(new URLSearchParams(location.search).get('embedded')==='1'&&window.self!==window.top)document.documentElement.classList.add('embedded')</script></head><body>
 <header><div><h1>鴻繽記事與任務</h1></div><span class="pill" id="who">未登入</span></header>
 <a class="crm-return" href="/-hongbin-personal-crm-beta/">← 返回鴻繽 CRM</a>
@@ -171,10 +175,9 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
   </div>
  </section>
  <section id="tasksPanel" hidden>
-  <div class="panel"><div class="row" style="justify-content:space-between"><h2>指定任務</h2></div>
-   <p class="hint">有效群組成員可發布及查看任務；執行人可回覆或申請延期。共用記事權限獨立維持。</p>
+  <div class="panel">
    <p id="taskPublishFeedback" class="status" role="status" aria-live="polite" hidden></p>
-   <div class="panel" style="margin:10px 0"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
+   <div class="task-scope"><label for="taskGroup">任務共用群組</label><select id="taskGroup"></select><p class="hint" id="taskScopeHint">任務只屬於多人共用群組，與私人記事無關。</p></div>
    <div class="row" style="justify-content:space-between;margin-top:15px"><h2>任務列表</h2><button id="toggleTaskForm" class="alt" type="button" aria-expanded="false" aria-controls="taskForm">＋ 發布任務</button></div>
    <div class="list-tabs" role="group" aria-label="任務狀態"><button id="taskOpenTab" type="button" class="active" aria-pressed="true">進行中</button><button id="taskDoneTab" type="button" aria-pressed="false">已完成</button></div>
    <div class="list-controls"><div><label for="taskSearchField">搜尋條件</label><select id="taskSearchField"><option value="all">全部欄位</option><option value="publisher">發布人</option><option value="executor">執行人</option><option value="content">任務名稱與內容</option></select></div><div><label for="taskSearch">搜尋任務</label><input id="taskSearch" type="search" placeholder="輸入名稱或關鍵字"></div></div>
@@ -284,7 +287,7 @@ const TASK_V3_RULES_ENABLED=true; // Existing TEST V3 rules live.
 const TASK_V4_PUBLISHER_DATE_ENABLED=true; // Owner-published TEST V4, live publisher approval and cross-account readback PASS.
 const TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED=true; // TEST V5 compatibility rules published and legacy request verified on 2026-10-21.
 const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator ACL PASS. Task writes remain gated.
-const $=id=>document.getElementById(id),say=s=>$('message').textContent=s;
+const $=id=>document.getElementById(id),say=s=>{const el=$('message');el.textContent=s;el.classList.toggle('routine',s.startsWith('已登入，請選擇'))};
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
