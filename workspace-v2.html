@@ -295,7 +295,7 @@ const PROFILE_RULES_ENABLED=true; // TEST only; live READ/denial and emulator AC
 const $=id=>document.getElementById(id),say=s=>{const el=$('message');el.textContent=s;el.classList.toggle('routine',s.startsWith('已登入，請選擇'))};
 const mk=(tag,text)=>{const e=document.createElement(tag);e.textContent=String(text??'');return e};
 let auth,db,sdk,notes,groups,tasks,extensions,drafts,uid='',epoch=0,groupItems=[],selected=null,taskSelected=null,items=[],current=null,pendingId=null,busy=false;
-let ordersUi=null,ordersPromise=null,ordersGeneration=0;
+let ordersUi=null,ordersPromise=null,ordersGeneration=0,membershipProof=null;
 let authenticated=false,ownerMembers=null,ownerGroups=[],ownerGroupId='',ownerLoadDone=false;
 let pendingTaskWrite=null,taskPublishSubmitting=false;
 let cloudNotifier=null;
@@ -322,6 +322,16 @@ async function showNick(){
  const name=await nicknameFor(uid);
  $('nickname').value=name;$('who').textContent=name||'未設定暱稱';
 }
+async function verifiedOrderGroups(){
+ const checkpoint=session(),now=Date.now();
+ if(membershipProof?.uid===uid&&membershipProof.epoch===epoch&&
+    (membershipProof.expires===0||membershipProof.expires>now))return membershipProof.promise;
+ const proof={uid,epoch,expires:0,promise:null};
+ proof.promise=groups.listGroupsFromServer().then(list=>{
+  check(checkpoint);proof.expires=Date.now()+60000;return list;
+ }).catch(error=>{if(membershipProof===proof)membershipProof=null;throw error});
+ membershipProof=proof;return proof.promise;
+}
 function clearOrders(){
  ++ordersGeneration;ordersUi?.dispose();ordersUi=null;ordersPromise=null;
  $('ordersMount').shadowRoot?.replaceChildren();
@@ -334,9 +344,9 @@ async function ensureOrders(){
  ordersPromise=(async()=>{
   let instance;
   try{
-   const module=await import('./orders-workspace-ui.mjs?v=20261028-single-document');
+   const module=await import('./orders-workspace-ui.mjs?v=20261028-shared-group-read');
    if(generation!==ordersGeneration||!authenticated||!auth?.currentUser)return;
-   instance=module.mountOrdersWorkspace({container:$('ordersMount'),db,sdk,auth,groups});
+   instance=module.mountOrdersWorkspace({container:$('ordersMount'),db,sdk,auth,groups,listVerifiedGroups:verifiedOrderGroups});
    ordersUi=instance;await instance.ready;
    if(generation===ordersGeneration)$('ordersLoading').hidden=true;
   }catch(error){
@@ -1016,7 +1026,7 @@ async function loadReceivedInvitations(){
  // Never rely on a cached member directory to decide if an old invitation
  // can be accepted. This is a bounded, identity-scoped SERVER read only.
  let visibleGroups=[];
- try{visibleGroups=await groups.listGroupsFromServer();check(s)}
+ try{visibleGroups=await verifiedOrderGroups();check(s)}
  catch(error){check(s);visibleGroups=[]}
  const visibleIds=new Set(visibleGroups.map(g=>g.id));
  const liveRoles=new Map(visibleGroups.map(g=>[g.id,g.role]));
@@ -1095,7 +1105,7 @@ async function loadReceivedInvitations(){
    if(!already&&!confirm('確認接受這個共用記事簿邀請？'))return;
    accept.disabled=true;
    try{
-    const result=await groups.acceptInvite(invitation);check(checkpoint);
+    const result=await groups.acceptInvite(invitation);check(checkpoint);membershipProof=null;
     if(!result.indexed){
      say('已接受邀請，但記事簿清單尚未完成，請按「確認加入／修復記事簿清單」重試。');
      await loadReceivedInvitations();check(checkpoint);return;
@@ -1572,7 +1582,7 @@ async function start(){
  $('login').disabled=false;
  authSdk.onAuthStateChanged(auth,async user=>{
   if(cloudNotifier){cloudNotifier.stop();cloudNotifier=null}
-  clearOrders();
+  clearOrders();membershipProof=null;
   const generation=++epoch;uid='';authenticated=false;extensions=null;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
   inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
