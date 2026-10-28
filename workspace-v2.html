@@ -17,7 +17,7 @@ button,input,textarea,select,.nav-link{font:inherit}button,.nav-link{border:0;ba
 button{cursor:pointer;min-width:44px;overflow-wrap:anywhere}button.alt{background:#e7eff9;color:#174c83}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,.nav-link:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #73a8e7;outline-offset:2px}
 input,textarea,select{width:100%;padding:11px;border:1px solid #9fafc2;border-radius:10px;background:#fff;min-height:46px}
 textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;margin:13px 0 5px}input,textarea{scroll-margin-bottom:45vh}
-.nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
 .nav button,.nav-link{background:#e7eff9;color:#24486c}.nav-link{display:flex;align-items:center;justify-content:center;min-width:0;text-align:center;text-decoration:none}.nav button.active{background:#205a9a;color:#fff}
 #message{margin-bottom:10px}#tasksPanel .panel .panel{border:0;background:#f4f7fb}
 .line{border-bottom:1px solid #e1e8f0;padding:12px 0}.line:last-child{border:0}
@@ -203,7 +203,6 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
     <p class="hint">任務發布後會保留紀錄，發布前請確認內容。</p>
     <div class="row" style="margin-top:12px"><button type="submit" id="taskPublish" disabled>發布任務</button><button id="cancelTaskForm" class="alt" type="button">取消</button></div>
    </form>
-   <p class="hint">按「發布任務」並由伺服器確認後，會自動返回任務列表；背景通知由已登記的 iPhone 依群組權限接收。</p>
   </div>
  </section>
  <section id="settingsPanel">
