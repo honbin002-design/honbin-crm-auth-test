@@ -20,6 +20,10 @@ label input,label select,label textarea{width:100%;color:#19283d}label.wide{grid
 small,.hint{color:#607087;font-size:.8rem}#status{white-space:pre-wrap;padding:9px;border-radius:8px;background:#eaf0f8}
 .history{font-size:.86rem;list-style:none;padding:0;margin:0}.history li{border-bottom:1px solid #e7ecf2;padding:10px 0}
 [hidden]{display:none!important}@media(max-width:420px){main{padding:12px 8px 90px}.formgrid{grid-template-columns:1fr}h1{font-size:1.18rem}}
+
+/* Compact list and form, retaining 44px touch targets. */
+main{padding-top:10px}.back-link{margin-bottom:7px}.bar,.tabs,.actions{margin:7px 0}.panel{padding:12px;margin:9px 0}.formgrid{gap:8px}label{gap:3px}h1{margin:2px 0 9px}.table-wrap{margin-top:8px}#status{margin:7px 0;padding:7px 9px}.hint{line-height:1.45}
+@media(max-width:600px){main{padding:8px 8px 90px}.tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.tabs button{min-width:0;padding:8px 3px}.formgrid{grid-template-columns:1fr}.formgrid label{font-size:.94rem}.actions button{flex:1}#editor{scroll-margin-top:12px}}
 </style></head><body><main>
 <h1>訂貨管理</h1>
 <a id="backWorkspace" class="back-link" href="./workspace-v2.html">← 返回雲端記事與任務</a>
@@ -29,7 +33,7 @@ small,.hint{color:#607087;font-size:.8rem}#status{white-space:pre-wrap;padding:9
 <div class="bar"><label>共用群組<select id="group"></select></label><button id="refresh">重新整理</button><button class="primary" id="new">＋ 新增訂貨</button></div>
 <div class="tabs" role="tablist"><button class="active" data-tab="all">全部</button><button data-tab="done">已完成</button><button data-tab="open">未完成</button></div>
 <input id="search" placeholder="搜尋產品、供應商、訂貨人、備註" aria-label="搜尋訂貨">
-<p class="hint">一筆一列，點「明細」查看或修改；每次只讀取最多 30 筆，按「載入更多」繼續。</p>
+
 <div class="table-wrap"><table><thead><tr><th>品名／規格</th><th>數量</th><th>狀態</th><th>預計交期</th><th>訂貨人</th><th>最後更新</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div>
 <div class="bar"><span id="count"></span><button id="more" hidden>載入更多</button></div>
 <section class="panel" id="editor" hidden>

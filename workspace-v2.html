@@ -107,6 +107,10 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
 #cloudRecordBody .task-detail-panel{border:0;margin:0;padding:0}
 #cloudRecordView .record-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
 [hidden]{display:none!important}
+
+/* Compact, readable layout across note, task and settings screens. */
+body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:8px}.task-card,.note-card{padding:12px;margin:8px 0}.task-section{margin-top:13px;padding-top:8px}.task-section h3{padding:8px 11px}.line{padding:9px 0}.list-tabs{margin:10px 0}.pager{margin:9px 0}.row{gap:7px}.compact-help{margin:6px 0;color:#52657b;font-size:.88rem}.compact-help summary{cursor:pointer;display:list-item;padding:5px 0;font-weight:600}.compact-help p{margin:3px 0 8px}.task-summary{gap:4px 9px}.task-meta{margin:7px 0}.nav{gap:5px}.nav button,.nav-link{min-height:44px;padding:8px 5px}
+@media(max-width:520px){body{padding:7px 8px calc(88px + env(safe-area-inset-bottom))}.panel{padding:11px;margin:8px 0}.task-card,.note-card{padding:11px}.nav button,.nav-link{font-size:.88rem;padding:7px 3px}}
 </style><script>if(new URLSearchParams(location.search).get('embedded')==='1'&&window.self!==window.top)document.documentElement.classList.add('embedded')</script></head><body>
 <header><div><h1>鴻繽記事與任務</h1></div><span class="pill" id="who">未登入</span></header>
 <a class="crm-return" href="/-hongbin-personal-crm-beta/">← 返回鴻繽 CRM</a>
@@ -157,7 +161,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
   </div>
   <div class="panel"><div class="row" style="justify-content:space-between"><h2>記事列表</h2><button class="alt" id="newNote">＋ 新記事</button><button class="alt" id="resumeNoteDraft" type="button" hidden>繼續編輯草稿</button></div>
   <label for="search">搜尋記事</label><input id="search" type="search" placeholder="搜尋標題或內容">
-  <p class="hint">每批最多 10 筆；搜尋目前批次。按「下一批」可查找更舊記事。</p>
+  <details class="compact-help"><summary>使用說明</summary><p class="hint">每批最多 10 筆；搜尋目前批次。按「下一批」可查找更舊記事。</p></details>
   <div id="notesList"></div><div class="pager"><button class="alt" id="notePrev" type="button">上一批</button><span id="notePageStatus" role="status">第 1 批</span><button class="alt" id="noteNext" type="button">下一批</button></div></div>
   <div class="panel" id="noteEditor" hidden><h2 id="noteHeading">新增記事</h2>
    <label for="noteTitle">標題</label><input id="noteTitle" maxlength="120">
@@ -177,9 +181,9 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
    <button id="taskSearchButton" class="alt" type="button" style="margin-top:10px">搜尋目前批次</button>
    <div id="tasksList"></div>
    <div class="pager"><button class="alt" id="taskPrev" type="button">上一批</button><span id="taskPageStatus" role="status">第 1 批</span><button class="alt" id="taskNext" type="button">下一批</button></div>
-   <p class="hint">每批最多 10 筆；點任務標題看詳情與操作。搜尋目前批次，按「下一批」繼續查找更舊資料。</p>
+   <details class="compact-help"><summary>使用說明</summary><p class="hint">每批最多 10 筆；點任務標題看詳情與操作。搜尋目前批次，按「下一批」繼續查找更舊資料。</p></details>
    <details hidden><summary>進階：核對延期紀錄讀取</summary><div class="row" style="margin:12px 0"><button id="verifyTaskV3Read" type="button" class="alt">核對伺服器讀取權限</button></div><p id="verifyTaskV3Status" class="hint" role="status" aria-live="polite">尚未核對。</p></details>
-   <p class="hint">截止日前 3 天會在任務頁提示。</p>
+   
    <form id="taskForm" hidden>
     <h2 style="margin-top:18px">發布新任務</h2>
     <label for="taskTitle">任務名稱（必填）</label><input id="taskTitle" maxlength="120" placeholder="例如：確認樣品進度" required>
@@ -194,7 +198,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
   </div>
  </section>
  <section id="settingsPanel">
-  <div class="panel" id="loginBox"><h2>Google 帳號</h2><p id="identity">正在檢查 Google 登入……</p><div class="row"><button id="login" disabled>Google 登入</button><button id="logout" class="alt" disabled>登出／切換帳號</button></div><p class="hint">登入後會在這台裝置保留狀態，關閉再開啟也可自動登入；按「登出／切換帳號」會清除登入狀態。Safari 與加入主畫面的網頁 App 可能需各登入一次；清除網站資料或撤銷帳號存取後仍須重新登入。</p></div>
+  <div class="panel" id="loginBox"><h2>Google 帳號</h2><p id="identity">正在檢查 Google 登入……</p><div class="row"><button id="login" disabled>Google 登入</button><button id="logout" class="alt" disabled>登出／切換帳號</button></div><details class="compact-help"><summary>使用說明</summary><p class="hint">登入後會在這台裝置保留狀態，關閉再開啟也可自動登入；按「登出／切換帳號」會清除登入狀態。Safari 與加入主畫面的網頁 App 可能需各登入一次；清除網站資料或撤銷帳號存取後仍須重新登入。</p></details></div>
   <div class="panel" id="ownerManagement" hidden>
    <h2>最高權限｜成員權限管理</h2>
    <p class="hint">僅供 honbin002 最高權限帳號使用。每本共用記事簿的成員權限獨立，不會跨群組改動。</p>
@@ -233,7 +237,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
   <div class="panel" id="pushReadiness">
    <h2>iPhone 通知</h2>
    <p class="hint">已啟用程式內通知：新共用記事、任務指派與完成通知。CRM 開啟時自動核對，開啟期間每 5 分鐘更新，或點左下角「重新整理」立即刷新。</p>
-   <p class="hint">iPhone 系統通知由 CRM 主畫面提供，成員從主畫面圖示啟動 CRM、登入自己的 Google 帳號後，可自行授權並登記手機。正式發送開關與最新狀態以 CRM 主畫面為準，絕不自動索取通知權限或開啟付費服務。</p>
+   <details class="compact-help"><summary>使用說明</summary><p class="hint">iPhone 系統通知由 CRM 主畫面提供，成員從主畫面圖示啟動 CRM、登入自己的 Google 帳號後，可自行授權並登記手機。正式發送開關與最新狀態以 CRM 主畫面為準，絕不自動索取通知權限或開啟付費服務。</p></details>
    <button id="checkPush" class="alt" type="button">檢查手機推播準備狀態</button>
    <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
    <p class="warning">要收背景通知，請從 iPhone 主畫面上的「鴻繽科技 CRM」開啟，在上方「雲端記事與任務」點選啟用這支 iPhone 通知並同意系統授權。只有本人主動登記才會建立私人裝置訂閱，背景送達可能受 GitHub 排程或 iPhone 通知設定影響。</p>
