@@ -4,7 +4,7 @@
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC",sans-serif;color:#19283d;background:#f5f7fb}
 *{box-sizing:border-box}body{margin:0}main{max-width:900px;margin:auto;padding:16px 12px 110px}
-h1{font-size:1.3rem;margin:4px 0 14px}.bar,.tabs,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+h1{font-size:1.3rem;margin:4px 0 14px}.back-link{display:inline-flex;align-items:center;min-height:43px;margin:0 0 12px;padding:8px 10px;border:1px solid #b8c8dc;border-radius:9px;color:#165ca8;background:#fff;text-decoration:none;font-weight:600}.back-link:focus-visible{outline:3px solid #165ca8;outline-offset:2px}.bar,.tabs,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
 button,select,input,textarea{font:inherit;border:1px solid #c7d2df;border-radius:9px;padding:10px;min-height:43px;background:#fff;color:#19283d}
 button{cursor:pointer}button.primary{background:#165ca8;color:#fff;border-color:#165ca8}button:disabled{opacity:.55;cursor:default}
 .tabs button{flex:1;white-space:nowrap}.tabs button.active{background:#165ca8;color:#fff}
@@ -22,6 +22,7 @@ small,.hint{color:#607087;font-size:.8rem}#status{white-space:pre-wrap;padding:9
 [hidden]{display:none!important}@media(max-width:420px){main{padding:12px 8px 90px}.formgrid{grid-template-columns:1fr}h1{font-size:1.18rem}}
 </style></head><body><main>
 <h1>訂貨管理</h1>
+<a id="backWorkspace" class="back-link" href="./workspace-v2.html">← 返回雲端記事與任務</a>
 <div id="status" role="status">請登入已核准的 Google 帳號。</div>
 <div class="bar"><button id="login" class="primary">Google 登入</button><button id="logout" hidden>登出</button><span id="who"></span></div>
 <section id="app" hidden>
@@ -49,6 +50,7 @@ small,.hint{color:#607087;font-size:.8rem}#status{white-space:pre-wrap;padding:9
 </section>
 </section>
 </main>
+<script>if(window.self!==window.top)document.getElementById('backWorkspace').href='./workspace-v2.html?embedded=1';</script>
 <script type="module">
 import {initializeApp,getApps,getApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
 import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
