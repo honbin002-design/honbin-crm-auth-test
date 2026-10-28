@@ -8,6 +8,7 @@ assert(html.includes('orders-v1-service.mjs'));
 assert(html.includes('HONBIN_ORDERS_READY')&&html.includes('HONBIN_ORDERS_HEIGHT'));
 assert(html.includes('html.embedded')&&html.includes('onAuthStateChanged(auth'));
 assert(html.includes('id="backWorkspace"'));
+assert(html.includes("await user.getIdToken(true)"));
 assert(!/supplierPrice|purchasePrice|costPrice|進價|採購單價/.test(html));
 const js=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
 assert(js,'inline module script missing');
