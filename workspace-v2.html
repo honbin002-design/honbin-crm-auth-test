@@ -13,12 +13,12 @@ header{display:flex;justify-content:space-between;align-items:center;gap:12px;ma
 h1{font-size:1.3rem;margin:0}h2{font-size:1.05rem;margin:0 0 12px}
 p{margin:8px 0}small,.hint{color:#52657b;font-size:.91rem;line-height:1.6}
 .panel{background:#fff;border:1px solid #d8e2ee;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 3px 16px rgba(25,53,83,.045)}
-button,input,textarea,select{font:inherit}button{border:0;background:#205a9a;color:#fff;border-radius:11px;min-height:45px;padding:10px 14px;font-weight:600}
-button{cursor:pointer;min-width:44px;overflow-wrap:anywhere}button.alt{background:#e7eff9;color:#174c83}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #73a8e7;outline-offset:2px}
+button,input,textarea,select,.nav-link{font:inherit}button,.nav-link{border:0;background:#205a9a;color:#fff;border-radius:11px;min-height:45px;padding:10px 14px;font-weight:600}
+button{cursor:pointer;min-width:44px;overflow-wrap:anywhere}button.alt{background:#e7eff9;color:#174c83}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,.nav-link:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #73a8e7;outline-offset:2px}
 input,textarea,select{width:100%;padding:11px;border:1px solid #9fafc2;border-radius:10px;background:#fff;min-height:46px}
 textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;margin:13px 0 5px}input,textarea{scroll-margin-bottom:45vh}
 .nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.nav button{background:#e7eff9;color:#24486c}.nav button.active{background:#205a9a;color:#fff}
+.nav button,.nav-link{background:#e7eff9;color:#24486c}.nav-link{display:flex;align-items:center;justify-content:center;min-width:0;text-align:center;text-decoration:none}.nav button.active{background:#205a9a;color:#fff}
 #message{margin-bottom:10px}#tasksPanel .panel .panel{border:0;background:#f4f7fb}
 .line{border-bottom:1px solid #e1e8f0;padding:12px 0}.line:last-child{border:0}
 .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
@@ -58,7 +58,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 #tabNotifications .notice-count{padding:1px 6px;min-width:19px;font-size:.72rem;line-height:1.25}
 @media(max-width:520px){
  .nav{gap:6px}
- .nav button{min-width:0;padding:10px 5px;font-size:.96rem}
+ .nav button,.nav-link{min-width:0;padding:10px 5px;font-size:.96rem}
  .notification-page>.panel{padding:14px 12px}
 }
 .notification-return-action{margin:0 0 12px;padding:8px 0;border-bottom:1px solid #d8e4f0}
@@ -74,7 +74,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .embedded header,.embedded .crm-return,.embedded .back-top,.embedded .float-refresh{display:none!important}
 html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!important;overflow-x:hidden}
 .embedded body{height:auto!important;min-height:0!important;overflow-y:visible!important;overflow-x:hidden!important}
-@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.list-controls,.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.list-controls>div{min-width:0}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button{padding:10px 5px}}
+@media(max-width:520px){header{align-items:flex-start}header .pill{max-width:42%;overflow-wrap:anywhere}.panel{padding:15px}.task-meta{grid-template-columns:1fr}.list-controls,.task-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.list-controls>div{min-width:0}.review-actions{grid-template-columns:1fr}.row>button{max-width:100%}.nav button,.nav-link{padding:10px 5px}}
 /* iPhone-safe controls: keep notebook actions in their own rows, never overlay. */
 #groupWrap{min-width:0;display:grid;gap:11px}
 #groupWrap>.row:first-child{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -108,7 +108,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
  <div class="panel"><div class="nav">
   <button id="tabNotes" class="active" type="button">記事</button>
   <button id="tabTasks" type="button">任務</button>
-  <a href="./orders-v1.html" class="alt" style="display:inline-flex;align-items:center;padding:8px 12px;border:1px solid #b8c8dc;border-radius:10px;text-decoration:none;color:#205a9a">訂貨管理</a>
+  <a href="./orders-v1.html" class="nav-link">訂貨管理</a>
   <button id="tabNotifications" type="button">通知 <span class="notice-count" id="notificationCount" hidden>0</span></button>
   <button id="tabSettings" type="button">設定</button>
  </div></div>
