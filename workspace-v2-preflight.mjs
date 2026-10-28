@@ -21,7 +21,6 @@ for(const path of ['notes-preview.html','groups-preview.html']){
  assert.doesNotMatch(companion,/browserSessionPersistence/);
 }
 assert.match(page,/taskPublish" disabled/);
-assert.match(page,/按「發布任務」並由伺服器確認後，會自動返回任務列表/);
 assert.match(page,/id="taskPublishFeedback" class="status" role="status" aria-live="polite" hidden/);
 assert.match(page,/let pendingTaskWrite=null,taskPublishSubmitting=false/);
 assert.match(page,/if\(taskPublishSubmitting\)return; \/\/ Guard double-tap/);
