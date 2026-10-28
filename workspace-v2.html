@@ -1614,6 +1614,8 @@ async function start(){
    groups=groupService({db,sdk,identity:user});tasks=taskService({db,sdk,currentUid:()=>auth.currentUser?.uid});
    extensions=taskExtensionService({db,sdk,currentUid:()=>auth.currentUser?.uid,
     recordOriginalDueDate:TASK_V5_ORIGINAL_DUE_AUDIT_ENABLED});
+   // Share the server membership proof while notes initialize.
+   void verifiedOrderGroups().catch(()=>{});
    $('mode').value='PRIVATE';$('groupWrap').hidden=true;
    $('privateNotes').classList.add('active');$('sharedNotes').classList.remove('active');
    // Verify server authorization before revealing any saved local identity or content.
