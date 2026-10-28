@@ -78,6 +78,8 @@ assert.doesNotMatch(page,/<p class="hint">有效群組成員可發布及查看�
 assert.match(page,/id="tabOrders"/);
 assert.match(page,/id="ordersPanel"/);
 assert.match(page,/HONBIN_ORDERS_READY/);
+assert.match(page,/data-src="\.\/orders-v1\.html\?embedded=1"/);
+assert.match(page,/if\(!frame\.getAttribute\('src'\)\)frame\.src=frame\.dataset\.src/);
 assert.doesNotMatch(page,/<a href="\.\/orders-v1\.html" class="nav-link">/);
 assert.match(page,/taskExtensionService\(\{db,sdk,currentUid:/);
 assert.match(page,/TASK_V3_RULES_ENABLED&&extensions/);
