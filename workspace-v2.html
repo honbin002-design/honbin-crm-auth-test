@@ -282,7 +282,7 @@ import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
 import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
-import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261022-dedicated-inbox';
+import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261029-shared-changes';
 import {attachInstalledCRMPushBridge} from './firebase-installed-crm-push-bridge.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 import {verifyOwnerSubscriptionWrite} from './firestore-push-write-probe.mjs';
@@ -338,7 +338,7 @@ function clearOrders(){
  $('ordersLoading').textContent='訂貨資料載入中……';$('ordersLoading').hidden=false;
 }
 function loadOrdersModule(){
- if(!ordersModulePromise)ordersModulePromise=import('./orders-workspace-ui.mjs?v=20261029-identity-status')
+ if(!ordersModulePromise)ordersModulePromise=import('./orders-workspace-ui.mjs?v=20261029-notification-deeplink')
   .catch(error=>{ordersModulePromise=null;throw error});
  return ordersModulePromise;
 }
@@ -380,7 +380,7 @@ function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
    $(n.toLowerCase()+'Panel')).hidden=n!==name;
  }
  $('notificationCenter').hidden=name!=='Notifications';
- if(name==='Orders'&&authenticated)void ensureOrders();
+ if(name==='Orders'&&authenticated&&!fromNotification)void ensureOrders();
  cloudNotifier?.onTabChange(name);
  if(name==='Tasks'&&authenticated&&!skipTaskLoad)void run(async()=>{await loadGroups();await loadTasks()});
  if(name==='Settings'&&authenticated){
@@ -1662,13 +1662,17 @@ async function start(){
       if(inviteGroupId)await loadSentInvitations();check(ss);
      }
     },
-    getCurrentTab:()=>['Notes','Tasks','Notifications','Settings'].find(name=>
+    getCurrentTab:()=>['Notes','Tasks','Orders','Notifications','Settings'].find(name=>
      $('tab'+name).classList.contains('active'))||'Notes',
-    restoreTab:name=>tab(['Notes','Tasks','Notifications','Settings'].includes(name)?name:'Notes',
+    restoreTab:name=>tab(['Notes','Tasks','Orders','Notifications','Settings'].includes(name)?name:'Notes',
      {skipTaskLoad:true}),
     openNotifications:()=>tab('Notifications'),
     closeNotifications:()=>tab(lastNonNotificationTab,{skipTaskLoad:true}),
     openItem:async event=>{
+     if(event.tab==='Orders'){
+      const ss=session();tab('Orders',{fromNotification:true});await ensureOrders();check(ss);
+      return !!(await ordersUi?.openRecord(event.groupId,event.itemId));
+     }
      const ss=session(),previous=location.pathname+location.search+location.hash;
      const dest=new URL(location.href);
      dest.searchParams.set('tab',event.tab);
