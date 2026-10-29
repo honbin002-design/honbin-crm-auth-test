@@ -125,6 +125,12 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  $('list').onclick=event=>{const button=event.target.closest('button[data-id]');if(button)void showDetail(button.dataset.id)};
  $('cancel').onclick=()=>{$('editor').hidden=true;editing=null};
  $('form').addEventListener('focusin',event=>revealField(event.target));
+ $('form').addEventListener('change',event=>{
+  if(event.target.name!=='status')return;
+  const item=items.find(x=>x.id===editing),status=new FormData($('form')).get('status');
+  $('editIdentity').textContent='建立人：'+person(item?.createdBy||item?.details.requesterUid||owner)+
+   '　訂貨人：'+(status==='PENDING'?'—':person(item?.details.orderedByUid||owner));
+ });
  const onViewport=()=>{const active=root.activeElement;if(active?.matches('input,select,textarea'))revealField(active)};
  window.visualViewport?.addEventListener('resize',onViewport);
  $('form').onsubmit=async event=>{
