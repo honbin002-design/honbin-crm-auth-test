@@ -26,4 +26,11 @@ assert.equal(check(note,{...newNote,ownerUid:'member_3'},'member_2'),false);
 assert.equal(check(note,{...newNote,deleted:undefined},'member_2'),false);
 assert.equal(check({actorUid:'actor_1',payload:{kind:'UNKNOWN',groupId:'group_1',taskId:'x'}},
  baseTask,'member_2'),false);
+const orderChanged={actorUid:'actor_1',payload:{kind:'ORDER_UPDATED',groupId:'group_1',orderId:'order_1',revision:2}};
+assert.equal(check(orderChanged,{revision:3},'member_2'),true);
+assert.equal(check(orderChanged,{revision:1},'member_2'),false);
+const noteChanged={actorUid:'actor_1',payload:{kind:'SHARED_NOTE_DELETED',groupId:'group_1',noteId:'note_1',revision:3}};
+assert.equal(check(noteChanged,{groupId:'group_1',version:4,deleted:true},'member_2'),true);
+assert.equal(check(noteChanged,{groupId:'different',version:4,deleted:true},'member_2'),false);
 console.log('TEST_PUSH_FINAL_EVENT_FRESHNESS_REVALIDATION_PASS');
+
