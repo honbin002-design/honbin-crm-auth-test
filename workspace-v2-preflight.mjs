@@ -78,7 +78,7 @@ assert.doesNotMatch(page,/<p class="hint">有效群組成員可發布及查看�
 assert.match(page,/id="tabOrders"/);
 assert.match(page,/id="ordersPanel"/);
 assert.match(page,/id="ordersMount"/);
-assert.match(page,/orders-workspace-ui\.mjs\?v=20261028-shared-group-read/);
+assert.match(page,/orders-workspace-ui\.mjs\?v=20261029-identity-status/);
 assert.doesNotMatch(page,/id="ordersFrame"/);
 const ordersUi=readFileSync('orders-workspace-ui.mjs','utf8');
 assert.match(ordersUi,/orderService\(\{db,sdk,currentUid:/);
