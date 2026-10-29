@@ -46,8 +46,9 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
  function showReturnFor(item){
   const attr=item.tab==='Notes'?'noteId':'taskId';
   const listId=item.tab==='Notes'?'notesList':'tasksList';
-  const row=[...($ (listId).querySelectorAll?.(item.tab==='Notes'?'[data-note-id]':'[data-task-id]')||[])]
-   .find(element=>element.dataset?.[attr]===item.itemId);
+  const row=item.tab==='Orders'?$('ordersPanel'):
+   [...($ (listId).querySelectorAll?.(item.tab==='Notes'?'[data-note-id]':'[data-task-id]')||[])]
+    .find(element=>element.dataset?.[attr]===item.itemId);
   if(!row)return false;
   const holder=document.createElement('div');
   holder.className='notification-return-action';
@@ -69,7 +70,7 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
   $('notificationCount').hidden=unread===0;
   $('notificationCount').textContent=String(unread);
   const root=$('notificationList');root.replaceChildren();
-  if(!entries.length){root.append(document.createTextNode('最近沒有新記事或任務通知。'));return}
+  if(!entries.length){root.append(document.createTextNode('最近沒有新記事、任務或訂貨通知。'));return}
   for(const item of entries){
    const row=document.createElement('div');row.className='notice-row';
    row.dataset.unread=String(!markers.isRead(item.id));
