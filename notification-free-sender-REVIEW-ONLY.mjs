@@ -90,10 +90,17 @@ async function main(){
     ['ADMIN','EDITOR','VIEWER'].includes(member.data().role);
  }
  async function stillRelevant(event,uid){
-  const {kind,groupId,taskId,noteId}=event.payload;
+  const {kind,groupId,taskId,noteId,orderId,eventDocId,revision}=event.payload;
   const base=db.collection('groups').doc(groupId);
-  const ref=kind==='SHARED_NOTE_CREATED'
-   ?base.collection('notes').doc(noteId)
+  if(eventDocId){
+   const notice=await base.collection('notificationEvents').doc(eventDocId).get();
+   if(!notice.exists||notice.data().kind!==kind||
+      notice.data().actorUid!==event.actorUid||
+      notice.data().itemId!==(noteId||orderId)||
+      notice.data().revision!==revision)return false;
+  }
+  const ref=orderId?base.collection('orders').doc(orderId)
+   :noteId?base.collection('notes').doc(noteId)
    :base.collection('tasks').doc(taskId);
   const fresh=await ref.get();
   return fresh.exists&&notificationEventStillRelevant(event,fresh.data(),uid);
@@ -172,14 +179,15 @@ async function main(){
    }
   }
  }
- // Three global streams read only new records. The saved document cursor
+ // Four global streams read only new records. The saved document cursor
  // prevents every scheduled run from rereading all historical notes/tasks.
  // At most 40 events per stream are processed in a run; backlog rolls forward
  // on the next run. Collection-group indexes must be reviewed before enabling.
  const streams=[
   {kind:'TASK_ASSIGNED',collection:'tasks',field:'createdAt'},
   {kind:'TASK_COMPLETED',collection:'tasks',field:'completedAt'},
-  {kind:'SHARED_NOTE_CREATED',collection:'notes',field:'createdAt'}
+  {kind:'SHARED_NOTE_CREATED',collection:'notes',field:'createdAt'},
+  {kind:'CHANGE_EVENT',collection:'notificationEvents',field:'changedAt'}
  ];
  for(const stream of streams){
   const checkpoint=db.collection('notificationSenderCursors').doc(stream.kind);
@@ -192,7 +200,7 @@ async function main(){
    .orderBy(FieldPath.documentId(),'asc').limit(40);
   if(last.exists){
    const {path,time}=last.data();
-   if(typeof path!=='string'||!/^groups\/[A-Za-z0-9_-]+\/(tasks|notes)\/[A-Za-z0-9_-]+$/.test(path)||
+   if(typeof path!=='string'||!/^groups\/[A-Za-z0-9_-]+\/(tasks|notes|notificationEvents)\/[A-Za-z0-9_-]+$/.test(path)||
       typeof time?.toMillis!=='function'||time.toMillis()<activation)
     throw Error('INVALID_PUSH_CURSOR_STOP');
    // Store the ordered values. A later deletion of the processed document
@@ -210,7 +218,8 @@ async function main(){
     if(memberBatch.size>30)throw Error('PUSH_GROUP_MEMBER_LIMIT_STOP');
     const members=memberBatch.docs.map(d=>({uid:d.id,...d.data()}));
     let event;
-    try{event=routeNotification({kind:stream.kind,group,members,
+    try{event=stream.kind==='SHARED_NOTE_CREATED'&&doc.data().lastNotificationEventId
+      ?null:routeNotification({kind:stream.kind,group,members,
       itemId:doc.id,record:doc.data()})}catch{
      // Invalid/deleted state has no recipient; retain no private payload.
      console.error('TEST_PUSH_EVENT_SKIPPED',stream.kind);
@@ -230,3 +239,4 @@ main().catch(e=>{
  console.error('TEST_PUSH_SENDER_SAFE_STOP',String(e.message||'unknown'));
  process.exitCode=1;
 });
+
