@@ -244,7 +244,7 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
   </div>
   <div class="panel" id="pushReadiness">
    <h2>iPhone 通知</h2>
-   <p class="hint">已啟用程式內通知：新共用記事、任務指派與完成通知。CRM 開啟時自動核對，開啟期間每 5 分鐘更新，或點左下角「重新整理」立即刷新。</p>
+   <p class="hint">程式內通知涵蓋共用記事、訂貨及任務。開啟 CRM 時核對，期間每 5 分鐘更新。</p>
    <details class="compact-help"><summary>使用說明</summary><p class="hint">iPhone 系統通知由 CRM 主畫面提供，成員從主畫面圖示啟動 CRM、登入自己的 Google 帳號後，可自行授權並登記手機。正式發送開關與最新狀態以 CRM 主畫面為準，絕不自動索取通知權限或開啟付費服務。</p></details>
    <button id="checkPush" class="alt" type="button">檢查手機推播準備狀態</button>
    <p id="pushStatus" class="hint" role="status" aria-live="polite">尚未檢查。此版本不會向手機要求通知授權。</p>
@@ -282,7 +282,7 @@ import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
 import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
-import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261029-shared-changes';
+import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261029-parallel-read';
 import {attachInstalledCRMPushBridge} from './firebase-installed-crm-push-bridge.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 import {verifyOwnerSubscriptionWrite} from './firestore-push-write-probe.mjs';
