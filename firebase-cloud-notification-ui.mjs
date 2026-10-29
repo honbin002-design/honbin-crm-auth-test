@@ -1,4 +1,4 @@
-import {notificationSource,notificationTitle} from './firebase-inapp-notifications.mjs';
+import {notificationSource,notificationTitle} from './firebase-inapp-notifications.mjs?v=20261029-parallel-read';
 import {notificationReadMarkers} from './notification-read-markers.mjs';
 // All data flows through signed-in Firestore's server-authorized group queries.
 // This is a foreground inbox, NOT a claim of lock-screen background delivery.
