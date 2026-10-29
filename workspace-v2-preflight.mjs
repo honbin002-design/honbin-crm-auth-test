@@ -119,7 +119,7 @@ assert.match(page,/id="notificationOverview"/);
 assert.match(page,/id="tabNotifications"/);
 assert.match(page,/<section class="notification-page" id="notificationOverview" hidden/);
 assert.match(page,/name!=='Notifications'\&\&!fromNotification/);
-assert.match(page,/\['Notes','Tasks','Notifications','Settings'\]/);
+assert.match(page,/\['Notes','Tasks','Orders','Notifications','Settings'\]/);
 assert.match(page,/\$\('notificationCenter'\)\.hidden=name!=='Notifications'/);
 assert.match(page,/openNotifications:\(\)=>tab\('Notifications'\)/);
 assert.match(page,/closeNotifications:\(\)=>tab\(lastNonNotificationTab/);
