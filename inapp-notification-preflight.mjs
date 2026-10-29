@@ -31,10 +31,17 @@ const streams=[
  {groupId:'other_2',kind:'SHARED_NOTE_CREATED',items:[
   {id:'foreign',data:{ownerUid:actor,groupId:'other_2',deleted:false,createdAt:t(now-10000)}}]}
 ];
+streams.push({groupId:g.id,kind:'CHANGE_EVENTS',items:[
+ {id:'ev_a',data:{kind:'ORDER_UPDATED',itemId:'order_2',revision:2,actorUid:actor,changedAt:t(now-2500)}},
+ {id:'ev_b',data:{kind:'ORDER_UPDATED',itemId:'order_2',revision:3,actorUid:actor,changedAt:t(now-2600)}},
+ {id:'ev_c',data:{kind:'SHARED_NOTE_DELETED',itemId:'note_4',revision:5,actorUid:actor,changedAt:t(now-1000)}},
+ {id:'ev_self',data:{kind:'ORDER_UPDATED',itemId:'order_3',revision:3,actorUid:me,changedAt:t(now-1000)}}
+]});
 const found=deriveNotifications({uid:me,groups:[g],streams,now});
-assert.equal(found.length,6,'authorized recipient changes and tasks');
-assert.deepEqual(found.map(v=>v.kind),['SHARED_NOTE_UPDATED','ORDER_UPDATED','ORDER_CREATED','TASK_COMPLETED','SHARED_NOTE_CREATED','TASK_ASSIGNED']);
-assert.equal(found.find(v=>v.kind==='ORDER_UPDATED').id,'ORDER_UPDATED:team_1:order_2:4');
+assert.equal(found.length,9,'authorized recipient changes and tasks');
+assert.deepEqual(found.map(v=>v.kind),['SHARED_NOTE_DELETED','SHARED_NOTE_UPDATED','ORDER_UPDATED','ORDER_UPDATED','ORDER_UPDATED','ORDER_CREATED','TASK_COMPLETED','SHARED_NOTE_CREATED','TASK_ASSIGNED']);
+assert.equal(found.filter(v=>v.kind==='ORDER_UPDATED').length,3);
+assert.ok(found.some(v=>v.id==='ORDER_UPDATED:team_1:order_2:4'));
 assert.equal(found.every(e=>e.groupId===g.id),true);
 assert.equal(found.some(e=>JSON.stringify(e).includes('private content')),false);
 assert.equal(notificationTitle('TASK_ASSIGNED'),'有新任務指派');
@@ -46,6 +53,7 @@ records['tasks:completedAt']=[streams[1].items[0]];
 records['notes:createdAt']=[streams[2].items[0]];
 records['notes:updatedAt']=[streams[3].items[0]];
 records['orders:updatedAt']=streams[4].items.slice(0,2);
+records['notificationEvents:changedAt']=streams.at(-1).items;
 const mock={
  collection:(_db,...parts)=>({path:parts.join('/'),type:parts.at(-1)}),
  orderBy:(field,direction)=>({field,direction}),
@@ -61,9 +69,9 @@ const mock={
 };
 const source=notificationSource({db:{},sdk:mock,currentUid:()=>currentUid});
 let result=await source.read([g],{now});
-assert.equal(result.items.length,6);
+assert.equal(result.items.length,9);
 assert.equal(result.partial,false);
-assert.equal(requests.length,5,'bounded one query per stream and group');
+assert.equal(requests.length,6,'bounded one query per stream and group');
 // One slow stream must not hold up the other four server requests.
 let releaseReads,started=0;
 const readGate=new Promise(resolve=>{releaseReads=resolve});
@@ -75,9 +83,9 @@ const parallelSdk={...mock,getDocsFromServer:async q=>{
 const parallelRead=notificationSource({db:{},sdk:parallelSdk,currentUid:()=>currentUid})
  .read([g],{now});
 await Promise.resolve();
-assert.equal(started,5,'all five bounded group streams start concurrently');
+assert.equal(started,6,'all six bounded group streams start concurrently');
 releaseReads();
-assert.equal((await parallelRead).items.length,6);
+assert.equal((await parallelRead).items.length,9);
 failOne=true;result=await source.read([g],{now});
 assert.equal(result.partial,true);
 assert.equal(result.failedQueries,2);
@@ -95,11 +103,12 @@ currentUid=me;
 const store=new Map();
 const storage={getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)};
 const read=notificationReadMarkers({storage,uid:me});
-assert.equal(read.countUnread(found),6);
+assert.equal(read.countUnread(found),9);
 assert.equal(read.mark(found[0].id),true);
-assert.equal(notificationReadMarkers({storage,uid:me}).countUnread(found),5);
-assert.equal(notificationReadMarkers({storage,uid:'other_user'}).countUnread(found),6);
+assert.equal(notificationReadMarkers({storage,uid:me}).countUnread(found),8);
+assert.equal(notificationReadMarkers({storage,uid:'other_user'}).countUnread(found),9);
 read.markAll(found.map(v=>v.id));
 assert.equal(notificationReadMarkers({storage,uid:me}).countUnread(found),0);
 assert.equal(JSON.stringify([...store.values()]).includes('測試群組'),false);
 console.log('INAPP_NOTICE_SERVER_SCOPING_AND_READ_MARKERS_PASS');
+

@@ -1,4 +1,4 @@
-import {notificationSource,notificationTitle} from './firebase-inapp-notifications.mjs?v=20261029-parallel-read';
+import {notificationSource,notificationTitle} from './firebase-inapp-notifications.mjs?v=20261029-immutable-events-v1';
 import {notificationReadMarkers} from './notification-read-markers.mjs';
 // All data flows through signed-in Firestore's server-authorized group queries.
 // This is a foreground inbox, NOT a claim of lock-screen background delivery.
@@ -193,3 +193,4 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
   onTabChange:()=>{if(returnContext)clearReturn()}
  });
 }
+

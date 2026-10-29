@@ -59,17 +59,21 @@ export function orderService({db,sdk,currentUid}){
   const uid=actor(),details=normalizeOrder({...input,requesterUid:uid,
    orderedByUid:input?.status==='PENDING'?'':(input?.orderedByUid?uid:'')}),ref=doc(orders(groupId));
   const audit=doc(history(groupId,ref.id));
+  const notice=doc(db,'groups',groupId,'notificationEvents',audit.id);
   await runTransaction(db,async tx=>{
    if(actor()!==uid)throw Error('ACCOUNT_CHANGED');
    tx.set(ref,{details,isCompleted:details.status==='RECEIVED',revision:1,createdBy:uid,createdAt:serverTimestamp(),
     updatedBy:uid,updatedAt:serverTimestamp(),lastAuditId:audit.id});
    tx.set(audit,{orderId:ref.id,revision:1,actorUid:uid,changedAt:serverTimestamp(),
     kind:'CREATE',before:{},after:details});
+   tx.set(notice,{kind:'ORDER_CREATED',itemId:ref.id,revision:1,
+    actorUid:uid,changedAt:serverTimestamp()});
   });
   return ref.id;
  }
  async function update(groupId,orderId,patch,expectedRevision){
   const uid=actor(),ref=orderRef(groupId,orderId),audit=doc(history(groupId,orderId));
+  const notice=doc(db,'groups',groupId,'notificationEvents',audit.id);
   if(!Number.isSafeInteger(expectedRevision)||expectedRevision<1)throw Error('REVISION_REQUIRED');
   return runTransaction(db,async tx=>{
    const snap=await tx.get(ref);
@@ -91,6 +95,8 @@ export function orderService({db,sdk,currentUid}){
     updatedAt:serverTimestamp(),lastAuditId:audit.id});
    tx.set(audit,{orderId,revision,actorUid:uid,changedAt:serverTimestamp(),
     kind:'UPDATE',before:previous.details,after:next});
+   tx.set(notice,{kind:'ORDER_UPDATED',itemId:orderId,revision,
+    actorUid:uid,changedAt:serverTimestamp()});
    return {changed:true,revision};
   });
  }
@@ -119,4 +125,5 @@ export function orderService({db,sdk,currentUid}){
  }
  return {create,update,listPage,listHistory};
 }
+
 

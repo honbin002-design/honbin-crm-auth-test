@@ -1,4 +1,4 @@
-import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-service.mjs';
+import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-service.mjs?v=20261029-immutable-events-v1';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const stamp=value=>value?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';

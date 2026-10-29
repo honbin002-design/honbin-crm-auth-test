@@ -3,7 +3,7 @@
 // All queries are scoped to ACTIVE notebook groups returned by the current user.
 const ID=/^[A-Za-z0-9_-]{1,150}$/;
 const permitted=new Set(['TASK_ASSIGNED','TASK_COMPLETED','SHARED_NOTE_CREATED',
- 'SHARED_NOTE_UPDATED','ORDER_CREATED','ORDER_UPDATED']);
+ 'SHARED_NOTE_UPDATED','SHARED_NOTE_DELETED','ORDER_CREATED','ORDER_UPDATED']);
 const timestamp=value=>{
  if(typeof value?.toMillis==='function')return value.toMillis();
  if(value instanceof Date)return value.getTime();
@@ -53,6 +53,12 @@ export function deriveNotifications({uid,groups,streams,now=Date.now(),ageDays=3
     // Older note documents do not identify the last editor. Show the change
     // to all active members, including the editor, rather than guess an actor.
     append(stream.kind,group,record,entry.id,record.updatedAt,record.version);
+   }else if(stream.kind==='CHANGE_EVENTS'){
+    if(!permitted.has(record.kind)||!['SHARED_NOTE_CREATED','SHARED_NOTE_UPDATED','SHARED_NOTE_DELETED','ORDER_CREATED','ORDER_UPDATED'].includes(record.kind)||
+       !ID.test(record.itemId)||!ID.test(record.actorUid)||record.actorUid===uid||
+       !Number.isSafeInteger(record.revision)||record.revision<1)continue;
+    append(record.kind,group,record,record.itemId,record.changedAt,
+      record.kind==='SHARED_NOTE_CREATED'?'':record.revision);
    }else if(stream.kind==='ORDER_CHANGED'){
     if(!Number.isSafeInteger(record.revision)||record.revision<1||
        !ID.test(record.createdBy)||!ID.test(record.updatedBy)||record.updatedBy===uid)continue;
@@ -69,6 +75,7 @@ export function notificationTitle(kind){
   kind==='TASK_COMPLETED'?'你發布的任務已完成':
   kind==='SHARED_NOTE_CREATED'?'共用記事簿有新記事':
   kind==='SHARED_NOTE_UPDATED'?'共用記事有異動':
+  kind==='SHARED_NOTE_DELETED'?'共用記事已刪除':
   kind==='ORDER_CREATED'?'共用群組有新訂貨':
   kind==='ORDER_UPDATED'?'共用訂貨有異動':'共用通知';
 }
@@ -95,11 +102,12 @@ export function notificationSource({db,sdk,currentUid,maxGroups=10,size=8}){
     {kind:'TASK_COMPLETED',folder:'tasks',field:'completedAt'},
     {kind:'SHARED_NOTE_CREATED',folder:'notes',field:'createdAt'},
     {kind:'SHARED_NOTE_UPDATED',folder:'notes',field:'updatedAt'},
-    {kind:'ORDER_CHANGED',folder:'orders',field:'updatedAt'}
+    {kind:'ORDER_CHANGED',folder:'orders',field:'updatedAt'},
+    {kind:'CHANGE_EVENTS',folder:'notificationEvents',field:'changedAt'}
    ].map(async x=>{
     try{
      const ref=collection(db,'groups',g.id,x.folder);
-     const docs=await getDocsFromServer(query(ref,orderBy(x.field,'desc'),limit(size)));
+     const docs=await getDocsFromServer(query(ref,orderBy(x.field,'desc'),limit(x.kind==='CHANGE_EVENTS'?30:size)));
      if(currentUid()!==uid)throw Error('ACCOUNT_CHANGED');
      return {stream:{groupId:g.id,kind:x.kind,
       items:docs.docs.map(d=>({id:d.id,data:d.data()}))}};
@@ -110,7 +118,7 @@ export function notificationSource({db,sdk,currentUid,maxGroups=10,size=8}){
      return {error:{groupId:g.id,kind:x.kind,code:String(error?.code||'SERVER_READ_FAILED')}};
     }
    });
-   // Bound concurrency to the five existing streams of one authorized group.
+   // Bound concurrency to the six bounded streams of one authorized group.
    // A single slow Firestore read no longer serializes all the other streams.
    const results=await Promise.all(jobs);
    if(currentUid()!==uid)throw Error('ACCOUNT_CHANGED');
@@ -125,3 +133,4 @@ export function notificationSource({db,sdk,currentUid,maxGroups=10,size=8}){
  }
  return Object.freeze({read});
 }
+

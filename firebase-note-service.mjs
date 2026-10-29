@@ -77,6 +77,8 @@ export function noteService({db,sdk,identity,currentUid}){
   async function create({mode,groupId,noteId,title,content}){
     const target=scope(mode,groupId),ref=noteRef(target,noteId);
     const payload=textBody(title,content);
+    const event=target.mode==='SHARED'
+      ?doc(collection(db,'groups',target.groupId,'notificationEvents')):null;
     return runTransaction(db,async tx=>{
       verifySession();
       const previous=await tx.get(ref);
@@ -92,12 +94,17 @@ export function noteService({db,sdk,identity,currentUid}){
       }
       const now=Timestamp.now();
       tx.set(ref,{ownerUid:uid,groupId:target.groupId,...payload,
-        createdAt:now,updatedAt:now,version:1,deleted:false});
+        createdAt:now,updatedAt:now,version:1,deleted:false,
+        ...(event?{lastNotificationEventId:event.id}:{})});
+      if(event)tx.set(event,{kind:'SHARED_NOTE_CREATED',itemId:ref.id,
+        revision:1,actorUid:uid,changedAt:now});
       return {id:ref.id,version:1,alreadyCreated:false};
     });
   }
   async function write({mode,groupId,noteId,expectedVersion,title,content,remove=false}){
     const target=scope(mode,groupId),ref=noteRef(target,noteId);
+    const event=target.mode==='SHARED'
+      ?doc(collection(db,'groups',target.groupId,'notificationEvents')):null;
     if(!Number.isSafeInteger(expectedVersion)||expectedVersion<1)throw Error('INVALID_EXPECTED_VERSION');
     const payload=remove?null:textBody(title,content);
     return runTransaction(db,async tx=>{
@@ -112,7 +119,11 @@ export function noteService({db,sdk,identity,currentUid}){
       const changes=remove?
         {deleted:true,updatedAt:Timestamp.now(),version:expectedVersion+1}:
         {...payload,updatedAt:Timestamp.now(),version:expectedVersion+1};
+      if(event)changes.lastNotificationEventId=event.id;
       tx.update(ref,changes);
+      if(event)tx.set(event,{kind:remove?'SHARED_NOTE_DELETED':'SHARED_NOTE_UPDATED',
+        itemId:ref.id,revision:expectedVersion+1,actorUid:uid,
+        changedAt:changes.updatedAt});
       return {id:ref.id,version:expectedVersion+1,deleted:!!remove};
     });
   }
@@ -120,3 +131,4 @@ export function noteService({db,sdk,identity,currentUid}){
   const softDelete=options=>write({...options,remove:true});
   return Object.freeze({newId,list,listPage,create,update,softDelete});
 }
+
