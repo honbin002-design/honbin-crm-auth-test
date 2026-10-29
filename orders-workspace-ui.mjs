@@ -148,5 +148,18 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   }catch(error){if(live(check))showStatus('儲存失敗：'+String(error?.code||error?.message||error),true)}
   finally{saving=false;$('save').disabled=false}
  };
- return {ready:initialize(),dispose(){disposed=true;++epoch;window.visualViewport?.removeEventListener('resize',onViewport);root.replaceChildren()}};
+ const ready=initialize();
+ async function openRecord(targetGroup,targetId){
+  await ready;
+  if(disposed||!auth.currentUser||auth.currentUser.uid!==owner||
+     !/^[A-Za-z0-9_-]{1,150}$/.test(targetId)||
+     ![...$('group').options].some(option=>option.value===targetGroup))return false;
+  if(groupId!==targetGroup){groupId=targetGroup;$('group').value=targetGroup;await load(true)}
+  const snap=await sdk.getDocFromServer(sdk.doc(db,'groups',targetGroup,'orders',targetId));
+  if(disposed||auth.currentUser?.uid!==owner||groupId!==targetGroup||!snap.exists())return false;
+  const item={id:snap.id,...snap.data()};
+  items=[item,...items.filter(x=>x.id!==item.id)];render();await showDetail(item.id);
+  return true;
+ }
+ return {ready,openRecord,dispose(){disposed=true;++epoch;window.visualViewport?.removeEventListener('resize',onViewport);root.replaceChildren()}};
 }

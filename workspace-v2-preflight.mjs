@@ -78,7 +78,7 @@ assert.doesNotMatch(page,/<p class="hint">有效群組成員可發布及查看�
 assert.match(page,/id="tabOrders"/);
 assert.match(page,/id="ordersPanel"/);
 assert.match(page,/id="ordersMount"/);
-assert.match(page,/orders-workspace-ui\.mjs\?v=20261029-identity-status/);
+assert.match(page,/orders-workspace-ui\.mjs\?v=20261029-notification-deeplink/);
 assert.doesNotMatch(page,/id="ordersFrame"/);
 const ordersUi=readFileSync('orders-workspace-ui.mjs','utf8');
 assert.match(ordersUi,/orderService\(\{db,sdk,currentUid:/);
@@ -119,7 +119,7 @@ assert.match(page,/id="notificationOverview"/);
 assert.match(page,/id="tabNotifications"/);
 assert.match(page,/<section class="notification-page" id="notificationOverview" hidden/);
 assert.match(page,/name!=='Notifications'\&\&!fromNotification/);
-assert.match(page,/\['Notes','Tasks','Notifications','Settings'\]/);
+assert.match(page,/\['Notes','Tasks','Orders','Notifications','Settings'\]/);
 assert.match(page,/\$\('notificationCenter'\)\.hidden=name!=='Notifications'/);
 assert.match(page,/openNotifications:\(\)=>tab\('Notifications'\)/);
 assert.match(page,/closeNotifications:\(\)=>tab\(lastNonNotificationTab/);

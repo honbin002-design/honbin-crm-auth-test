@@ -86,7 +86,7 @@ assert.equal($('notesPanel').hidden,false,'Notes alone visible initially');
 assert.equal($('notificationCount').textContent,'1');
 assert.equal($('notificationCount').hidden,false);
 assert.equal($('notificationList').children.length,1);
-assert.equal(queries,3,'one bounded initial read per event stream');
+assert.equal(queries,5,'one bounded initial read per event stream');
 switchPage('Notifications');
 assert.equal($('notificationCenter').hidden,false);
 assert.equal($('notificationOverview').hidden,false);
@@ -120,7 +120,7 @@ switchPage('Notes');
 assert.equal(storageMap.size,1,'only per-UID read markers saved');
 await $('refreshCloud').onclick();
 assert.equal(refreshed,1);
-assert.equal(queries,6,'manual refresh reads exactly three bounded streams');
+assert.equal(queries,10,'manual refresh reads exactly five bounded streams');
 assert.equal($('refreshCloud').disabled,false);
 app.stop();
 assert.equal($('notificationOverview').hidden,true);
@@ -138,6 +138,22 @@ assert.equal(page,'Notifications','missing notification returns to the dedicated
 assert.equal($('notificationOverview').hidden,false);
 assert.equal($('tasksPanel').hidden,true);
 inaccessible.stop();
+// An order notice opens within the same workspace and offers a return action.
+events['orders:updatedAt']=[{id:'order_new',data:{createdBy:'author_2',updatedBy:'author_2',
+ revision:1,updatedAt:millis(Date.now()-1000)}}];
+const orderInbox=cloudNotificationController({...config,
+ openItem:async item=>{assert.equal(item.tab,'Orders');switchPage('Orders',{fromNotification:true});return true}
+});
+controller=orderInbox;orderInbox.start();
+await new Promise(resolve=>setTimeout(resolve,0));
+switchPage('Notifications');
+const orderRow=$('notificationList').children.find(row=>row.children[0].children[0].textContent.includes('訂貨'));
+assert.ok(orderRow,'order update appears in the inbox');
+await orderRow.children[1].onclick();
+assert.equal(page,'Orders');
+assert.equal($('ordersPanel').children[0].children[0].onclick(),true);
+assert.equal(page,'Notifications');
+orderInbox.stop();
 const prev=queries;
 uid='another_member';
 await $('refreshCloud').onclick();
