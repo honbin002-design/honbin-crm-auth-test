@@ -90,25 +90,33 @@ export function notificationSource({db,sdk,currentUid,maxGroups=10,size=8}){
   const streams=[],errors=[];
   for(const g of eligible){
    if(currentUid()!==uid)throw Error('ACCOUNT_CHANGED');
-   for(const x of [
+   const jobs=[
     {kind:'TASK_ASSIGNED',folder:'tasks',field:'createdAt'},
     {kind:'TASK_COMPLETED',folder:'tasks',field:'completedAt'},
     {kind:'SHARED_NOTE_CREATED',folder:'notes',field:'createdAt'},
     {kind:'SHARED_NOTE_UPDATED',folder:'notes',field:'updatedAt'},
     {kind:'ORDER_CHANGED',folder:'orders',field:'updatedAt'}
-   ]){
+   ].map(async x=>{
     try{
      const ref=collection(db,'groups',g.id,x.folder);
      const docs=await getDocsFromServer(query(ref,orderBy(x.field,'desc'),limit(size)));
      if(currentUid()!==uid)throw Error('ACCOUNT_CHANGED');
-     streams.push({groupId:g.id,kind:x.kind,
-      items:docs.docs.map(d=>({id:d.id,data:d.data()}))});
+     return {stream:{groupId:g.id,kind:x.kind,
+      items:docs.docs.map(d=>({id:d.id,data:d.data()}))}};
     }catch(error){
      if(currentUid()!==uid)throw Error('ACCOUNT_CHANGED');
      // Fail closed on permission or connectivity failure: no stale cached
      // notification names, no cross-account or group fallback.
-     errors.push({groupId:g.id,kind:x.kind,code:String(error?.code||'SERVER_READ_FAILED')});
+     return {error:{groupId:g.id,kind:x.kind,code:String(error?.code||'SERVER_READ_FAILED')}};
     }
+   });
+   // Bound concurrency to the five existing streams of one authorized group.
+   // A single slow Firestore read no longer serializes all the other streams.
+   const results=await Promise.all(jobs);
+   if(currentUid()!==uid)throw Error('ACCOUNT_CHANGED');
+   for(const result of results){
+    if(result.stream)streams.push(result.stream);
+    else errors.push(result.error);
    }
   }
   return Object.freeze({items:deriveNotifications({uid,groups:eligible,streams,now}),

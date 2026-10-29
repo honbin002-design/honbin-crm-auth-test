@@ -64,6 +64,20 @@ let result=await source.read([g],{now});
 assert.equal(result.items.length,6);
 assert.equal(result.partial,false);
 assert.equal(requests.length,5,'bounded one query per stream and group');
+// One slow stream must not hold up the other four server requests.
+let releaseReads,started=0;
+const readGate=new Promise(resolve=>{releaseReads=resolve});
+const parallelSdk={...mock,getDocsFromServer:async q=>{
+ started++;
+ await readGate;
+ return mock.getDocsFromServer(q);
+}};
+const parallelRead=notificationSource({db:{},sdk:parallelSdk,currentUid:()=>currentUid})
+ .read([g],{now});
+await Promise.resolve();
+assert.equal(started,5,'all five bounded group streams start concurrently');
+releaseReads();
+assert.equal((await parallelRead).items.length,6);
 failOne=true;result=await source.read([g],{now});
 assert.equal(result.partial,true);
 assert.equal(result.failedQueries,2);
