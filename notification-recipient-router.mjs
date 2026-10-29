@@ -44,6 +44,16 @@ export function routeNotification({kind,group,members,itemId,record}){
   actor=record.ownerUid;
   recipients=[...allowed].filter(uid=>uid!==actor);
   payload={kind,groupId:group.id,noteId:itemId};
+ }else if(kind==='CHANGE_EVENT'){
+  const types=new Set(['SHARED_NOTE_CREATED','SHARED_NOTE_UPDATED','SHARED_NOTE_DELETED','ORDER_CREATED','ORDER_UPDATED']);
+  if(!types.has(record.kind)||!valid(record.itemId)||!valid(record.actorUid)||
+     !allowed.has(record.actorUid)||!Number.isSafeInteger(record.revision)||record.revision<1||
+     typeof record.changedAt?.toMillis!=='function')throw Error('INVALID_CHANGE_EVENT');
+  actor=record.actorUid;
+  recipients=[...allowed].filter(uid=>uid!==actor);
+  payload={kind:record.kind,groupId:group.id,revision:record.revision,
+    eventDocId:itemId,
+    ...(record.kind.startsWith('ORDER_')?{orderId:record.itemId}:{noteId:record.itemId})};
  }else throw Error('INVALID_NOTIFICATION_KIND');
  return Object.freeze({
   eventId:kind+':'+group.id+':'+itemId,
@@ -52,3 +62,4 @@ export function routeNotification({kind,group,members,itemId,record}){
   payload:Object.freeze(payload)
  });
 }
+
