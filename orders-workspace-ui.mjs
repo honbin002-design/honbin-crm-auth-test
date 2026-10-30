@@ -1,4 +1,4 @@
-import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-service.mjs?v=20261029-immutable-events-v1';
+import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-service.mjs?v=20261030-arrival-v1';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const stamp=value=>value?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
@@ -90,7 +90,10 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
    for(const entry of history){
     const actor=await nameFor(entry.actorUid);if(!live(check)||editing!==id)return;
     const li=document.createElement('li');
-    li.textContent=stamp(entry.changedAt)+'｜'+actor+'｜'+(entry.changes||orderChangeSummary(entry.before,entry.after)).map(c=>(fieldLabels[c.field]||c.field)+'：'+actorValue(c.field,c.before)+' → '+actorValue(c.field,c.after)).join('；');
+    const changes=entry.changes||orderChangeSummary(entry.before,entry.after);
+    li.textContent=stamp(entry.changedAt)+'｜'+actor+'｜'+
+     (entry.kind==='CREATE'?'建立訂貨：'+String(entry.after?.productName||d.productName):
+      changes.map(c=>(fieldLabels[c.field]||c.field)+'：'+actorValue(c.field,c.before)+' → '+actorValue(c.field,c.after)).join('；')||'沒有欄位變更');
     $('history').append(li);
    }
   }catch(error){if(live(check))$('history').textContent='歷史讀取失敗：'+String(error?.code||error?.message||error)}
@@ -125,11 +128,22 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  $('list').onclick=event=>{const button=event.target.closest('button[data-id]');if(button)void showDetail(button.dataset.id)};
  $('cancel').onclick=()=>{$('editor').hidden=true;editing=null};
  $('form').addEventListener('focusin',event=>revealField(event.target));
- $('form').addEventListener('change',event=>{
-  if(event.target.name!=='status')return;
+ function updateOrderIdentity(){
   const item=items.find(x=>x.id===editing),status=new FormData($('form')).get('status');
   $('editIdentity').textContent='建立人：'+person(item?.createdBy||item?.details.requesterUid||owner)+
    '　訂貨人：'+(status==='PENDING'?'—':person(item?.details.orderedByUid||owner));
+ }
+ $('form').addEventListener('change',event=>{
+  const form=$('form'),status=form.elements.namedItem('status');
+  const arrived=form.elements.namedItem('arrivedQuantity');
+  const quantity=Number(form.elements.namedItem('quantity').value),received=Number(arrived.value);
+  if(event.target.name==='status'){
+   if(['PENDING','ORDERED'].includes(status.value))arrived.value='0';
+   if(status.value==='RECEIVED'&&quantity>0)arrived.value=String(quantity);
+  }else if(event.target.name==='arrivedQuantity'&&quantity>0&&received>0&&received<=quantity){
+   status.value=received===quantity?'RECEIVED':'PARTIAL';
+  }
+  if(['status','arrivedQuantity'].includes(event.target.name))updateOrderIdentity();
  });
  const onViewport=()=>{const active=root.activeElement;if(active?.matches('input,select,textarea'))revealField(active)};
  window.visualViewport?.addEventListener('resize',onViewport);
@@ -142,6 +156,12 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
    if(data.status==='PENDING'){data.orderedByUid='';data.orderDate='';data.arrivedQuantity=0}
    else{if(!data.orderedByUid)data.orderedByUid=owner;if(!data.orderDate)data.orderDate=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'})}
    if(data.status==='RECEIVED')data.arrivedQuantity=data.quantity;
+   if(['PENDING','ORDERED'].includes(data.status)&&data.arrivedQuantity>0){
+    throw Error('已有到貨數量，請選「部分到貨」或「已完成」');
+   }
+   if(data.status==='PARTIAL'&&!(data.arrivedQuantity>0&&data.arrivedQuantity<data.quantity)){
+    throw Error('部分到貨的數量需大於 0，且小於訂貨數量');
+   }
    if(previous)await svc.update(group,id,data,previous.revision);else await svc.create(group,data);
    if(!live(check)||group!==groupId)return;
    await load(true);showStatus('訂貨已儲存，異動紀錄已寫入。');
