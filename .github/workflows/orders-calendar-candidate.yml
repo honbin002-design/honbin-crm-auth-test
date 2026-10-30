@@ -14,6 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: node --check orders-workspace-ui.mjs
       - run: node --check orders-v1-preflight.mjs
       - run: node orders-v1-preflight.mjs
 
