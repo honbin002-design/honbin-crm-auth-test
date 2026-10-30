@@ -7,20 +7,29 @@ const parse=data=>{
  if(!data)return null;
  try{
   const p=data.json(),kind=p?.kind;
-  if(!['TASK_ASSIGNED','TASK_COMPLETED','SHARED_NOTE_CREATED'].includes(kind)
+  const noteKinds=['SHARED_NOTE_CREATED','SHARED_NOTE_UPDATED','SHARED_NOTE_DELETED'];
+  const orderKinds=['ORDER_CREATED','ORDER_UPDATED'];
+  if(!['TASK_ASSIGNED','TASK_COMPLETED',...noteKinds,...orderKinds].includes(kind)
      ||!idOkay(p.groupId))return null;
-  const item=kind==='SHARED_NOTE_CREATED'?p.noteId:p.taskId;
+  const isNote=noteKinds.includes(kind),isOrder=orderKinds.includes(kind);
+  const item=isNote?p.noteId:isOrder?p.orderId:p.taskId;
   if(!idOkay(item))return null;
-  // We intentionally do not put customer names, private task content,
-  // member email or UID on an unlocked device's notification surface.
-  const params=new URLSearchParams({tab:kind==='SHARED_NOTE_CREATED'?'Notes':'Tasks',
+  // Keep business content and identities off the unlocked device screen.
+  const params=new URLSearchParams({tab:isNote?'Notes':isOrder?'Orders':'Tasks',
      groupId:p.groupId});
-  params.set(kind==='SHARED_NOTE_CREATED'?'noteId':'taskId',item);
+  params.set(isNote?'noteId':isOrder?'orderId':'taskId',item);
   const url=APP_PATH+'?'+params.toString();
-  const title=kind==='TASK_ASSIGNED'?'有新任務指派':
-    kind==='TASK_COMPLETED'?'指定任務已完成':'共用記事有新內容';
-  const body=kind==='TASK_COMPLETED'?'點擊查看完成紀錄':'點擊開啟鴻繽記事與任務';
-  return {title,body,url,tag:kind+':'+p.groupId+':'+item};
+  const titles={TASK_ASSIGNED:'有新任務指派',TASK_COMPLETED:'指定任務已完成',
+   SHARED_NOTE_CREATED:'新增共用記事',SHARED_NOTE_UPDATED:'共用記事已修改',
+   SHARED_NOTE_DELETED:'共用記事已刪除',ORDER_CREATED:'新增訂貨',
+   ORDER_UPDATED:'訂貨資料已修改'};
+  const title=titles[kind];
+  const body=isOrder?'點擊查看訂貨內容與異動紀錄':
+   isNote?'點擊查看共用記事與異動紀錄':
+   kind==='TASK_COMPLETED'?'點擊查看完成紀錄':'點擊開啟鴻繽記事與任務';
+  const tag=p.eventDocId&&idOkay(p.eventDocId)
+   ?kind+':'+p.groupId+':'+p.eventDocId:kind+':'+p.groupId+':'+item;
+  return {title,body,url,tag};
  }catch{return null}
 };
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
