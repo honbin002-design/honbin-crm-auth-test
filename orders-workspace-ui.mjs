@@ -2,6 +2,7 @@ import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-ser
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const stamp=value=>value?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
+export const matchesOrderFilter=(item,filter)=>filter==='all'||item?.details?.status===filter;
 const fieldLabels={productName:'品名',specification:'規格',quantity:'數量',unit:'單位',supplierName:'供應商',requesterUid:'建立人',orderedByUid:'訂貨人',orderDate:'訂貨日期',dueDate:'預計交期',arrivedQuantity:'已到貨數量',status:'狀態',note:'備註'};
 
 const markup=`<style>
@@ -9,7 +10,7 @@ const markup=`<style>
  button,input,select,textarea{font:inherit;color:inherit;border:1px solid #bdccdc;border-radius:10px;background:#fff;min-height:44px;padding:8px 11px}
  button{cursor:pointer}button:disabled{opacity:.55;cursor:default}.primary,.active{background:#205a9a;color:#fff;border-color:#205a9a}
  .toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:end}.toolbar label{display:grid;gap:3px}
- .toolbar select{width:100%}.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:10px 0}
+ .toolbar select{width:100%}.filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:10px 0}
  .filters button{min-width:0}.search{width:100%}.status{margin:8px 0;color:#52657b;font-size:.9rem}.list{display:grid;gap:9px;margin:9px 0}
  .card,.detail{border:1px solid #d6e1ed;border-radius:12px;background:#fff;padding:12px}.card{width:100%;text-align:left;display:grid;gap:3px}
  .card strong{font-size:1rem}.meta{color:#52657b;font-size:.88rem;overflow-wrap:anywhere}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -19,10 +20,10 @@ const markup=`<style>
  .history{margin:7px 0 0;padding-left:19px;font-size:.88rem}.history li{padding:5px 0;border-bottom:1px solid #e7ecf2;overflow-wrap:anywhere}
  .statusChoices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.statusChoices label{display:flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #bdccdc;border-radius:10px;cursor:pointer;text-align:center;padding:4px;font-size:.88rem}.statusChoices input{position:absolute;opacity:0;width:1px;height:1px}.statusChoices label:has(input:checked){background:#205a9a;color:white;border-color:#205a9a}.statusChoices label:has(input:focus-visible){outline:3px solid #8ab4e0}.identity{font-size:.85rem;color:#52657b;margin:4px 0 8px}
  .hint{font-size:.85rem;color:#52657b}.empty{padding:12px 0}.error{color:#a33225}.more{margin:7px 0}
- [hidden]{display:none!important}@media(max-width:520px){.toolbar{grid-template-columns:1fr 1fr}.toolbar label{grid-column:1/-1}.toolbar button{min-width:0}.fields{grid-template-columns:1fr}.statusChoices{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ [hidden]{display:none!important}@media(max-width:520px){.toolbar{grid-template-columns:1fr 1fr}.toolbar label{grid-column:1/-1}.toolbar button{min-width:0}.fields{grid-template-columns:1fr}.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.statusChoices{grid-template-columns:repeat(2,minmax(0,1fr))}}
  </style>
  <div class="toolbar"><label>共用群組<select id="group" aria-label="共用群組"></select></label><button id="refresh">重新整理</button><button id="new" class="primary">＋ 新增訂貨</button></div>
- <div class="filters" role="tablist" aria-label="訂貨狀態"><button class="active" data-filter="all">全部</button><button data-filter="done">已完成</button><button data-filter="open">未完成</button></div>
+ <div class="filters" role="tablist" aria-label="訂貨狀態"><button role="tab" aria-selected="true" class="active" data-filter="all">全部</button><button role="tab" aria-selected="false" data-filter="PENDING">待訂貨</button><button role="tab" aria-selected="false" data-filter="ORDERED">已訂貨</button><button role="tab" aria-selected="false" data-filter="PARTIAL">部份到貨</button><button role="tab" aria-selected="false" data-filter="RECEIVED">已完成</button></div>
  <input id="search" class="search" aria-label="搜尋訂貨" placeholder="搜尋產品、供應商、訂貨人、備註">
  <p id="status" class="status" role="status"></p><div id="list" class="list"></div><button id="more" class="more" hidden>載入更多</button>
  <section id="detail" class="detail" hidden></section>
@@ -65,13 +66,19 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  async function load(reset=false){
   if(!groupId||disposed)return;
   if(loading&&!reset)return;
-  if(reset){++epoch;items=[];cursor=null;hasMore=false;clearView();render()}
+  if(reset){++epoch;items=[];cursor=null;hasMore=false;loading=false;clearView();render()}
   const check=epoch,group=groupId;loading=true;$('more').disabled=true;showStatus('正在讀取訂貨……');
   try{
-   const page=await svc.listPage(group,{cursor,size:30,tab:filter});
-   if(!live(check)||group!==groupId)return;
-   items.push(...page.items.filter(x=>!items.some(v=>v.id===x.id)));cursor=page.cursor;hasMore=page.hasMore;render();showStatus('');
-   await Promise.all([...new Set(page.items.flatMap(x=>[x.createdBy,x.details.requesterUid,x.updatedBy,x.details.orderedByUid]).filter(Boolean))].map(nameFor));
+   // Scan in update order so each status retains correct pagination without a new Firestore index.
+   const batch=[];
+   do{
+    const page=await svc.listPage(group,{cursor,size:30,tab:'all'});
+    if(!live(check)||group!==groupId)return;
+    cursor=page.cursor;hasMore=page.hasMore;
+    batch.push(...page.items.filter(item=>matchesOrderFilter(item,filter)));
+   }while(hasMore&&batch.length<30);
+   items.push(...batch.filter(x=>!items.some(v=>v.id===x.id)));render();showStatus('');
+   await Promise.all([...new Set(batch.flatMap(x=>[x.createdBy,x.details.requesterUid,x.updatedBy,x.details.orderedByUid]).filter(Boolean))].map(nameFor));
    if(live(check))render();
   }catch(error){if(live(check))showStatus('讀取失敗：'+String(error?.code||error?.message||error),true)}
   finally{if(live(check)){loading=false;$('more').disabled=false}}
@@ -123,7 +130,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  $('group').onchange=()=>{groupId=$('group').value;load(true)};
  $('refresh').onclick=()=>load(true);$('new').onclick=()=>openEditor();$('more').onclick=()=>load();$('search').oninput=render;
  root.querySelectorAll('[data-filter]').forEach(button=>button.onclick=()=>{
-  filter=button.dataset.filter;root.querySelectorAll('[data-filter]').forEach(x=>x.classList.toggle('active',x===button));load(true);
+  filter=button.dataset.filter;root.querySelectorAll('[data-filter]').forEach(x=>{x.classList.toggle('active',x===button);x.setAttribute('aria-selected',String(x===button))});load(true);
  });
  $('list').onclick=event=>{const button=event.target.closest('button[data-id]');if(button)void showDetail(button.dataset.id)};
  $('cancel').onclick=()=>{$('editor').hidden=true;editing=null};

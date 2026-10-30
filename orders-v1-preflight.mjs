@@ -14,7 +14,14 @@ assert.equal(normalizeOrder({...base,status:'PARTIAL',arrivedQuantity:4,orderDat
 assert.equal(normalizeOrder({...base,status:'RECEIVED',arrivedQuantity:20,orderDate:'2026-10-27',orderedByUid:'u1'}).arrivedQuantity,20);
 const diff=orderChangeSummary(base,{...base,status:'ORDERED',orderDate:'2026-10-27'});
 assert.deepEqual(diff.map(x=>x.field),['orderDate','status']);
-console.log('ORDERS_V1_VALIDATION_AND_AUDIT_DIFF_PASS');
+const {matchesOrderFilter}=await import('./orders-workspace-ui.mjs');
+for(const status of ['PENDING','ORDERED','PARTIAL','RECEIVED']){
+ const item={details:{status}};
+ assert.equal(matchesOrderFilter(item,'all'),true);
+ for(const tab of ['PENDING','ORDERED','PARTIAL','RECEIVED'])
+  assert.equal(matchesOrderFilter(item,tab),status===tab);
+}
+console.log('ORDERS_V1_VALIDATION_AND_STATUS_FILTER_PASS');
 
 
 assert.throws(()=>normalizeOrder({...base,status:'ORDERED'}),/ORDERED_REQUIRES_DATE_AND_ACTOR/);
