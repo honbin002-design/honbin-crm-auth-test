@@ -179,15 +179,14 @@ async function main(){
    }
   }
  }
- // Four global streams read only new records. The saved document cursor
+ // Three indexed global streams read only new records. The saved document cursor
  // prevents every scheduled run from rereading all historical notes/tasks.
  // At most 40 events per stream are processed in a run; backlog rolls forward
- // on the next run. Collection-group indexes must be reviewed before enabling.
+ // on the next run.
  const streams=[
   {kind:'TASK_ASSIGNED',collection:'tasks',field:'createdAt'},
   {kind:'TASK_COMPLETED',collection:'tasks',field:'completedAt'},
-  {kind:'SHARED_NOTE_CREATED',collection:'notes',field:'createdAt'},
-  {kind:'CHANGE_EVENT',collection:'notificationEvents',field:'changedAt'}
+  {kind:'SHARED_NOTE_CREATED',collection:'notes',field:'createdAt'}
  ];
  for(const stream of streams){
   const checkpoint=db.collection('notificationSenderCursors').doc(stream.kind);
@@ -227,6 +226,51 @@ async function main(){
     if(event)await sendEvent(event);
    }
    const time=doc.get(stream.field);
+   if(typeof time?.toMillis!=='function'||time.toMillis()<activation)
+    throw Error('INVALID_EVENT_TIME_STOP');
+   await checkpoint.set({activation:process.env.TEST_PUSH_START_ISO,
+    path:doc.ref.path,time,scannedAt:FieldValue.serverTimestamp()});
+  }
+ }
+ // Changed notes and orders use collection-scoped automatic indexing. A
+ // bounded group list and one durable cursor per group avoid requiring a new
+ // production collection-group index or re-reading old change events.
+ const groupBatch=await db.collection('groups').orderBy(FieldPath.documentId()).limit(11).get();
+ if(groupBatch.size>10)throw Error('PUSH_GROUP_COUNT_LIMIT_STOP');
+ const legacy=await db.collection('notificationSenderCursors').doc('CHANGE_EVENT').get();
+ if(legacy.exists)throw Error('LEGACY_CHANGE_CURSOR_MIGRATION_REQUIRED_STOP');
+ for(const groupDoc of groupBatch.docs){
+  if(!/^[A-Za-z0-9_-]+$/.test(groupDoc.id))throw Error('INVALID_PUSH_GROUP_ID_STOP');
+  const checkpoint=db.collection('notificationSenderCursors').doc('CHANGE_EVENT_'+groupDoc.id);
+  const last=await checkpoint.get();
+  if(last.exists&&last.data().activation!==process.env.TEST_PUSH_START_ISO)
+   throw Error('PUSH_CURSOR_ACTIVATION_CHANGED_STOP');
+  let query=groupDoc.ref.collection('notificationEvents')
+   .where('changedAt','>=',Timestamp.fromMillis(activation))
+   .orderBy('changedAt','asc').orderBy(FieldPath.documentId(),'asc').limit(40);
+  if(last.exists){
+   const {path,time}=last.data();
+   if(typeof path!=='string'||!new RegExp('^groups/'+groupDoc.id+'/notificationEvents/[A-Za-z0-9_-]+$').test(path)||
+      typeof time?.toMillis!=='function'||time.toMillis()<activation)
+    throw Error('INVALID_PUSH_CURSOR_STOP');
+   query=query.startAfter(time,db.doc(path));
+  }
+  const batch=await query.get();
+  for(const doc of batch.docs){
+   const live=await groupDoc.ref.get();
+   if(live.exists){
+    const group={id:groupDoc.id,...live.data()};
+    const memberBatch=await groupDoc.ref.collection('members').limit(31).get();
+    if(memberBatch.size>30)throw Error('PUSH_GROUP_MEMBER_LIMIT_STOP');
+    const members=memberBatch.docs.map(d=>({uid:d.id,...d.data()}));
+    let event;
+    try{event=routeNotification({kind:'CHANGE_EVENT',group,members,
+     itemId:doc.id,record:doc.data()})}catch{
+     console.error('TEST_PUSH_EVENT_SKIPPED','CHANGE_EVENT');
+    }
+    if(event)await sendEvent(event);
+   }
+   const time=doc.get('changedAt');
    if(typeof time?.toMillis!=='function'||time.toMillis()<activation)
     throw Error('INVALID_EVENT_TIME_STOP');
    await checkpoint.set({activation:process.env.TEST_PUSH_START_ISO,
