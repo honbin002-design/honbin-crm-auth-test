@@ -49,8 +49,21 @@ assert.ok(task.options.data.url.startsWith('/honbin-crm-auth-test/workspace-v2.h
 assert.ok(!JSON.stringify(task).includes('secret client data'));
 assert.ok(!JSON.stringify(task).includes('private@example.com'));
 const note=await simulate({kind:'SHARED_NOTE_CREATED',groupId:'gid_123',noteId:'note_123'});
-assert.equal(note.title,'共用記事有新內容');
+assert.equal(note.title,'新增共用記事');
 assert.ok(note.options.data.url.includes('tab=Notes'));
+const order=await simulate({kind:'ORDER_UPDATED',groupId:'gid_123',orderId:'order_123',
+ eventDocId:'event_2',revision:2,content:'private business detail'});
+assert.equal(order.title,'訂貨資料已修改');
+assert.ok(order.options.data.url.includes('tab=Orders'));
+assert.ok(order.options.data.url.includes('orderId=order_123'));
+assert.ok(order.options.tag.endsWith('event_2'));
+assert.ok(!JSON.stringify(order).includes('private business detail'));
+const prior=await simulate({kind:'ORDER_UPDATED',groupId:'gid_123',orderId:'order_123',
+ eventDocId:'event_1',revision:1});
+assert.notEqual(prior.options.tag,order.options.tag);
+const editedNote=await simulate({kind:'SHARED_NOTE_UPDATED',groupId:'gid_123',
+ noteId:'note_123',eventDocId:'event_3',revision:3});
+assert.equal(editedNote.title,'共用記事已修改');
 const invalid=await simulate({kind:'TASK_ASSIGNED',groupId:'../../hack',taskId:'task_123'});
 assert.equal(invalid.options.data.url,'/honbin-crm-auth-test/workspace-v2.html');
 const empty=await simulate(null);

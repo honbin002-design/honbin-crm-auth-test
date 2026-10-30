@@ -47,7 +47,17 @@ for(const kind of ['TASK_ASSIGNED','TASK_COMPLETED','SHARED_NOTE_CREATED']){
   members,itemId:'old_item',record:sample
  }),/RETIRED_GROUP_NOTIFICATION_STOP/);
 }
+const changed=call('CHANGE_EVENT','event_1',{kind:'ORDER_UPDATED',itemId:'order_1',revision:3,
+ actorUid:'uid_editor',changedAt:{toMillis:()=>42}});
+assert.equal(changed.payload.orderId,'order_1');
+assert.equal(changed.payload.eventDocId,'event_1');
+assert.deepEqual(new Set(changed.recipients),new Set(['uid_owner','uid_vic']));
+assert.throws(()=>call('CHANGE_EVENT','event_2',{kind:'ORDER_UPDATED',itemId:'order_1',revision:3,
+ actorUid:'uid_revoked',changedAt:{toMillis:()=>42}}),/INVALID_CHANGE_EVENT/);
+assert.throws(()=>call('CHANGE_EVENT','event_3',{kind:'PRIVATE_NOTE_UPDATED',itemId:'note_1',revision:1,
+ actorUid:'uid_editor',changedAt:{toMillis:()=>42}}),/INVALID_CHANGE_EVENT/);
 const serial=JSON.stringify([directed,open,done,note]);
 assert.ok(!serial.includes('@gmail.com'));
 assert.ok(!serial.includes('task title'));
 console.log('TEST_NOTIFICATION_RECIPIENT_ROUTING_PASS');
+
