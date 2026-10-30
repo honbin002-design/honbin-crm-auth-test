@@ -526,14 +526,21 @@ function renderNotes(){
 async function openPushDeepLink(){
  const params=new URLSearchParams(location.search);
  const target=params.get('tab'),groupId=params.get('groupId');
- const itemId=target==='Tasks'?params.get('taskId'):params.get('noteId');
+ const itemId=target==='Tasks'?params.get('taskId'):
+  target==='Orders'?params.get('orderId'):params.get('noteId');
  const id=/^[A-Za-z0-9_-]{1,150}$/;
- if(!['Tasks','Notes'].includes(target)||!id.test(groupId||'')||
+ if(!['Tasks','Notes','Orders'].includes(target)||!id.test(groupId||'')||
    !id.test(itemId||''))return false;
  const s=session();
  await loadGroups();check(s);
  const group=groupItems.find(x=>x.id===groupId);
  if(!group){say('通知所屬群組已無法存取，請檢查成員權限。');return false}
+ if(target==='Orders'){
+  tab('Orders',{fromNotification:true});await ensureOrders();check(s);
+  const opened=!!(await ordersUi?.openRecord(groupId,itemId));
+  say(opened?'已開啟通知指定的訂貨。':'訂貨已不存在或目前無法讀取。');
+  return opened;
+ }
  if(target==='Tasks'){
   const snap=await sdk.getDocFromServer(sdk.doc(db,'groups',group.id,'tasks',itemId));check(s);
   if(!snap.exists()||!['OPEN','DONE'].includes(snap.data().status)){
