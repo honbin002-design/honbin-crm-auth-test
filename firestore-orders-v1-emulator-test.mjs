@@ -56,6 +56,20 @@ try{
  const final=await viewer.doc(root).get();assert.equal(final.data().revision,2);
  assert.equal(final.data().isCompleted,true);
  await assertFails(viewer.doc(root+'/history/h2').update({actorUid:'uid_owner'}));
+ const extra={productName:'HB-8008C',specification:'桶裝',quantity:40,unit:'KG',arrivedQuantity:0};
+ const multiNext={...next,status:'PARTIAL',lineItems:[extra]};
+ await assertSucceeds(viewer.runTransaction(async tx=>{
+  tx.update(viewer.doc(root),{details:multiNext,isCompleted:false,revision:3,
+   updatedBy:uid,updatedAt:serverTime(),lastAuditId:'h3'});
+  tx.set(viewer.doc(root+'/history/h3'),audit(3,uid,'UPDATE',next,multiNext));
+ }));
+ const bad={...multiNext,lineItems:'malformed'};
+ await assertFails(viewer.runTransaction(async tx=>{
+  tx.update(viewer.doc(root),{details:bad,revision:4,updatedBy:uid,
+   updatedAt:serverTime(),lastAuditId:'bad4'});
+  tx.set(viewer.doc(root+'/history/bad4'),audit(4,uid,'UPDATE',multiNext,bad));
+ }));
+ assert.equal((await viewer.doc(root).get()).data().details.lineItems.length,1);
  console.log('ORDERS_V1_FIRESTORE_ATOMIC_AUDIT_AND_DENIAL_PASS');
 }finally{await env.cleanup()}
 

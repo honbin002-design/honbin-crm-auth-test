@@ -21,6 +21,16 @@ for(const status of ['PENDING','ORDERED','PARTIAL','RECEIVED']){
  for(const tab of ['PENDING','ORDERED','PARTIAL','RECEIVED'])
   assert.equal(matchesOrderFilter(item,tab),status===tab);
 }
+const extra={productName:'HB-8008C',specification:'桶裝',quantity:40,unit:'KG',arrivedQuantity:0};
+const multi={...base,status:'ORDERED',orderDate:'2026-10-27',orderedByUid:'u1',lineItems:[extra]};
+assert.equal(normalizeOrder(multi).lineItems.length,1);
+assert.throws(()=>normalizeOrder({...multi,status:'RECEIVED',arrivedQuantity:20}),/RECEIVED_REQUIRES/);
+assert.equal(normalizeOrder({...multi,status:'PARTIAL',arrivedQuantity:20}).status,'PARTIAL');
+assert.equal(normalizeOrder({...multi,status:'PARTIAL',lineItems:[{...extra,arrivedQuantity:10}]}).status,'PARTIAL');
+assert.throws(()=>normalizeOrder({...multi,status:'ORDERED',lineItems:[{...extra,arrivedQuantity:10}]}),/ARRIVED_QUANTITY_REQUIRES/);
+assert.equal(normalizeOrder({...multi,status:'RECEIVED',arrivedQuantity:20,lineItems:[{...extra,arrivedQuantity:40}]}).status,'RECEIVED');
+assert.deepEqual(orderChangeSummary(base,{...base,lineItems:[extra]}).map(x=>x.field),['lineItems']);
+assert.throws(()=>normalizeOrder({...multi,lineItems:[{...extra,quantity:0}]}),/INVALID_ORDER_LINES/);
 console.log('ORDERS_V1_VALIDATION_AND_STATUS_FILTER_PASS');
 
 
