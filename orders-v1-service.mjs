@@ -3,7 +3,7 @@
 const DATE=/^\d{4}-\d{2}-\d{2}$/;
 const ID=/^[A-Za-z0-9_-]{1,150}$/;
 const FIELDS=['productName','specification','quantity','unit','supplierName','requesterUid',
- 'orderedByUid','orderDate','dueDate','arrivedQuantity','status','note'];
+ 'orderedByUid','orderDate','dueDate','arrivedQuantity','status','note','lineItems'];
 const STATUS=['PENDING','ORDERED','PARTIAL','RECEIVED'];
 const str=(v,max=300)=>String(v??'').trim().slice(0,max);
 const validId=(v)=>typeof v==='string'&&ID.test(v);
@@ -12,6 +12,8 @@ const date=(v)=>{if(v==='')return true;if(!DATE.test(v))return false;
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export const orderStatusLabels=Object.freeze({PENDING:'待訂貨',ORDERED:'已訂貨',
  PARTIAL:'部分到貨',RECEIVED:'已完成'});
+export const orderLines=details=>[{productName:details.productName,specification:details.specification,
+ quantity:details.quantity,unit:details.unit,arrivedQuantity:details.arrivedQuantity},...(details.lineItems||[])];
 export function normalizeOrder(input){
  const d={
   productName:str(input.productName,120),specification:str(input.specification,200),
@@ -23,17 +25,26 @@ export function normalizeOrder(input){
   arrivedQuantity:Number(input.arrivedQuantity??0),
   status:str(input.status,20),note:str(input.note,2000)
  };
+ if(Object.hasOwn(input,'lineItems')){
+  if(!Array.isArray(input.lineItems)||input.lineItems.length>9)throw Error('INVALID_ORDER_LINES');
+  d.lineItems=input.lineItems.map(line=>({productName:str(line?.productName,120),
+   specification:str(line?.specification,200),quantity:Number(line?.quantity),
+   unit:str(line?.unit,20),arrivedQuantity:Number(line?.arrivedQuantity??0)}));
+  if(d.lineItems.some(line=>!line.productName||!line.unit||!Number.isFinite(line.quantity)||
+   line.quantity<=0||!Number.isFinite(line.arrivedQuantity)||line.arrivedQuantity<0||
+   line.arrivedQuantity>line.quantity))throw Error('INVALID_ORDER_LINES');
+ }
  if(!d.productName||!d.unit||!d.supplierName||!Number.isFinite(d.quantity)||
   d.quantity<=0||!Number.isFinite(d.arrivedQuantity)||d.arrivedQuantity<0||
   d.arrivedQuantity>d.quantity||!STATUS.includes(d.status)||
   !date(d.orderDate)||!date(d.dueDate)||
   (d.requesterUid&&!validId(d.requesterUid))||
   (d.orderedByUid&&!validId(d.orderedByUid)))throw Error('INVALID_ORDER_FIELDS');
- if(d.status==='RECEIVED'&&d.arrivedQuantity!==d.quantity)
-  throw Error('RECEIVED_REQUIRES_FULL_QUANTITY');
- if(d.status==='PARTIAL'&&!(d.arrivedQuantity>0&&d.arrivedQuantity<d.quantity))
-  throw Error('PARTIAL_REQUIRES_PARTIAL_QUANTITY');
- if((d.status==='PENDING'||d.status==='ORDERED')&&d.arrivedQuantity!==0)
+ const lines=orderLines(d),anyArrived=lines.some(line=>line.arrivedQuantity>0),
+  allReceived=lines.every(line=>line.arrivedQuantity===line.quantity);
+ if(d.status==='RECEIVED'&&!allReceived)throw Error('RECEIVED_REQUIRES_FULL_QUANTITY');
+ if(d.status==='PARTIAL'&&(!anyArrived||allReceived))throw Error('PARTIAL_REQUIRES_PARTIAL_QUANTITY');
+ if((d.status==='PENDING'||d.status==='ORDERED')&&anyArrived)
   throw Error('ARRIVED_QUANTITY_REQUIRES_PARTIAL_OR_RECEIVED');
  if(d.status!=='PENDING'&&(!d.orderDate||!d.orderedByUid))
   throw Error('ORDERED_REQUIRES_DATE_AND_ACTOR');
