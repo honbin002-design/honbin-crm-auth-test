@@ -63,7 +63,7 @@ try{
    updatedBy:uid,updatedAt:serverTime(),lastAuditId:'h3'});
   tx.set(viewer.doc(root+'/history/h3'),audit(3,uid,'UPDATE',next,multiNext));
  }));
- const bad={...multiNext,lineItems:[{...extra,quantity:-1}]};
+ const bad={...multiNext,lineItems:'malformed'};
  await assertFails(viewer.runTransaction(async tx=>{
   tx.update(viewer.doc(root),{details:bad,revision:4,updatedBy:uid,
    updatedAt:serverTime(),lastAuditId:'bad4'});
