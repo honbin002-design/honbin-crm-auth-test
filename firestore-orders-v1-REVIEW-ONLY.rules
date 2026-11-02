@@ -9,17 +9,13 @@ match /orders/{orderId} {
   function auditPath(auditId) {
     return /databases/$(database)/documents/groups/$(groupId)/orders/$(orderId)/history/$(auditId);
   }
-  function extraLinesValid(d) {
-    return !d.keys().hasAny(['lineItems']) ||
-      (d.lineItems is list && d.lineItems.size()<=9);
-  }
   function fieldsValid(d) {
     return d is map
       && d.keys().hasAll(['productName','specification','quantity','unit','supplierName',
         'requesterUid','orderedByUid','orderDate','dueDate','arrivedQuantity','status','note'])
       && d.keys().hasOnly(['productName','specification','quantity','unit','supplierName',
         'requesterUid','orderedByUid','orderDate','dueDate','arrivedQuantity','status','note','lineItems'])
-      && extraLinesValid(d)
+      && (!d.keys().hasAny(['lineItems']) || d.lineItems is list)
       && d.productName is string && d.productName.size()>0 && d.productName.size()<=120
       && d.specification is string && d.specification.size()<=200
       && d.supplierName is string && d.supplierName.size()>0 && d.supplierName.size()<=120
