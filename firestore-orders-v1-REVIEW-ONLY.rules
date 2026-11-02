@@ -21,24 +21,24 @@ match /orders/{orderId} {
       && line.arrivedQuantity<=line.quantity;
   }
   function extraLinesValid(d) {
-    return d.get('lineItems',[]) is list && d.get('lineItems',[]).size()<=9
-      && (d.get('lineItems',[]).size()<=0 || lineValid(d.get('lineItems',[])[0]))
-      && (d.get('lineItems',[]).size()<=1 || lineValid(d.get('lineItems',[])[1]))
-      && (d.get('lineItems',[]).size()<=2 || lineValid(d.get('lineItems',[])[2]))
-      && (d.get('lineItems',[]).size()<=3 || lineValid(d.get('lineItems',[])[3]))
-      && (d.get('lineItems',[]).size()<=4 || lineValid(d.get('lineItems',[])[4]))
-      && (d.get('lineItems',[]).size()<=5 || lineValid(d.get('lineItems',[])[5]))
-      && (d.get('lineItems',[]).size()<=6 || lineValid(d.get('lineItems',[])[6]))
-      && (d.get('lineItems',[]).size()<=7 || lineValid(d.get('lineItems',[])[7]))
-      && (d.get('lineItems',[]).size()<=8 || lineValid(d.get('lineItems',[])[8]));
+    return !d.keys().hasAny(['lineItems']) || (d.lineItems is list && d.lineItems.size()<=9
+      && (d.lineItems.size()<=0 || lineValid(d.lineItems[0]))
+      && (d.lineItems.size()<=1 || lineValid(d.lineItems[1]))
+      && (d.lineItems.size()<=2 || lineValid(d.lineItems[2]))
+      && (d.lineItems.size()<=3 || lineValid(d.lineItems[3]))
+      && (d.lineItems.size()<=4 || lineValid(d.lineItems[4]))
+      && (d.lineItems.size()<=5 || lineValid(d.lineItems[5]))
+      && (d.lineItems.size()<=6 || lineValid(d.lineItems[6]))
+      && (d.lineItems.size()<=7 || lineValid(d.lineItems[7]))
+      && (d.lineItems.size()<=8 || lineValid(d.lineItems[8])));
   }
   function noArrival(d) {
     let lines=d.get('lineItems',[]);
-    return d.arrivedQuantity==0 && (lines.size()<=0 || lines[0].arrivedQuantity==0) && (lines.size()<=1 || lines[1].arrivedQuantity==0) && (lines.size()<=2 || lines[2].arrivedQuantity==0) && (lines.size()<=3 || lines[3].arrivedQuantity==0) && (lines.size()<=4 || lines[4].arrivedQuantity==0) && (lines.size()<=5 || lines[5].arrivedQuantity==0) && (lines.size()<=6 || lines[6].arrivedQuantity==0) && (lines.size()<=7 || lines[7].arrivedQuantity==0) && (lines.size()<=8 || lines[8].arrivedQuantity==0);
+    return d.arrivedQuantity==0 && (!d.keys().hasAny(['lineItems']) || ((lines.size()<=0 || lines[0].arrivedQuantity==0) && (lines.size()<=1 || lines[1].arrivedQuantity==0) && (lines.size()<=2 || lines[2].arrivedQuantity==0) && (lines.size()<=3 || lines[3].arrivedQuantity==0) && (lines.size()<=4 || lines[4].arrivedQuantity==0) && (lines.size()<=5 || lines[5].arrivedQuantity==0) && (lines.size()<=6 || lines[6].arrivedQuantity==0) && (lines.size()<=7 || lines[7].arrivedQuantity==0) && (lines.size()<=8 || lines[8].arrivedQuantity==0)));
   }
   function fullyArrived(d) {
     let lines=d.get('lineItems',[]);
-    return d.arrivedQuantity==d.quantity && (lines.size()<=0 || lines[0].arrivedQuantity==lines[0].quantity) && (lines.size()<=1 || lines[1].arrivedQuantity==lines[1].quantity) && (lines.size()<=2 || lines[2].arrivedQuantity==lines[2].quantity) && (lines.size()<=3 || lines[3].arrivedQuantity==lines[3].quantity) && (lines.size()<=4 || lines[4].arrivedQuantity==lines[4].quantity) && (lines.size()<=5 || lines[5].arrivedQuantity==lines[5].quantity) && (lines.size()<=6 || lines[6].arrivedQuantity==lines[6].quantity) && (lines.size()<=7 || lines[7].arrivedQuantity==lines[7].quantity) && (lines.size()<=8 || lines[8].arrivedQuantity==lines[8].quantity);
+    return d.arrivedQuantity==d.quantity && (!d.keys().hasAny(['lineItems']) || ((lines.size()<=0 || lines[0].arrivedQuantity==lines[0].quantity) && (lines.size()<=1 || lines[1].arrivedQuantity==lines[1].quantity) && (lines.size()<=2 || lines[2].arrivedQuantity==lines[2].quantity) && (lines.size()<=3 || lines[3].arrivedQuantity==lines[3].quantity) && (lines.size()<=4 || lines[4].arrivedQuantity==lines[4].quantity) && (lines.size()<=5 || lines[5].arrivedQuantity==lines[5].quantity) && (lines.size()<=6 || lines[6].arrivedQuantity==lines[6].quantity) && (lines.size()<=7 || lines[7].arrivedQuantity==lines[7].quantity) && (lines.size()<=8 || lines[8].arrivedQuantity==lines[8].quantity)));
   }
   function fieldsValid(d) {
     return d is map
