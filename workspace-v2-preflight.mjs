@@ -83,7 +83,7 @@ assert.doesNotMatch(page,/id="ordersFrame"/);
 const ordersUi=readFileSync('orders-workspace-ui.mjs','utf8');
 assert(ordersUi.includes('card.after($(\'detail\'))'));
 assert(ordersUi.includes('供應商 ${escapeHtml(x.details.supplierName)} · 訂貨 ${escapeHtml(x.details.quantity)}'));
-assert(!ordersUi.includes("$('detail').scrollIntoView"));
+assert(ordersUi.includes('.card[aria-expanded="true"]{display:none}'));
 assert.match(ordersUi,/orderService\(\{db,sdk,currentUid:/);
 assert.match(ordersUi,/auth\.currentUser\?\.uid===owner/);
 assert.match(ordersUi,/listGroupsFromServer/);
