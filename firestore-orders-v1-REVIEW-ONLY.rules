@@ -13,7 +13,7 @@ match /orders/{orderId} {
     return d is map
       && d.keys().hasOnly(['productName','specification','quantity','unit','supplierName',
         'requesterUid','orderedByUid','orderDate','dueDate','arrivedQuantity','status','note','lineItems'])
-      && (!d.keys().hasAny(['lineItems']) || d.lineItems is list)
+      && (!d.keys().hasAny(['lineItems']) || (d.lineItems is list && d.lineItems.size()<=9))
       && d.productName is string && d.productName.size()>0 && d.productName.size()<=120
       && d.specification is string && d.specification.size()<=200
       && d.supplierName is string && d.supplierName.size()>0 && d.supplierName.size()<=120
