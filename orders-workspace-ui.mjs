@@ -1,9 +1,9 @@
-import {orderService,orderStatusLabels,orderChangeSummary} from './orders-v1-service.mjs?v=20261030-arrival-v1';
+import {orderService,orderStatusLabels,orderChangeSummary,orderLines} from './orders-v1-service.mjs?v=20261102-multi-v1';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const stamp=value=>value?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
 export const matchesOrderFilter=(item,filter)=>filter==='all'||item?.details?.status===filter;
-const fieldLabels={productName:'品名',specification:'規格',quantity:'數量',unit:'單位',supplierName:'供應商',requesterUid:'建立人',orderedByUid:'訂貨人',orderDate:'訂貨日期',dueDate:'預計交期',arrivedQuantity:'已到貨數量',status:'狀態',note:'備註'};
+const fieldLabels={productName:'品名',specification:'規格',quantity:'數量',unit:'單位',supplierName:'供應商',requesterUid:'建立人',orderedByUid:'訂貨人',orderDate:'訂貨日期',dueDate:'預計交期',arrivedQuantity:'已到貨數量',status:'狀態',note:'備註',lineItems:'其他品項'};
 
 const markup=`<style>
  :host{display:block;color:#20334d;font:inherit}*{box-sizing:border-box}
@@ -19,8 +19,8 @@ const markup=`<style>
  .fields label{display:grid;gap:3px;min-width:0}.fields input,.fields select,.fields textarea{width:100%}.wide{grid-column:1/-1}
  .history{margin:7px 0 0;padding-left:19px;font-size:.88rem}.history li{padding:5px 0;border-bottom:1px solid #e7ecf2;overflow-wrap:anywhere}
  .statusChoices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.statusChoices label{display:flex;align-items:center;justify-content:center;min-height:44px;border:1px solid #bdccdc;border-radius:10px;cursor:pointer;text-align:center;padding:4px;font-size:.88rem}.statusChoices input{position:absolute;opacity:0;width:1px;height:1px}.statusChoices label:has(input:checked){background:#205a9a;color:white;border-color:#205a9a}.statusChoices label:has(input:focus-visible){outline:3px solid #8ab4e0}.identity{font-size:.85rem;color:#52657b;margin:4px 0 8px}
- .hint{font-size:.85rem;color:#52657b}.empty{padding:12px 0}.error{color:#a33225}.more{margin:7px 0}
- [hidden]{display:none!important}@media(max-width:520px){.toolbar{grid-template-columns:1fr 1fr}.toolbar label{grid-column:1/-1}.toolbar button{min-width:0}.fields{grid-template-columns:1fr}.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.statusChoices{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.lineRow{border:1px solid #d6e1ed;border-radius:10px;padding:9px;margin:8px 0}.lineRow h3{margin:0 0 6px;font-size:.92rem}.lineFields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.lineFields label{display:grid;gap:3px}.lineFields input{width:100%}.hint{font-size:.85rem;color:#52657b}.empty{padding:12px 0}.error{color:#a33225}.more{margin:7px 0}
+ [hidden]{display:none!important}@media(max-width:520px){.toolbar{grid-template-columns:1fr 1fr}.toolbar label{grid-column:1/-1}.toolbar button{min-width:0}.fields,.lineFields{grid-template-columns:1fr}.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.statusChoices{grid-template-columns:repeat(2,minmax(0,1fr))}}
  </style>
  <div class="toolbar"><label>共用群組<select id="group" aria-label="共用群組"></select></label><button id="refresh">重新整理</button><button id="new" class="primary">＋ 新增訂貨</button></div>
  <div class="filters" role="tablist" aria-label="訂貨狀態"><button role="tab" aria-selected="true" class="active" data-filter="all">全部</button><button role="tab" aria-selected="false" data-filter="PENDING">待訂貨</button><button role="tab" aria-selected="false" data-filter="ORDERED">已訂貨</button><button role="tab" aria-selected="false" data-filter="PARTIAL">部份到貨</button><button role="tab" aria-selected="false" data-filter="RECEIVED">已完成</button></div>
@@ -28,11 +28,12 @@ const markup=`<style>
  <p id="status" class="status" role="status"></p><div id="list" class="list"></div><button id="more" class="more" hidden>載入更多</button>
  <div id="detailHome"><section id="detail" class="detail" hidden></section></div>
  <section id="editor" class="detail" hidden><h2 id="editTitle">新增訂貨</h2><p id="editIdentity" class="identity"></p><form id="form"><div class="fields">
- <label>品名<input name="productName" maxlength="120" required></label><label>規格<input name="specification" maxlength="200"></label>
- <label>數量<input name="quantity" type="number" step="any" min="0.001" required></label><label>單位<input name="unit" maxlength="20" value="KG" required></label>
+ <label>品號 1<input name="productName" maxlength="120" required></label><label>包裝 1<input name="specification" maxlength="200"></label>
+ <label>訂貨數量 1<input name="quantity" type="number" step="any" min="0.001" required></label><label>單位<input name="unit" maxlength="20" value="KG" required></label>
  <label>供應商<input name="supplierName" maxlength="120" required></label><div class="wide"><span>訂貨狀態（點選）</span><div class="statusChoices" role="radiogroup" aria-label="訂貨狀態"><label><input type="radio" name="status" value="PENDING" checked>待訂貨</label><label><input type="radio" name="status" value="ORDERED">已訂貨</label><label><input type="radio" name="status" value="PARTIAL">部分到貨</label><label><input type="radio" name="status" value="RECEIVED">已完成</label></div></div>
  <label>訂貨日期<input name="orderDate" type="date"></label><label>預計交期<input name="dueDate" type="date"></label>
- <label>已到貨數量<input name="arrivedQuantity" type="number" step="any" min="0" value="0"></label>
+ <label>已到貨數量 1<input name="arrivedQuantity" type="number" step="any" min="0" value="0"></label>
+ <div class="wide"><strong>同筆訂貨的其他品號</strong><div id="extraLines"></div><button id="addLine" type="button">＋ 增加品號</button><p class="hint">每筆最多 10 個品號，各品號可填不同數量、包裝與到貨數量。</p></div>
  <label class="wide">備註<textarea name="note" rows="2" maxlength="2000"></textarea></label>
  </div><div class="actions"><button id="save" type="submit" class="primary">儲存</button><button id="cancel" type="button">取消</button></div></form></section>`;
 
@@ -53,13 +54,13 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   names.set(id,name);return name;
  };
  const person=id=>id?(names.get(id)||(id===owner?(auth.currentUser?.displayName||auth.currentUser?.email||'本人'):'成員（'+id.slice(0,8)+'…）')):'—';
- const actorValue=(field,value)=>field==='requesterUid'||field==='orderedByUid'?person(value):field==='status'?(orderStatusLabels[value]||value):String(value??'（空）');
+ const actorValue=(field,value)=>field==='requesterUid'||field==='orderedByUid'?person(value):field==='status'?(orderStatusLabels[value]||value):field==='lineItems'?(value?.length?value.map(line=>line.productName+' '+line.quantity+' '+line.unit).join('、'):'—'):String(value??'（空）');
  function render(){
   const term=$('search').value.trim().toLocaleLowerCase('zh-Hant');
-  const shown=items.filter(x=>[x.details.productName,x.details.specification,x.details.supplierName,x.details.note,person(x.createdBy||x.details.requesterUid),person(x.details.orderedByUid),person(x.updatedBy)]
+  const shown=items.filter(x=>[x.details.productName,x.details.specification,x.details.supplierName,x.details.note,...(x.details.lineItems||[]).flatMap(line=>[line.productName,line.specification]),person(x.createdBy||x.details.requesterUid),person(x.details.orderedByUid),person(x.updatedBy)]
    .join(' ').toLocaleLowerCase('zh-Hant').includes(term));
   const detail=$('detail');$('detailHome').append(detail);
-  $('list').innerHTML=shown.map(x=>`<button class="card" data-id="${escapeHtml(x.id)}"><span class="row"><strong>${escapeHtml(x.details.productName)}</strong><span class="pill">${escapeHtml(orderStatusLabels[x.details.status]||x.details.status)}</span></span><span class="meta">供應商 ${escapeHtml(x.details.supplierName)} · 訂貨 ${escapeHtml(x.details.quantity)} ${escapeHtml(x.details.unit)} · 包裝 ${escapeHtml(x.details.specification||'—')}</span><span class="meta">建立人 ${escapeHtml(person(x.createdBy||x.details.requesterUid))} · 訂貨人 ${escapeHtml(person(x.details.orderedByUid))}</span><span class="meta">預計交期 ${escapeHtml(x.details.dueDate||'—')} · ${escapeHtml(stamp(x.updatedAt))}</span></button>`).join('');
+  $('list').innerHTML=shown.map(x=>`<button class="card" data-id="${escapeHtml(x.id)}"><span class="row"><strong>${escapeHtml(x.details.productName)}${x.details.lineItems?.length?' 等 '+(x.details.lineItems.length+1)+' 項':''}</strong><span class="pill">${escapeHtml(orderStatusLabels[x.details.status]||x.details.status)}</span></span><span class="meta">供應商 ${escapeHtml(x.details.supplierName)} · 訂貨 ${escapeHtml(x.details.quantity)} ${escapeHtml(x.details.unit)} · 包裝 ${escapeHtml(x.details.specification||'—')}</span>${(x.details.lineItems||[]).map(line=>`<span class="meta">${escapeHtml(line.productName)} · 訂貨 ${escapeHtml(line.quantity)} ${escapeHtml(line.unit)} · 包裝 ${escapeHtml(line.specification||'—')}</span>`).join('')}<span class="meta">建立人 ${escapeHtml(person(x.createdBy||x.details.requesterUid))} · 訂貨人 ${escapeHtml(person(x.details.orderedByUid))}</span><span class="meta">預計交期 ${escapeHtml(x.details.dueDate||'—')} · ${escapeHtml(stamp(x.updatedAt))}</span></button>`).join('');
   if(!shown.length)$('list').innerHTML=`<p class="empty">${items.length?'沒有符合的訂貨':'尚無訂貨紀錄'}</p>`;
   if(!detail.hidden&&editing){const card=[...$('list').querySelectorAll('button[data-id]')].find(x=>x.dataset.id===editing);if(card){card.setAttribute('aria-expanded','true');card.after(detail)}else clearView()}
   $('more').hidden=!hasMore;
@@ -88,7 +89,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  async function showDetail(id){
   const item=items.find(x=>x.id===id);if(!item)return;
   clearView();editing=id;const check=epoch,group=groupId,d=item.details;
-  $('detail').innerHTML=`<h2>${escapeHtml(d.productName)}</h2><p>${escapeHtml(d.specification||'—')} · ${escapeHtml(d.quantity)} ${escapeHtml(d.unit)}</p><p>供應商：${escapeHtml(d.supplierName)} · ${escapeHtml(orderStatusLabels[d.status])}</p><p>建立人：${escapeHtml(person(item.createdBy||d.requesterUid))} · 訂貨人：${escapeHtml(person(d.orderedByUid))}</p><p>訂貨日期：${escapeHtml(d.orderDate||'—')} · 預計交期：${escapeHtml(d.dueDate||'—')}</p><p>已到貨：${escapeHtml(d.arrivedQuantity)} ${escapeHtml(d.unit)}</p><p>備註：${escapeHtml(d.note||'—')}</p><div class="actions"><button id="edit" class="primary">編輯</button><button id="closeDetail">返回清單</button></div><h3>異動紀錄</h3><ol id="history" class="history"><li>讀取中……</li></ol>`;
+  $('detail').innerHTML=`<h2>${escapeHtml(d.productName)}</h2>${orderLines(d).map((line,index)=>`<p>品號 ${index+1}：${escapeHtml(line.productName)} · 訂貨 ${escapeHtml(line.quantity)} ${escapeHtml(line.unit)} · 包裝 ${escapeHtml(line.specification||'—')} · 已到貨 ${escapeHtml(line.arrivedQuantity)} ${escapeHtml(line.unit)}</p>`).join('')}<p>供應商：${escapeHtml(d.supplierName)} · ${escapeHtml(orderStatusLabels[d.status])}</p><p>建立人：${escapeHtml(person(item.createdBy||d.requesterUid))} · 訂貨人：${escapeHtml(person(d.orderedByUid))}</p><p>訂貨日期：${escapeHtml(d.orderDate||'—')} · 預計交期：${escapeHtml(d.dueDate||'—')}</p><p>備註：${escapeHtml(d.note||'—')}</p><div class="actions"><button id="edit" class="primary">編輯</button><button id="closeDetail">返回清單</button></div><h3>異動紀錄</h3><ol id="history" class="history"><li>讀取中……</li></ol>`;
   const card=[...$('list').querySelectorAll('button[data-id]')].find(x=>x.dataset.id===id);
   if(card){card.setAttribute('aria-expanded','true');card.after($('detail'))}
   $('detail').classList.add('inline');$('detail').hidden=false;
@@ -110,10 +111,23 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   }catch(error){if(live(check))$('history').textContent='歷史讀取失敗：'+String(error?.code||error?.message||error)}
  }
  function revealField(field){if($('editor').hidden||!field?.closest('form'))return;requestAnimationFrame(()=>field.scrollIntoView({block:'center',behavior:'smooth'}))}
+ function addLine(line={}){
+  if($('extraLines').children.length>=9){showStatus('每筆訂貨最多 10 個品號。',true);return}
+  const row=document.createElement('div');row.className='lineRow';
+  row.innerHTML=`<h3>品號 ${$('extraLines').children.length+2}</h3><div class="lineFields"><label>品號<input data-field="productName" maxlength="120" required value="${escapeHtml(line.productName||'')}"></label><label>包裝<input data-field="specification" maxlength="200" value="${escapeHtml(line.specification||'')}"></label><label>訂貨數量<input data-field="quantity" type="number" step="any" min="0.001" required value="${escapeHtml(line.quantity??'')}"></label><label>單位<input data-field="unit" maxlength="20" required value="${escapeHtml(line.unit||'KG')}"></label><label>已到貨數量<input data-field="arrivedQuantity" type="number" step="any" min="0" value="${escapeHtml(line.arrivedQuantity??0)}"></label></div><button type="button" data-remove-line>移除此品號</button>`;
+  row.querySelector('[data-remove-line]').onclick=()=>{row.remove();[...$('extraLines').children].forEach((item,i)=>item.querySelector('h3').textContent='品號 '+(i+2))};
+  $('extraLines').append(row);$('addLine').hidden=$('extraLines').children.length>=9;
+ }
+ function extraData(){return [...$('extraLines').children].map(row=>Object.fromEntries(
+  [...row.querySelectorAll('[data-field]')].map(field=>[field.dataset.field,
+   ['quantity','arrivedQuantity'].includes(field.dataset.field)?Number(field.value):field.value.trim()])))}
+ function allLines(){const form=$('form');return [{quantity:Number(form.elements.namedItem('quantity').value),
+  arrivedQuantity:Number(form.elements.namedItem('arrivedQuantity').value)},...extraData()]}
  function openEditor(id=null){
   const item=items.find(x=>x.id===id);if(id&&!item)return;
-  editing=id;const form=$('form');form.reset();
+  editing=id;const form=$('form');form.reset();$('extraLines').replaceChildren();$('addLine').hidden=false;
   for(const [key,value] of Object.entries(item?.details||{})){const field=form.elements.namedItem(key);if(field)field.value=value}
+  for(const line of item?.details.lineItems||[])addLine(line);
   if(!item){form.elements.namedItem('unit').value='KG';form.elements.namedItem('arrivedQuantity').value='0'}
   $('editIdentity').textContent='建立人：'+person(item?.createdBy||item?.details.requesterUid||owner)+'　訂貨人：'+person(item?.details.orderedByUid);
   $('editTitle').textContent=item?'修改訂貨':'新增訂貨';$('detail').hidden=true;$('editor').hidden=false;
@@ -139,6 +153,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  $('list').onclick=event=>{const button=event.target.closest('button[data-id]');if(button)void showDetail(button.dataset.id)};
  $('cancel').onclick=()=>{$('editor').hidden=true;editing=null};
  $('form').addEventListener('focusin',event=>revealField(event.target));
+ $('addLine').onclick=()=>addLine();
  function updateOrderIdentity(){
   const item=items.find(x=>x.id===editing),status=new FormData($('form')).get('status');
   $('editIdentity').textContent='建立人：'+person(item?.createdBy||item?.details.requesterUid||owner)+
@@ -146,15 +161,29 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  }
  $('form').addEventListener('change',event=>{
   const form=$('form'),status=form.elements.namedItem('status');
-  const arrived=form.elements.namedItem('arrivedQuantity');
-  const quantity=Number(form.elements.namedItem('quantity').value),received=Number(arrived.value);
   if(event.target.name==='status'){
-   if(['PENDING','ORDERED'].includes(status.value))arrived.value='0';
-   if(status.value==='RECEIVED'&&quantity>0)arrived.value=String(quantity);
-  }else if(event.target.name==='arrivedQuantity'&&quantity>0&&received>0&&received<=quantity){
-   status.value=received===quantity?'RECEIVED':'PARTIAL';
+   const arrived=form.elements.namedItem('arrivedQuantity');
+   if(['PENDING','ORDERED'].includes(status.value)){
+    arrived.value='0';$('extraLines').querySelectorAll('[data-field="arrivedQuantity"]').forEach(x=>x.value='0');
+   }
+   if(status.value==='RECEIVED'){
+    const quantity=Number(form.elements.namedItem('quantity').value);
+    if(quantity>0)arrived.value=String(quantity);
+    $('extraLines').querySelectorAll('.lineRow').forEach(row=>{
+     const q=Number(row.querySelector('[data-field="quantity"]').value);
+     if(q>0)row.querySelector('[data-field="arrivedQuantity"]').value=String(q);
+    });
+   }
+   updateOrderIdentity();
+  }else if(event.target.name==='arrivedQuantity'||event.target.dataset.field==='arrivedQuantity'){
+   const lines=allLines();
+   if(lines.every(line=>line.quantity>0&&line.arrivedQuantity>=0&&line.arrivedQuantity<=line.quantity)){
+    const any=lines.some(line=>line.arrivedQuantity>0);
+    if(any)status.value=lines.every(line=>line.arrivedQuantity===line.quantity)?'RECEIVED':'PARTIAL';
+    else if(['PARTIAL','RECEIVED'].includes(status.value))status.value='ORDERED';
+    updateOrderIdentity();
+   }
   }
-  if(['status','arrivedQuantity'].includes(event.target.name))updateOrderIdentity();
  });
  const onViewport=()=>{const active=root.activeElement;if(active?.matches('input,select,textarea'))revealField(active)};
  window.visualViewport?.addEventListener('resize',onViewport);
@@ -163,16 +192,14 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   const check=epoch,group=groupId,id=editing,previous=items.find(x=>x.id===id);
   try{
    const data=Object.fromEntries(new FormData($('form')));data.quantity=Number(data.quantity);data.arrivedQuantity=Number(data.arrivedQuantity);
+   const extra=extraData();if(extra.length||previous?.details.lineItems)data.lineItems=extra;
    data.requesterUid=previous?.details.requesterUid||previous?.createdBy||owner;data.orderedByUid=previous?.details.orderedByUid||'';
-   if(data.status==='PENDING'){data.orderedByUid='';data.orderDate='';data.arrivedQuantity=0}
+   if(data.status==='PENDING'){data.orderedByUid='';data.orderDate='';data.arrivedQuantity=0;extra.forEach(line=>line.arrivedQuantity=0)}
    else{if(!data.orderedByUid)data.orderedByUid=owner;if(!data.orderDate)data.orderDate=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'})}
-   if(data.status==='RECEIVED')data.arrivedQuantity=data.quantity;
-   if(['PENDING','ORDERED'].includes(data.status)&&data.arrivedQuantity>0){
-    throw Error('已有到貨數量，請選「部分到貨」或「已完成」');
-   }
-   if(data.status==='PARTIAL'&&!(data.arrivedQuantity>0&&data.arrivedQuantity<data.quantity)){
-    throw Error('部分到貨的數量需大於 0，且小於訂貨數量');
-   }
+   if(data.status==='RECEIVED'){data.arrivedQuantity=data.quantity;extra.forEach(line=>line.arrivedQuantity=line.quantity)}
+   const lines=orderLines(data),any=lines.some(line=>line.arrivedQuantity>0),all=lines.every(line=>line.quantity>0&&line.arrivedQuantity===line.quantity);
+   if(['PENDING','ORDERED'].includes(data.status)&&any)throw Error('已有到貨數量，請選「部份到貨」或「已完成」');
+   if(data.status==='PARTIAL'&&(!any||all))throw Error('部份到貨須有到貨數量，且尚未全部到齊');
    if(previous)await svc.update(group,id,data,previous.revision);else await svc.create(group,data);
    if(!live(check)||group!==groupId)return;
    await load(true);showStatus('訂貨已儲存，異動紀錄已寫入。');
