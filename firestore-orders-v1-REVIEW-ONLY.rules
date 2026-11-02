@@ -11,8 +11,6 @@ match /orders/{orderId} {
   }
   function fieldsValid(d) {
     return d is map
-      && d.keys().hasAll(['productName','specification','quantity','unit','supplierName',
-        'requesterUid','orderedByUid','orderDate','dueDate','arrivedQuantity','status','note'])
       && d.keys().hasOnly(['productName','specification','quantity','unit','supplierName',
         'requesterUid','orderedByUid','orderDate','dueDate','arrivedQuantity','status','note','lineItems'])
       && (!d.keys().hasAny(['lineItems']) || d.lineItems is list)
