@@ -12,8 +12,11 @@ const date=(v)=>{if(v==='')return true;if(!DATE.test(v))return false;
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export const orderStatusLabels=Object.freeze({PENDING:'待訂貨',ORDERED:'已訂貨',
  PARTIAL:'部分到貨',RECEIVED:'已完成'});
+export const orderExtraLines=details=>Array.isArray(details?.lineItems)?details.lineItems.filter(line=>
+ line&&typeof line==='object'&&typeof line.productName==='string'&&typeof line.specification==='string'&&
+ typeof line.quantity==='number'&&typeof line.unit==='string'&&typeof line.arrivedQuantity==='number'):[];
 export const orderLines=details=>[{productName:details.productName,specification:details.specification,
- quantity:details.quantity,unit:details.unit,arrivedQuantity:details.arrivedQuantity},...(details.lineItems||[])];
+ quantity:details.quantity,unit:details.unit,arrivedQuantity:details.arrivedQuantity},...orderExtraLines(details)];
 export function normalizeOrder(input){
  const d={
   productName:str(input.productName,120),specification:str(input.specification,200),
