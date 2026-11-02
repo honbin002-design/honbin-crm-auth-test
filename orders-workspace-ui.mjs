@@ -1,4 +1,4 @@
-import {orderService,orderStatusLabels,orderChangeSummary,orderLines} from './orders-v1-service.mjs?v=20261102-multi-v1';
+import {orderService,orderStatusLabels,orderChangeSummary,orderLines,orderExtraLines} from './orders-v1-service.mjs?v=20261102-multi-v1';
 
 const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const stamp=value=>value?.toDate?.().toLocaleString('zh-TW',{hour12:false})||'待確認';
@@ -54,13 +54,13 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   names.set(id,name);return name;
  };
  const person=id=>id?(names.get(id)||(id===owner?(auth.currentUser?.displayName||auth.currentUser?.email||'本人'):'成員（'+id.slice(0,8)+'…）')):'—';
- const actorValue=(field,value)=>field==='requesterUid'||field==='orderedByUid'?person(value):field==='status'?(orderStatusLabels[value]||value):field==='lineItems'?(value?.length?value.map(line=>line.productName+' '+line.quantity+' '+line.unit).join('、'):'—'):String(value??'（空）');
+ const actorValue=(field,value)=>field==='requesterUid'||field==='orderedByUid'?person(value):field==='status'?(orderStatusLabels[value]||value):field==='lineItems'?(Array.isArray(value)&&value.length?value.map(line=>line.productName+' '+line.quantity+' '+line.unit).join('、'):'—'):String(value??'（空）');
  function render(){
   const term=$('search').value.trim().toLocaleLowerCase('zh-Hant');
-  const shown=items.filter(x=>[x.details.productName,x.details.specification,x.details.supplierName,x.details.note,...(x.details.lineItems||[]).flatMap(line=>[line.productName,line.specification]),person(x.createdBy||x.details.requesterUid),person(x.details.orderedByUid),person(x.updatedBy)]
+  const shown=items.filter(x=>[x.details.productName,x.details.specification,x.details.supplierName,x.details.note,...orderExtraLines(x.details).flatMap(line=>[line.productName,line.specification]),person(x.createdBy||x.details.requesterUid),person(x.details.orderedByUid),person(x.updatedBy)]
    .join(' ').toLocaleLowerCase('zh-Hant').includes(term));
   const detail=$('detail');$('detailHome').append(detail);
-  $('list').innerHTML=shown.map(x=>`<button class="card" data-id="${escapeHtml(x.id)}"><span class="row"><strong>${escapeHtml(x.details.productName)}${x.details.lineItems?.length?' 等 '+(x.details.lineItems.length+1)+' 項':''}</strong><span class="pill">${escapeHtml(orderStatusLabels[x.details.status]||x.details.status)}</span></span><span class="meta">供應商 ${escapeHtml(x.details.supplierName)} · 訂貨 ${escapeHtml(x.details.quantity)} ${escapeHtml(x.details.unit)} · 包裝 ${escapeHtml(x.details.specification||'—')}</span>${(x.details.lineItems||[]).map(line=>`<span class="meta">${escapeHtml(line.productName)} · 訂貨 ${escapeHtml(line.quantity)} ${escapeHtml(line.unit)} · 包裝 ${escapeHtml(line.specification||'—')}</span>`).join('')}<span class="meta">建立人 ${escapeHtml(person(x.createdBy||x.details.requesterUid))} · 訂貨人 ${escapeHtml(person(x.details.orderedByUid))}</span><span class="meta">預計交期 ${escapeHtml(x.details.dueDate||'—')} · ${escapeHtml(stamp(x.updatedAt))}</span></button>`).join('');
+  $('list').innerHTML=shown.map(x=>`<button class="card" data-id="${escapeHtml(x.id)}"><span class="row"><strong>${escapeHtml(x.details.productName)}${orderExtraLines(x.details).length?' 等 '+(orderExtraLines(x.details).length+1)+' 項':''}</strong><span class="pill">${escapeHtml(orderStatusLabels[x.details.status]||x.details.status)}</span></span><span class="meta">供應商 ${escapeHtml(x.details.supplierName)} · 訂貨 ${escapeHtml(x.details.quantity)} ${escapeHtml(x.details.unit)} · 包裝 ${escapeHtml(x.details.specification||'—')}</span>${orderExtraLines(x.details).map(line=>`<span class="meta">${escapeHtml(line.productName)} · 訂貨 ${escapeHtml(line.quantity)} ${escapeHtml(line.unit)} · 包裝 ${escapeHtml(line.specification||'—')}</span>`).join('')}<span class="meta">建立人 ${escapeHtml(person(x.createdBy||x.details.requesterUid))} · 訂貨人 ${escapeHtml(person(x.details.orderedByUid))}</span><span class="meta">預計交期 ${escapeHtml(x.details.dueDate||'—')} · ${escapeHtml(stamp(x.updatedAt))}</span></button>`).join('');
   if(!shown.length)$('list').innerHTML=`<p class="empty">${items.length?'沒有符合的訂貨':'尚無訂貨紀錄'}</p>`;
   if(!detail.hidden&&editing){const card=[...$('list').querySelectorAll('button[data-id]')].find(x=>x.dataset.id===editing);if(card){card.setAttribute('aria-expanded','true');card.after(detail)}else clearView()}
   $('more').hidden=!hasMore;
@@ -127,7 +127,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   const item=items.find(x=>x.id===id);if(id&&!item)return;
   editing=id;const form=$('form');form.reset();$('extraLines').replaceChildren();$('addLine').hidden=false;
   for(const [key,value] of Object.entries(item?.details||{})){const field=form.elements.namedItem(key);if(field)field.value=value}
-  for(const line of item?.details.lineItems||[])addLine(line);
+  for(const line of orderExtraLines(item?.details))addLine(line);
   if(!item){form.elements.namedItem('unit').value='KG';form.elements.namedItem('arrivedQuantity').value='0'}
   $('editIdentity').textContent='建立人：'+person(item?.createdBy||item?.details.requesterUid||owner)+'　訂貨人：'+person(item?.details.orderedByUid);
   $('editTitle').textContent=item?'修改訂貨':'新增訂貨';$('detail').hidden=true;$('editor').hidden=false;
@@ -192,7 +192,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   const check=epoch,group=groupId,id=editing,previous=items.find(x=>x.id===id);
   try{
    const data=Object.fromEntries(new FormData($('form')));data.quantity=Number(data.quantity);data.arrivedQuantity=Number(data.arrivedQuantity);
-   const extra=extraData();if(extra.length||previous?.details.lineItems)data.lineItems=extra;
+   const extra=extraData();if(extra.length||previous?.details?.lineItems)data.lineItems=extra;
    data.requesterUid=previous?.details.requesterUid||previous?.createdBy||owner;data.orderedByUid=previous?.details.orderedByUid||'';
    if(data.status==='PENDING'){data.orderedByUid='';data.orderDate='';data.arrivedQuantity=0;extra.forEach(line=>line.arrivedQuantity=0)}
    else{if(!data.orderedByUid)data.orderedByUid=owner;if(!data.orderDate)data.orderDate=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'})}
