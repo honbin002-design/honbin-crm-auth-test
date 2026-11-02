@@ -13,7 +13,7 @@ const markup=`<style>
  .toolbar select{width:100%}.filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:10px 0}
  .filters button{min-width:0}.search{width:100%}.status{margin:8px 0;color:#52657b;font-size:.9rem}.list{display:grid;gap:9px;margin:9px 0}
  .card,.detail{border:1px solid #d6e1ed;border-radius:12px;background:#fff;padding:12px}.card{width:100%;text-align:left;display:grid;gap:3px}
- .card strong{font-size:1rem}.card[aria-expanded="true"]{border-radius:12px 12px 0 0;border-bottom:0}.detail.inline{border-radius:0 0 12px 12px;border-top:1px solid #e7ecf2}.meta{color:#52657b;font-size:.88rem;overflow-wrap:anywhere}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+ .card strong{font-size:1rem}.card[aria-expanded="true"]{display:none}.detail.inline{border-radius:12px}.meta{color:#52657b;font-size:.88rem;overflow-wrap:anywhere}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
  .pill{font-size:.8rem;padding:3px 8px;border-radius:20px;background:#e7eff9;white-space:nowrap}.detail h2{font-size:1.1rem;margin:0 0 8px}
  .detail p{margin:5px 0;overflow-wrap:anywhere}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
  .fields label{display:grid;gap:3px;min-width:0}.fields input,.fields select,.fields textarea{width:100%}.wide{grid-column:1/-1}
@@ -89,7 +89,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
  async function showDetail(id){
   const item=items.find(x=>x.id===id);if(!item)return;
   clearView();editing=id;const check=epoch,group=groupId,d=item.details;
-  $('detail').innerHTML=`<h2>${escapeHtml(d.productName)}</h2>${orderLines(d).map((line,index)=>`<p>品號 ${index+1}：${escapeHtml(line.productName)} · 訂貨 ${escapeHtml(line.quantity)} ${escapeHtml(line.unit)} · 包裝 ${escapeHtml(line.specification||'—')} · 已到貨 ${escapeHtml(line.arrivedQuantity)} ${escapeHtml(line.unit)}</p>`).join('')}<p>供應商：${escapeHtml(d.supplierName)} · ${escapeHtml(orderStatusLabels[d.status])}</p><p>建立人：${escapeHtml(person(item.createdBy||d.requesterUid))} · 訂貨人：${escapeHtml(person(d.orderedByUid))}</p><p>訂貨日期：${escapeHtml(d.orderDate||'—')} · 預計交期：${escapeHtml(d.dueDate||'—')}</p><p>備註：${escapeHtml(d.note||'—')}</p><div class="actions"><button id="edit" class="primary">編輯</button><button id="closeDetail">返回清單</button></div><h3>異動紀錄</h3><ol id="history" class="history"><li>讀取中……</li></ol>`;
+  $('detail').innerHTML=`<h2>${escapeHtml(d.productName)}</h2>${orderLines(d).map((line,index)=>`<p>品號 ${index+1}：${escapeHtml(line.productName)} · 訂貨 ${escapeHtml(line.quantity)} ${escapeHtml(line.unit)} · 包裝 ${escapeHtml(line.specification||'—')} · 已到貨 ${escapeHtml(line.arrivedQuantity)} ${escapeHtml(line.unit)}</p>`).join('')}<p>供應商：${escapeHtml(d.supplierName)} · ${escapeHtml(orderStatusLabels[d.status])}</p><p>建立人：${escapeHtml(person(item.createdBy||d.requesterUid))} · 訂貨人：${escapeHtml(person(d.orderedByUid))}</p><p>訂貨日期：${escapeHtml(d.orderDate||'—')} · 預計交期：${escapeHtml(d.dueDate||'—')}</p><p>備註：${escapeHtml(d.note||'—')}</p><div class="actions"><button id="edit" class="primary">編輯</button><button id="closeDetail">收合</button></div><h3>異動紀錄</h3><ol id="history" class="history"><li>讀取中……</li></ol>`;
   const card=[...$('list').querySelectorAll('button[data-id]')].find(x=>x.dataset.id===id);
   if(card){card.setAttribute('aria-expanded','true');card.after($('detail'))}
   $('detail').classList.add('inline');$('detail').hidden=false;
@@ -125,7 +125,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   arrivedQuantity:Number(form.elements.namedItem('arrivedQuantity').value)},...extraData()]}
  function openEditor(id=null){
   const item=items.find(x=>x.id===id);if(id&&!item)return;
-  editing=id;const form=$('form');form.reset();$('extraLines').replaceChildren();$('addLine').hidden=false;
+  clearView();editing=id;const form=$('form');form.reset();$('extraLines').replaceChildren();$('addLine').hidden=false;
   for(const [key,value] of Object.entries(item?.details||{})){const field=form.elements.namedItem(key);if(field)field.value=value}
   for(const line of orderExtraLines(item?.details))addLine(line);
   if(!item){form.elements.namedItem('unit').value='KG';form.elements.namedItem('arrivedQuantity').value='0'}
@@ -151,7 +151,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   filter=button.dataset.filter;root.querySelectorAll('[data-filter]').forEach(x=>{x.classList.toggle('active',x===button);x.setAttribute('aria-selected',String(x===button))});load(true);
  });
  $('list').onclick=event=>{const button=event.target.closest('button[data-id]');if(button)void showDetail(button.dataset.id)};
- $('cancel').onclick=()=>{$('editor').hidden=true;editing=null};
+ $('cancel').onclick=clearView;
  $('form').addEventListener('focusin',event=>revealField(event.target));
  $('addLine').onclick=()=>addLine();
  function updateOrderIdentity(){
@@ -217,7 +217,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   if(disposed||auth.currentUser?.uid!==owner||groupId!==targetGroup||!snap.exists())return false;
   const item={id:snap.id,...snap.data()};
   items=[item,...items.filter(x=>x.id!==item.id)];render();await showDetail(item.id);
-  $('list').querySelector('button[data-id="'+targetId+'"]')?.scrollIntoView({block:'start',behavior:'smooth'});
+  $('detail').scrollIntoView({block:'start',behavior:'smooth'});
   return true;
  }
  return {ready,openRecord,dispose(){disposed=true;++epoch;window.visualViewport?.removeEventListener('resize',onViewport);root.replaceChildren()}};
