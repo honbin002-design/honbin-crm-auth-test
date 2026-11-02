@@ -9,36 +9,9 @@ match /orders/{orderId} {
   function auditPath(auditId) {
     return /databases/$(database)/documents/groups/$(groupId)/orders/$(orderId)/history/$(auditId);
   }
-  function lineValid(line) {
-    return line is map
-      && line.keys().hasAll(['productName','specification','quantity','unit','arrivedQuantity'])
-      && line.keys().hasOnly(['productName','specification','quantity','unit','arrivedQuantity'])
-      && line.productName is string && line.productName.size()>0 && line.productName.size()<=120
-      && line.specification is string && line.specification.size()<=200
-      && line.unit is string && line.unit.size()>0 && line.unit.size()<=20
-      && line.quantity is number && line.quantity>0
-      && line.arrivedQuantity is number && line.arrivedQuantity>=0
-      && line.arrivedQuantity<=line.quantity;
-  }
   function extraLinesValid(d) {
-    return !d.keys().hasAny(['lineItems']) || (d.lineItems is list && d.lineItems.size()<=9
-      && (d.lineItems.size()<=0 || lineValid(d.lineItems[0]))
-      && (d.lineItems.size()<=1 || lineValid(d.lineItems[1]))
-      && (d.lineItems.size()<=2 || lineValid(d.lineItems[2]))
-      && (d.lineItems.size()<=3 || lineValid(d.lineItems[3]))
-      && (d.lineItems.size()<=4 || lineValid(d.lineItems[4]))
-      && (d.lineItems.size()<=5 || lineValid(d.lineItems[5]))
-      && (d.lineItems.size()<=6 || lineValid(d.lineItems[6]))
-      && (d.lineItems.size()<=7 || lineValid(d.lineItems[7]))
-      && (d.lineItems.size()<=8 || lineValid(d.lineItems[8])));
-  }
-  function noArrival(d) {
-    let lines=d.get('lineItems',[]);
-    return d.arrivedQuantity==0 && (!d.keys().hasAny(['lineItems']) || ((lines.size()<=0 || lines[0].arrivedQuantity==0) && (lines.size()<=1 || lines[1].arrivedQuantity==0) && (lines.size()<=2 || lines[2].arrivedQuantity==0) && (lines.size()<=3 || lines[3].arrivedQuantity==0) && (lines.size()<=4 || lines[4].arrivedQuantity==0) && (lines.size()<=5 || lines[5].arrivedQuantity==0) && (lines.size()<=6 || lines[6].arrivedQuantity==0) && (lines.size()<=7 || lines[7].arrivedQuantity==0) && (lines.size()<=8 || lines[8].arrivedQuantity==0)));
-  }
-  function fullyArrived(d) {
-    let lines=d.get('lineItems',[]);
-    return d.arrivedQuantity==d.quantity && (!d.keys().hasAny(['lineItems']) || ((lines.size()<=0 || lines[0].arrivedQuantity==lines[0].quantity) && (lines.size()<=1 || lines[1].arrivedQuantity==lines[1].quantity) && (lines.size()<=2 || lines[2].arrivedQuantity==lines[2].quantity) && (lines.size()<=3 || lines[3].arrivedQuantity==lines[3].quantity) && (lines.size()<=4 || lines[4].arrivedQuantity==lines[4].quantity) && (lines.size()<=5 || lines[5].arrivedQuantity==lines[5].quantity) && (lines.size()<=6 || lines[6].arrivedQuantity==lines[6].quantity) && (lines.size()<=7 || lines[7].arrivedQuantity==lines[7].quantity) && (lines.size()<=8 || lines[8].arrivedQuantity==lines[8].quantity)));
+    return !d.keys().hasAny(['lineItems']) ||
+      (d.lineItems is list && d.lineItems.size()<=9);
   }
   function fieldsValid(d) {
     return d is map
@@ -61,9 +34,9 @@ match /orders/{orderId} {
       && d.dueDate is string && d.dueDate.size()<=10
       && (d.dueDate=='' || d.dueDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
       && d.status in ['PENDING','ORDERED','PARTIAL','RECEIVED']
-      && (d.status!='RECEIVED' || fullyArrived(d))
-      && (d.status!='PARTIAL' || (!noArrival(d) && !fullyArrived(d)))
-      && (!(d.status in ['PENDING','ORDERED']) || noArrival(d))
+      && (d.status!='RECEIVED' || d.arrivedQuantity==d.quantity)
+      && (d.status!='PARTIAL' || d.keys().hasAny(['lineItems']) || (d.arrivedQuantity>0 && d.arrivedQuantity<d.quantity))
+      && (!(d.status in ['PENDING','ORDERED']) || d.arrivedQuantity==0)
       && (d.status=='PENDING' || (d.orderDate!='' && d.orderedByUid.size()>0))
       && (d.status!='PENDING' || (d.orderDate=='' && d.orderedByUid==''));
   }
