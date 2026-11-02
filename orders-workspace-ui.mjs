@@ -13,7 +13,7 @@ const markup=`<style>
  .toolbar select{width:100%}.filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:10px 0}
  .filters button{min-width:0}.search{width:100%}.status{margin:8px 0;color:#52657b;font-size:.9rem}.list{display:grid;gap:9px;margin:9px 0}
  .card,.detail{border:1px solid #d6e1ed;border-radius:12px;background:#fff;padding:12px}.card{width:100%;text-align:left;display:grid;gap:3px}
- .card strong{font-size:1rem}.meta{color:#52657b;font-size:.88rem;overflow-wrap:anywhere}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+ .card strong{font-size:1rem}.card[aria-expanded="true"]{border-radius:12px 12px 0 0;border-bottom:0}.detail.inline{border-radius:0 0 12px 12px;border-top:1px solid #e7ecf2}.meta{color:#52657b;font-size:.88rem;overflow-wrap:anywhere}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
  .pill{font-size:.8rem;padding:3px 8px;border-radius:20px;background:#e7eff9;white-space:nowrap}.detail h2{font-size:1.1rem;margin:0 0 8px}
  .detail p{margin:5px 0;overflow-wrap:anywhere}.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
  .fields label{display:grid;gap:3px;min-width:0}.fields input,.fields select,.fields textarea{width:100%}.wide{grid-column:1/-1}
@@ -26,7 +26,7 @@ const markup=`<style>
  <div class="filters" role="tablist" aria-label="訂貨狀態"><button role="tab" aria-selected="true" class="active" data-filter="all">全部</button><button role="tab" aria-selected="false" data-filter="PENDING">待訂貨</button><button role="tab" aria-selected="false" data-filter="ORDERED">已訂貨</button><button role="tab" aria-selected="false" data-filter="PARTIAL">部份到貨</button><button role="tab" aria-selected="false" data-filter="RECEIVED">已完成</button></div>
  <input id="search" class="search" aria-label="搜尋訂貨" placeholder="搜尋產品、供應商、訂貨人、備註">
  <p id="status" class="status" role="status"></p><div id="list" class="list"></div><button id="more" class="more" hidden>載入更多</button>
- <section id="detail" class="detail" hidden></section>
+ <div id="detailHome"><section id="detail" class="detail" hidden></section></div>
  <section id="editor" class="detail" hidden><h2 id="editTitle">新增訂貨</h2><p id="editIdentity" class="identity"></p><form id="form"><div class="fields">
  <label>品名<input name="productName" maxlength="120" required></label><label>規格<input name="specification" maxlength="200"></label>
  <label>數量<input name="quantity" type="number" step="any" min="0.001" required></label><label>單位<input name="unit" maxlength="20" value="KG" required></label>
@@ -58,11 +58,13 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   const term=$('search').value.trim().toLocaleLowerCase('zh-Hant');
   const shown=items.filter(x=>[x.details.productName,x.details.specification,x.details.supplierName,x.details.note,person(x.createdBy||x.details.requesterUid),person(x.details.orderedByUid),person(x.updatedBy)]
    .join(' ').toLocaleLowerCase('zh-Hant').includes(term));
-  $('list').innerHTML=shown.map(x=>`<button class="card" data-id="${escapeHtml(x.id)}"><span class="row"><strong>${escapeHtml(x.details.productName)}</strong><span class="pill">${escapeHtml(orderStatusLabels[x.details.status]||x.details.status)}</span></span><span class="meta">${escapeHtml(x.details.specification||'規格未填')} · ${escapeHtml(x.details.quantity)} ${escapeHtml(x.details.unit)} · ${escapeHtml(x.details.supplierName)}</span><span class="meta">建立人 ${escapeHtml(person(x.createdBy||x.details.requesterUid))} · 訂貨人 ${escapeHtml(person(x.details.orderedByUid))}</span><span class="meta">預計交期 ${escapeHtml(x.details.dueDate||'—')} · ${escapeHtml(stamp(x.updatedAt))}</span></button>`).join('');
+  const detail=$('detail');$('detailHome').append(detail);
+  $('list').innerHTML=shown.map(x=>`<button class="card" data-id="${escapeHtml(x.id)}"><span class="row"><strong>${escapeHtml(x.details.productName)}</strong><span class="pill">${escapeHtml(orderStatusLabels[x.details.status]||x.details.status)}</span></span><span class="meta">供應商 ${escapeHtml(x.details.supplierName)} · 訂貨 ${escapeHtml(x.details.quantity)} ${escapeHtml(x.details.unit)} · 包裝 ${escapeHtml(x.details.specification||'—')}</span><span class="meta">建立人 ${escapeHtml(person(x.createdBy||x.details.requesterUid))} · 訂貨人 ${escapeHtml(person(x.details.orderedByUid))}</span><span class="meta">預計交期 ${escapeHtml(x.details.dueDate||'—')} · ${escapeHtml(stamp(x.updatedAt))}</span></button>`).join('');
   if(!shown.length)$('list').innerHTML=`<p class="empty">${items.length?'沒有符合的訂貨':'尚無訂貨紀錄'}</p>`;
+  if(!detail.hidden&&editing){const card=[...$('list').querySelectorAll('button[data-id]')].find(x=>x.dataset.id===editing);if(card){card.setAttribute('aria-expanded','true');card.after(detail)}else clearView()}
   $('more').hidden=!hasMore;
  }
- function clearView(){editing=null;$('detail').hidden=true;$('editor').hidden=true}
+ function clearView(){root.querySelectorAll('button[data-id][aria-expanded="true"]').forEach(x=>x.setAttribute('aria-expanded','false'));const detail=$('detail');detail.hidden=true;detail.classList.remove('inline');$('detailHome').append(detail);editing=null;$('editor').hidden=true}
  async function load(reset=false){
   if(!groupId||disposed)return;
   if(loading&&!reset)return;
@@ -87,7 +89,9 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   const item=items.find(x=>x.id===id);if(!item)return;
   clearView();editing=id;const check=epoch,group=groupId,d=item.details;
   $('detail').innerHTML=`<h2>${escapeHtml(d.productName)}</h2><p>${escapeHtml(d.specification||'—')} · ${escapeHtml(d.quantity)} ${escapeHtml(d.unit)}</p><p>供應商：${escapeHtml(d.supplierName)} · ${escapeHtml(orderStatusLabels[d.status])}</p><p>建立人：${escapeHtml(person(item.createdBy||d.requesterUid))} · 訂貨人：${escapeHtml(person(d.orderedByUid))}</p><p>訂貨日期：${escapeHtml(d.orderDate||'—')} · 預計交期：${escapeHtml(d.dueDate||'—')}</p><p>已到貨：${escapeHtml(d.arrivedQuantity)} ${escapeHtml(d.unit)}</p><p>備註：${escapeHtml(d.note||'—')}</p><div class="actions"><button id="edit" class="primary">編輯</button><button id="closeDetail">返回清單</button></div><h3>異動紀錄</h3><ol id="history" class="history"><li>讀取中……</li></ol>`;
-  $('detail').hidden=false;$('detail').scrollIntoView({block:'start',behavior:'smooth'});
+  const card=[...$('list').querySelectorAll('button[data-id]')].find(x=>x.dataset.id===id);
+  if(card){card.setAttribute('aria-expanded','true');card.after($('detail'))}
+  $('detail').classList.add('inline');$('detail').hidden=false;
   $('edit').onclick=()=>openEditor(id);$('closeDetail').onclick=clearView;
   try{
    const history=await svc.listHistory(group,id);if(!live(check)||editing!==id||group!==groupId)return;
@@ -186,6 +190,7 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   if(disposed||auth.currentUser?.uid!==owner||groupId!==targetGroup||!snap.exists())return false;
   const item={id:snap.id,...snap.data()};
   items=[item,...items.filter(x=>x.id!==item.id)];render();await showDetail(item.id);
+  $('list').querySelector('button[data-id="'+targetId+'"]')?.scrollIntoView({block:'start',behavior:'smooth'});
   return true;
  }
  return {ready,openRecord,dispose(){disposed=true;++epoch;window.visualViewport?.removeEventListener('resize',onViewport);root.replaceChildren()}};
