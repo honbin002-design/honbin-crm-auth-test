@@ -1,0 +1,100 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>CRM 集中上傳驗證</title><style>body{font:17px/1.6 system-ui;max-width:700px;margin:auto;padding:20px;background:#f5f7fb;color:#20334d}button{font:inherit;padding:12px;margin:8px;border:0;border-radius:9px;background:#205a9a;color:white}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:16px;border-radius:12px}a{color:#205a9a}img{max-width:100%}</style><h1>CRM 集中上傳驗證</h1><p>僅公司最高權限帳號可執行合成附件測試。沒有正式記事寫入、沒有通知。</p><p id="identity">尚未登入</p><button id="login">登入公司帳號</button><button id="run" disabled>驗證上傳與讀回</button><pre id="status">準備中</pre><div id="preview"></div><script type="module">
+import {firebaseConfig} from './notes-preview-config.mjs';
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js';
+import {getAuth,onAuthStateChanged,GoogleAuthProvider,signInWithPopup,setPersistence,browserLocalPersistence} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js';
+import {getFirestore} from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+import * as fs from 'https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js';
+import {groupService} from './firebase-group-service.mjs?v=20261022-server-verified-invite-v3';
+// Central Drive gateway transport. Firebase ID token stays in POST body only.
+const ATTACHMENT_PREFIX='📎 CRM附件 ';
+const MAX_ATTACHMENT_BYTES=20*1024*1024;
+const MAX_ATTACHMENTS=10;
+function attachmentLine(line){
+ if(!String(line).startsWith(ATTACHMENT_PREFIX))return null;
+ try{
+  const x=JSON.parse(line.slice(ATTACHMENT_PREFIX.length));
+  if(!x||!/^[A-Za-z0-9_-]{15,150}$/.test(x.id)||typeof x.name!=='string'||x.name.length>180||typeof x.mime!=='string'||!/^[a-z0-9.+_-]+\/[a-z0-9.+_-]+$/i.test(x.mime)||!Number.isSafeInteger(x.size)||x.size<1||x.size>MAX_ATTACHMENT_BYTES)return null;
+  return {id:x.id,name:x.name,mime:x.mime,size:x.size};
+ }catch{return null}
+}
+function appendAttachment(content,file){
+ const encoded=ATTACHMENT_PREFIX+JSON.stringify(file),parsed=attachmentLine(encoded);
+ if(!parsed)throw Error('INVALID_ATTACHMENT');
+ const text=String(content||''),existing=text.split('\n').map(attachmentLine).filter(Boolean);
+ if(existing.some(x=>x.id===file.id))return text;
+ if(existing.length>=MAX_ATTACHMENTS)throw Error('每筆記事最多 10 個上傳附件');
+ const next=text+(text?'\n':'')+encoded;if(next.length>30000)throw Error('記事內容已達長度上限');return next;
+}
+function attachmentError(error){
+ const code=String(error?.message||'');
+ return ({LOGIN_REQUIRED:'登入已失效，請重新登入後重試。',ACCOUNT_NOT_APPROVED:'此帳號尚未核准或已停用，無法上傳。',GROUP_ACCESS_DENIED:'你已無法存取這本共用記事簿。',FILE_ACCESS_DENIED:'你沒有這個附件的查看權限。',UPLOAD_RESULT_UNCERTAIN:'上傳結果尚未確認，為避免重複已停止重傳。請保留畫面並通知管理員核對。',UPLOAD_RATE_LIMIT:'目前上傳較頻繁，請五分鐘後再試。',GATEWAY_NOT_CONFIGURED:'集中上傳服務尚未完成設定。',GATEWAY_FAILED:'集中上傳服務未能完成，請保留目前頁面並通知管理員。'})[code]||code||'上傳未確認，請保留目前頁面重試。';
+}
+function centralDriveClient({endpoint,currentUser,fetchImpl=globalThis.fetch}){
+ const slots=new WeakMap();
+ async function request(payload,expectedUid){
+  const user=currentUser();if(!user||user.uid!==expectedUid)throw Error('ACCOUNT_CHANGED');
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(endpoint||''))throw Error('GATEWAY_NOT_CONFIGURED');
+  const idToken=await user.getIdToken();if(currentUser()?.uid!==expectedUid)throw Error('ACCOUNT_CHANGED');
+  const response=await fetchImpl(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},credentials:'omit',redirect:'follow',referrerPolicy:'no-referrer',body:JSON.stringify({...payload,idToken}),signal:AbortSignal.timeout(120000)});
+  if(currentUser()?.uid!==expectedUid)throw Error('ACCOUNT_CHANGED');
+  if(!response.ok)throw Error('集中上傳服務回應失敗（'+response.status+'）');
+  let data;try{data=await response.json()}catch{throw Error('集中上傳服務回應格式錯誤，請通知管理員。')}
+  if(!data.ok)throw Error(data.code||'GATEWAY_FAILED');return data;
+ }
+ async function upload(file,scope,assertContext=()=>{}){
+  if(!file||!Number.isSafeInteger(file.size)||file.size<1||file.size>MAX_ATTACHMENT_BYTES)throw Error('每個檔案需介於 1 byte 與 20 MB');
+  const user=currentUser();if(!user)throw Error('LOGIN_REQUIRED');
+  const uid=user.uid,key=JSON.stringify(scope);let slot=slots.get(file);
+  if(slot&&(slot.uid!==uid||slot.scope!==key))throw Error('UPLOAD_CONTEXT_CHANGED');
+  if(!slot){slot={uid,scope:key,id:Date.now()+'_'+crypto.randomUUID().replaceAll('-',''),result:null};slots.set(file,slot)}
+  assertContext();if(slot.result)return slot.result;
+  const buffer=await file.arrayBuffer();assertContext();
+  const hash=await crypto.subtle.digest('SHA-256',buffer);assertContext();
+  const sha256=Array.from(new Uint8Array(hash),n=>n.toString(16).padStart(2,'0')).join('');
+  // Chunk conversion avoids spreading a large photo onto the JS call stack.
+  const bytes=new Uint8Array(buffer);let binary='';
+  for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+  const result=await request({action:'upload',...scope,requestId:slot.id,name:file.name.slice(0,180),mime:file.type||'application/octet-stream',size:file.size,sha256,data:btoa(binary)},uid);assertContext();
+  if(!attachmentLine(ATTACHMENT_PREFIX+JSON.stringify(result.result)))throw Error('INVALID_ATTACHMENT');
+  slot.result=result.result;return slot.result;
+ }
+ async function read(file,scope){
+  const user=currentUser();if(!user)throw Error('LOGIN_REQUIRED');
+  const response=await request({action:'read',...scope,fileId:file.id},user.uid),result=response.result;
+  if(result?.id!==file.id||result.size!==file.size||result.mime!==file.mime||typeof result.data!=='string')throw Error('附件讀回核對失敗');
+  const binary=atob(result.data),bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+  if(bytes.length!==file.size)throw Error('附件大小核對失敗');return new Blob([bytes],{type:file.mime});
+ }
+ return Object.freeze({upload,read,check:scope=>request({action:'check',...scope},currentUser()?.uid)});
+}
+
+const endpoint='https://script.google.com/macros/s/AKfycbwqB5sBv8XRHgPO77996ZkWKjJHavUKKiV9uR0sDdctAFcEYAyO798K3EwfmnFLmQGVqQ/exec';
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+await setPersistence(auth,browserLocalPersistence);
+const $=id=>document.getElementById(id),out=$('status');let replayBody='',running=false;
+const say=text=>{out.textContent+='\n'+text};
+const client=centralDriveClient({endpoint,currentUser:()=>auth.currentUser,fetchImpl:async(url,options)=>{const parsed=JSON.parse(options.body);if(parsed.action==='upload')replayBody=options.body;return fetch(url,options)}});
+$('login').onclick=()=>signInWithPopup(auth,new GoogleAuthProvider()).catch(e=>say(e.code||'LOGIN_FAILED'));
+onAuthStateChanged(auth,u=>{$('identity').textContent=u?'Google：'+u.email:'尚未登入';$('login').disabled=!!u;$('run').disabled=!u||u.email!=='honbin002@gmail.com'||!u.emailVerified});
+async function plainPost(body){const r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},credentials:'omit',body:JSON.stringify(body)});return r.json()}
+try{const denied=await plainPost({action:'read',mode:'PRIVATE',fileId:'synthetic_missing_12345'});out.textContent=denied.ok===false&&denied.code==='LOGIN_REQUIRED'?'ANONYMOUS_DENIED_PASS':'ANONYMOUS_DENIAL_FAILED'}catch(e){out.textContent='TRANSPORT_FAILED：'+e.message}
+$('run').onclick=async()=>{
+ if(running)return;running=true;$('run').disabled=true;const u=auth.currentUser,uid=u?.uid;
+ const verify=()=>{if(auth.currentUser?.uid!==uid)throw Error('ACCOUNT_CHANGED')};
+ try{
+  if(!u||u.email!=='honbin002@gmail.com'||!u.emailVerified)throw Error('OWNER_REQUIRED');
+  await client.check({mode:'PRIVATE'});say('AUTH_AND_CRM_FOLDER_PASS');
+  const file=new File(['HONBIN CRM synthetic upload verification. No business data.'],'CRM_VERIFY_SYNTHETIC.txt',{type:'text/plain'});
+  const ref=await client.upload(file,{mode:'PRIVATE'},verify);say('UPLOAD_TEXT_PASS '+ref.id);
+  const blob=await client.read(ref,{mode:'PRIVATE'});if(await blob.text()!==await file.text())throw Error('READBACK_MISMATCH');say('READBACK_TEXT_PASS');
+  const payload=JSON.parse(replayBody),repeated=await plainPost(payload);verify();if(!repeated.ok||repeated.result.id!==ref.id)throw Error('RETRY_MISMATCH');say('SERVER_IDEMPOTENT_RETRY_PASS');
+  const bytes=Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6ioAAAAASUVORK5CYII='),c=>c.charCodeAt(0));
+  const image=new File([bytes],'CRM_VERIFY_SYNTHETIC.png',{type:'image/png'}),imgRef=await client.upload(image,{mode:'PRIVATE'},verify);
+  const imgBlob=await client.read(imgRef,{mode:'PRIVATE'});if(imgBlob.size!==image.size)throw Error('IMAGE_READBACK_MISMATCH');const img=document.createElement('img');img.alt='CRM 合成測試圖';img.src=URL.createObjectURL(imgBlob);$('preview').append(img);say('UPLOAD_IMAGE_AND_READBACK_PASS '+imgRef.id);
+  const groups=groupService({db,sdk:fs,identity:u});const list=await groups.listGroups();verify();
+  const denied=await plainPost({action:'read',mode:'SHARED',groupId:list[0]?.id||'synthetic_nonexistent_group',fileId:ref.id,idToken:await u.getIdToken()});verify();
+  if(denied.ok||!['FILE_ACCESS_DENIED','GROUP_ACCESS_DENIED'].includes(denied.code))throw Error('CROSS_SCOPE_DENIAL_FAILED');say('CROSS_SCOPE_DENIED_PASS '+denied.code);
+  say('LIVE_CENTRAL_DRIVE_VERIFICATION_PASS');
+ }catch(e){say('HOLD：'+attachmentError(e))}finally{replayBody='';running=false;$('run').disabled=false}
+};
+</script></html>
