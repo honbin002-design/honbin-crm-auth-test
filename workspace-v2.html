@@ -104,6 +104,7 @@ html.embedded{height:auto!important;min-height:0!important;overflow-y:hidden!imp
 #cloudRecordView[data-mode="view"] [data-task-edit]{display:none!important}
 #cloudRecordBody{white-space:normal;overflow-wrap:anywhere}
 #cloudRecordBody .note-content{white-space:pre-wrap;font-size:1.05rem;line-height:1.7}
+.drive-photo{max-width:720px;margin:12px 0;padding:10px;border:1px solid #d7e3ef;border-radius:12px;background:#f8fbff}.drive-photo img{display:block;width:100%;max-height:460px;object-fit:contain;border-radius:8px}.drive-photo a{display:inline-block;margin-top:8px;overflow-wrap:anywhere}.drive-photo small{display:block;color:#52647b}.drive-photo-input{margin:12px 0;padding:12px;border:1px solid #d7e3ef;border-radius:10px}.drive-photo-input input{width:100%;box-sizing:border-box}.drive-photo-input button{margin-top:8px}
 #cloudRecordBody .task-detail-panel{border:0;margin:0;padding:0}
 #cloudRecordView .record-actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
 [hidden]{display:none!important}
@@ -176,6 +177,7 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
   <div class="panel" id="noteEditor" hidden><h2 id="noteHeading">新增記事</h2>
    <label for="noteTitle">標題</label><input id="noteTitle" maxlength="120">
    <label for="noteContent">內容</label><textarea id="noteContent" maxlength="30000"></textarea>
+   <div id="notePhotoPanel" class="drive-photo-input" hidden><label for="notePhotoUrl">Google Drive 照片連結</label><input id="notePhotoUrl" type="url" inputmode="url" placeholder="貼上照片的 Google Drive 分享連結" autocomplete="off"><button type="button" id="addNotePhoto" class="alt">＋ 加入照片連結</button><p class="hint">先用 Google Drive 上傳照片，僅分享給需要查看的記事簿成員；不要設定「知道連結的任何人」。記事只保存連結，照片仍由 Drive 管理。</p></div>
    <div class="row" style="margin-top:12px"><button id="saveNote">儲存</button><button id="closeNote" class="alt">返回</button></div>
    <p id="noteTiming" class="hint">輸入時先保存到本機，按「儲存」才上傳。</p>
   </div>
@@ -276,6 +278,7 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
 <script type="module">
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
 import {noteService} from './firebase-note-service.mjs?v=20261029-immutable-events-v1';
+import {addDrivePhoto,photoLine,plainNoteText} from './firebase-drive-photo-links.mjs?v=20261103-v1';
 import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261022-server-verified-invite-v3';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
@@ -421,9 +424,22 @@ function showCloudRecord({kind,item,body,canEdit,onEdit}){
  body.hidden=false;$('cloudRecordBody').replaceChildren(body);$('cloudRecordView').hidden=false;
  scrollCloudRecord();
 }
+function renderNoteBody(body,content){
+ let paragraph=[];const flush=()=>{if(!paragraph.length)return;const p=mk('p',paragraph.join('\n'));p.className='note-content';body.append(p);paragraph=[]};
+ for(const line of String(content||'').split('\n')){
+  const photo=photoLine(line);
+  if(!photo){paragraph.push(line);continue}
+  flush();const figure=mk('figure');figure.className='drive-photo';
+  const image=document.createElement('img');image.src=photo.thumbnail;image.alt='Google Drive 照片';image.loading='lazy';image.referrerPolicy='no-referrer';
+  const help=mk('small','若預覽無法顯示，請在 Google Drive 開啟並確認檔案分享權限。');
+  image.onerror=()=>{image.hidden=true;help.textContent='此裝置無法預覽，請在 Google Drive 開啟照片。'};
+  const link=mk('a','在 Google Drive 開啟原檔');link.href=photo.url;link.target='_blank';link.rel='noopener noreferrer';
+  figure.append(image,help,link);body.append(figure);
+ }
+ flush();
+}
 function openNoteView(item){
- const body=mk('div'),content=mk('p',item.content||'');content.className='note-content';
- body.append(content);
+ const body=mk('div');renderNoteBody(body,item.content||'');
  for(const [label,value] of [['建立時間',item.createdAt],['更新時間',item.updatedAt]]){
   if(value?.toDate)body.append(mk('small',label+'：'+value.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
  }
@@ -466,6 +482,7 @@ function openEditor(item=null){
  closeCloudRecord();noteEditOrigin=item;$('notesPanel').hidden=false;$('notesPanel').classList.add('note-editing');
  current=item?{id:item.id,version:item.version}:null;pendingId=null;
  $('noteTitle').value=item?.title||'';$('noteContent').value=item?.content||'';
+ $('notePhotoPanel').hidden=$('mode').value!=='SHARED';$('notePhotoUrl').value='';
  $('noteHeading').textContent=item?'編輯記事':'新增記事';
  $('noteEditor').hidden=false;
  // The standalone page can scroll itself, but inside the CRM iframe only the
@@ -506,7 +523,8 @@ function renderNotes(){
    const author=sharedNickCache.get(item.ownerUid);
    line.append(mk('small','建立者：'+(author||'未設定暱稱')));
   }
-  const body=mk('p',item.content.slice(0,60)+(item.content.length>60?'…':''));body.className='note-content';line.append(body);
+  const preview=plainNoteText(item.content);const count=String(item.content||'').split('\n').filter(photoLine).length;
+  const body=mk('p',(preview.slice(0,60)+(preview.length>60?'…':''))+(count?' 📷 '+count+' 張照片':''));body.className='note-content';line.append(body);
   const btn=mk('button','查看');btn.className='alt';btn.type='button';btn.onclick=()=>openNoteView(item);line.append(btn);
   if($('mode').value==='PRIVATE'||selected?.role==='ADMIN'){
    const del=mk('button','刪除記事');del.className='alt';
@@ -1395,6 +1413,7 @@ $('resumeNoteDraft').onclick=resumeNoteDraft;
 $('cloudRecordEdit').onclick=editCloudRecord;
 $('cloudRecordBack').onclick=backCloudRecord;
 $('noteTitle').oninput=saveDraft;$('noteContent').oninput=saveDraft;
+$('addNotePhoto').onclick=()=>{try{if($('mode').value!=='SHARED'||!mayWrite())throw Error('只有共用記事的編輯者可加入照片');$('noteContent').value=addDrivePhoto($('noteContent').value,$('notePhotoUrl').value);$('notePhotoUrl').value='';saveDraft();$('noteTiming').textContent='已加入照片連結；按「儲存」後共用成員才會看到。';}catch(error){say(String(error?.message||error))}};
 $('closeNote').onclick=()=>{const origin=noteEditOrigin;clearEditor();if(origin)openNoteView(origin);void restoreDraft().catch(()=>{});};
 $('saveNote').onclick=()=>run(async()=>{
  if(!mayWrite())throw Error('READ_ONLY');const s=session(),sc=scope(),title=$('noteTitle').value,content=$('noteContent').value;
