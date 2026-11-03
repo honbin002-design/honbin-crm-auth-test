@@ -4,7 +4,7 @@
 
 - CRM 資料夾：1hC6sjOpvyO-vHb8QYi5JlEj0o-FP_m5k。公司帳號已建立；未公開、未授予整個資料夾給同事。
 - Apps Script 專案：1b_X9wDwLa0ZhNqHLaY2g3C3FX-ydTkUQBxRTBAVx9FigtIjQOIgCTxcs，名稱 HONBIN_CRM_Drive_Upload；已儲存來源，尚未授權或部署。
-- 目前 Google 授權頁顯示「這個應用程式未經 Google 驗證」。需使用者對新 Drive 權限與獨立入口授權作明確決定；尚未繼續未驗證流程、未按允許。
+- 使用者於本輪已明確同意新 Drive 權限與獨立入口部署。公司 Google 帳號已透過安全登入表單重新登入成功。Google 授權頁顯示「這個應用程式未經 Google 驗證」；已展開進階，按「前往 HONBIN_CRM_Drive_Upload（不安全）」遭自動核准審查拒絕，要求使用者親自操作（handoff），不得以重試或 API 規避。尚未授予 OAuth 權限、尚未部署；使用者不需要再次同意相同權限。
 - appsscript.json 是期望部署設定；須在專案 manifest 核對／套用，避免自動推導多餘權限。
 - CRM_DRIVE_ENDPOINT 仍空白。不可合併上線，直到服務授權、部署、真實上傳／讀取與拒絕驗收通過。
 
@@ -26,10 +26,11 @@
 
 ## 接續順序
 
-1. 使用者確認新權限與 gateway 設計後，於現有自建程式 Google 授權頁核對 scopes；只授權公司帳號，不授權其他專案、不開收費。
+1. 使用者已確認新權限與 gateway 設計。先完成目前 Google 未驗證應用程式警告的必要人工操作，再核對 scopes；只授權公司帳號，不授權其他專案、不開收費。
 2. 核對／套用 manifest；部署執行身分為公司 owner，網頁入口可接收請求，所有讀寫仍由 Firebase token+Rules 核准。公開入口不等於公開檔案。
 3. 取得實際 /exec URL 填入 crm-drive-config.mjs。真實測試 fetch ContentService redirect／iPhone 跨來源存取；未通過則改受限 postMessage iframe transport，禁止 no-cors 假成功。
 4. 實際合成檔案上傳、CRM 顯示、下載、私人／群組拒絕測試，不發送測試通知給同事。保留已授權測試資料隔離。
 5. CI、服務與瀏覽器核對後才合併部署；最後 iPhone 真實選檔驗收。
 
 前一回合本機 commit 5694f85 是已被 PR17 取代的貼連結方案，不應再推送至 main。正式 main 基準為 0482ba3（PR17）。本候選改為真正集中上傳，尚未上線。
+
