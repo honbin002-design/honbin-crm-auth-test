@@ -2,6 +2,7 @@
 // No Firebase SDK, network, credentials or production writes.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {photoLine,addDrivePhoto} from './firebase-drive-photo-links.mjs';
 import {readFileSync} from 'node:fs';
 const html=readFileSync('workspace-v2.html','utf8');
 const fragment=(start,end)=>{const a=html.indexOf(start),b=html.indexOf(end,a);assert(a>=0&&b>a);return html.slice(a,b)};
@@ -17,7 +18,7 @@ const nodes=new Map(),$=id=>{if(!nodes.has(id)){const e=new Element();e.root=tru
 const window={};window.parent=window;
 let writable=true,draft=null;
 const messages=[];
-const sandbox={$,window,document:{documentElement:{classList:{contains:()=>false}}},location:{origin:'https://synthetic.test'},
+const sandbox={$,window,photoLine,document:{createElement:tag=>new Element(tag),documentElement:{classList:{contains:()=>false}}},location:{origin:'https://synthetic.test'},
  requestAnimationFrame:f=>f(),mk:(tag,text='')=>Object.assign(new Element(tag),{textContent:text}),
  mayWrite:()=>writable,say:m=>messages.push(m),context:()=>({uid:'synthetic'}),session:()=>({uid:'synthetic'}),check:()=>{},drafts:{read:async()=>draft},items:[],current:null,pendingId:null};
 const ctx=vm.createContext(sandbox);
@@ -31,6 +32,10 @@ assert.equal($('cloudRecordView').dataset.mode,'view');
 assert.equal($('noteEditor').hidden,true,'title opens read-only view');
 assert.equal($('cloudRecordBody').querySelectorAll('input,textarea,select').length,0);
 assert.equal(ctx.current,null,'view does not establish edit version');
+ctx.photoNote={...ctx.note,content:addDrivePhoto('現場紀錄','https://drive.google.com/file/d/A12345678901234567890123456789012/view')};
+run('openNoteView(photoNote)');
+assert.equal($('cloudRecordBody').querySelectorAll('figure').length,1,'shared photo renders in read-only note');
+run('openNoteView(note)');
 run('editCloudRecord()');
 assert.equal($('noteEditor').hidden,false,'explicit edit opens editor');
 assert.equal(ctx.current.id,'note-1');assert.equal(ctx.current.version,7,'optimistic version retained');
