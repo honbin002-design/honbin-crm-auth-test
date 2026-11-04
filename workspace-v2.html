@@ -439,6 +439,33 @@ function rememberImage(key,blob){
   const oldest=previewFiles.keys().next().value;bytes-=previewFiles.get(oldest).size;previewFiles.delete(oldest);
  }
 }
+const pendingImages=new Map();
+const thumbnailStore='crm-photo-previews-v1';
+function thumbKey(sc,f){return new URL('./_local_preview_/'+encodeURIComponent(JSON.stringify([uid,sc.mode,sc.groupId||'',f.id,f.size])),location.href).href}
+async function localThumb(key){try{return await (await caches.open(thumbnailStore)).match(key)}catch{return null}}
+async function keepThumb(blob,key,ss){
+ if(!/^image\/(jpeg|png|webp)$/.test(blob.type)||await localThumb(key))return;
+ const img=new Image(),url=URL.createObjectURL(blob);
+ try{
+  img.src=url;await img.decode();check(ss);
+  const ratio=Math.min(1,640/Math.max(img.width,img.height)),canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(img.width*ratio));canvas.height=Math.max(1,Math.round(img.height*ratio));
+  canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+  const thumb=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.65));check(ss);
+  if(!thumb||thumb.size>120000)return;
+  const cache=await caches.open(thumbnailStore),keys=await cache.keys();
+  while(keys.length>=12)await cache.delete(keys.shift());
+  check(ss);await cache.put(key,new Response(thumb));
+ }catch{}finally{URL.revokeObjectURL(url)}
+}
+function readPreview(file,sc,ss){
+ const key=previewKey(sc,file);
+ if(pendingImages.has(key))return pendingImages.get(key);
+ const task=getCentralDrive().read(file,sc).then(blob=>{
+  check(ss);rememberImage(key,blob);void keepThumb(blob,thumbKey(sc,file),ss);return blob;
+ }).finally(()=>pendingImages.delete(key));
+ pendingImages.set(key,task);return task;
+}
 function renderCentralAttachment(body,file,noteId,uploadedFile){
  const figure=mk('figure');figure.className='drive-photo';
  const label=mk('strong',file.name),status=mk('small',Math.ceil(file.size/1024)+' KB · 存放於 CRM 資料夾');
@@ -451,16 +478,17 @@ function renderCentralAttachment(body,file,noteId,uploadedFile){
    check(ss);
    const key=previewKey(targetScope,file);
    let blob=uploadedFile||(preview&&noteId&&previewFiles.get(key));
-   if(blob&&!uploadedFile){
+   const thumbnail=preview&&noteId&&!blob&&await localThumb(thumbKey(targetScope,file));check(ss);
+   if((blob||thumbnail)&&!uploadedFile){
     const path=targetScope.mode==='PRIVATE'?['users',ss.uid]:['groups',targetScope.groupId];
     const note=await sdk.getDocFromServer(sdk.doc(db,...path,'notes',noteId));check(ss);
     const data=note.data();
     if(!data||data.deleted||!(data.content||'').split('\n').some(line=>attachmentLine(line)?.id===file.id))throw Error('FILE_ACCESS_DENIED');
    }
-   if(!blob){blob=await getCentralDrive().read(file,targetScope);check(ss)}
-   if(preview)rememberImage(key,blob);
+   if(!blob&&!thumbnail){blob=preview?await readPreview(file,targetScope,ss):await getCentralDrive().read(file,targetScope);check(ss)}
+   if(preview&&blob)rememberImage(key,blob);
    if(!figure.isConnected)return;
-   const url=URL.createObjectURL(blob);
+   const url=URL.createObjectURL(blob||await thumbnail.blob());check(ss);
    if(preview){
     const image=document.createElement('img');image.alt=file.name;image.onload=()=>URL.revokeObjectURL(url);image.onerror=()=>{URL.revokeObjectURL(url);status.textContent='此格式無法預覽，請下載查看。'};image.src=url;figure.prepend(image);
     button.textContent='下載原檔';status.textContent='已載入 · 存放於 CRM 資料夾';
@@ -567,6 +595,10 @@ async function loadNotes({reset=true}={}){
   check(s);
  }
  items=all;renderNotes();
+ // Warm only the leading photo, sharing the same request with a tap.
+ const photo=all[0]?.content?.split('\n').map(attachmentLine).find(f=>f&&/^image\/(jpeg|png|webp)$/.test(f.mime));
+ if(photo&&photo.size<=5*1024*1024&&!navigator.connection?.saveData&&!previewFiles.has(previewKey(sc,photo)))
+  void localThumb(thumbKey(sc,photo)).then(hit=>{check(s);if(!hit)return readPreview(photo,sc,s)}).catch(()=>{});
 }
 function renderNotes(){
  const term=$('search').value.trim().toLowerCase(),root=$('notesList');root.replaceChildren();
@@ -1490,7 +1522,7 @@ async function uploadSelectedAttachments(){
    const result=await getCentralDrive().upload(file,sc,verify);verify();
    $('noteContent').value=appendAttachment($('noteContent').value,result);completedAttachmentFiles.set(file,result);
    await drafts.save(context(),draftSnap());verify();
-   rememberImage(previewKey(sc,result),file);
+   rememberImage(previewKey(sc,result),file);void keepThumb(file,thumbKey(sc,result),checkpoint);
    renderCentralAttachment($('noteAttachmentResults'),result,null,file);
   }
   $('noteAttachmentFiles').value='';status.textContent='已上傳至 CRM 資料夾並保存在本機草稿。請按「儲存」完成記事。';
@@ -1704,6 +1736,7 @@ async function start(){
  authSdk.onAuthStateChanged(auth,async user=>{
   if(cloudNotifier){cloudNotifier.stop();cloudNotifier=null}
   clearOrders();membershipProof=null;
+  if(uid&&uid!==user?.uid&&globalThis.caches)void caches.delete(thumbnailStore).catch(()=>{});
   const generation=++epoch;previewFiles.clear();uid='';authenticated=false;extensions=null;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
   inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
