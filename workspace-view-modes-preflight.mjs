@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {photoLine,addDrivePhoto} from './firebase-drive-photo-links.mjs';
+import {attachmentLine} from './crm-drive-client.mjs';
 import {readFileSync} from 'node:fs';
 const html=readFileSync('workspace-v2.html','utf8');
 const fragment=(start,end)=>{const a=html.indexOf(start),b=html.indexOf(end,a);assert(a>=0&&b>a);return html.slice(a,b)};
@@ -18,7 +19,7 @@ const nodes=new Map(),$=id=>{if(!nodes.has(id)){const e=new Element();e.root=tru
 const window={};window.parent=window;
 let writable=true,draft=null;
 const messages=[];
-const sandbox={$,window,photoLine,document:{createElement:tag=>new Element(tag),documentElement:{classList:{contains:()=>false}}},location:{origin:'https://synthetic.test'},
+const sandbox={$,window,photoLine,attachmentLine,scope:()=>({mode:'PRIVATE'}),document:{createElement:tag=>new Element(tag),documentElement:{classList:{contains:()=>false}}},location:{origin:'https://synthetic.test'},
  requestAnimationFrame:f=>f(),mk:(tag,text='')=>Object.assign(new Element(tag),{textContent:text}),
  mayWrite:()=>writable,say:m=>messages.push(m),context:()=>({uid:'synthetic'}),session:()=>({uid:'synthetic'}),check:()=>{},drafts:{read:async()=>draft},items:[],current:null,pendingId:null};
 const ctx=vm.createContext(sandbox);

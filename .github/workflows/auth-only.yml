@@ -56,6 +56,8 @@ jobs:
         run: node firebase-offline-drafts-coalescing-preflight.mjs
       - name: Verify simplified TEST workspace and task security gates
         run: node workspace-v2-preflight.mjs
+      - name: Verify central Drive gateway authorization and upload recovery
+        run: node crm-drive-gateway-preflight.mjs
       - name: Verify note and task view/edit separation without writes
         run: node workspace-view-modes-preflight.mjs
       - name: Verify task submit closes the editor, prevents double taps and uses same ID on retry
