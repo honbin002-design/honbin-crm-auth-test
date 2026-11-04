@@ -179,7 +179,7 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
    <label for="noteContent">內容</label><textarea id="noteContent" maxlength="30000"></textarea>
    <div id="noteAttachmentPanel" class="drive-photo-input"><label for="noteAttachmentFiles">從手機上傳照片／檔案</label><input id="noteAttachmentFiles" type="file" multiple><button id="uploadNoteAttachments" type="button">上傳選取檔案／重試</button><p id="noteAttachmentStatus" class="hint" role="status" aria-live="polite"></p><p class="hint">選取後自動上傳，照片與檔案集中保存在公司 Drive 的「CRM」資料夾；每個檔案最多 20 MB。私人內容僅本人可在 CRM 查看，共用內容依記事簿權限查看。</p><div id="noteAttachmentResults"></div></div><details><summary>已有 Google Drive 照片連結</summary><div id="notePhotoPanel" class="drive-photo-input" hidden><label for="notePhotoUrl">Google Drive 照片連結</label><input id="notePhotoUrl" type="url" inputmode="url" placeholder="貼上照片的 Google Drive 分享連結" autocomplete="off"><button type="button" id="addNotePhoto" class="alt">＋ 加入照片連結</button><p class="hint">先用 Google Drive 上傳照片，僅分享給需要查看的記事簿成員；不要設定「知道連結的任何人」。記事只保存連結，照片仍由 Drive 管理。</p></div></details>
    <div class="row" style="margin-top:12px"><button id="saveNote">儲存</button><button id="closeNote" class="alt">返回</button></div>
-   <p id="noteTiming" class="hint">輸入時先保存到本機，按「儲存」才上傳。</p>
+   <p id="noteTiming" class="hint">記事文字先保存在本機；附件選取後上傳 Drive，按「儲存」完成雲端記事。</p>
   </div>
  </section>
  <section id="tasksPanel" hidden>
