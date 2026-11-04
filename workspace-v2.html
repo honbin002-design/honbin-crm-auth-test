@@ -429,7 +429,17 @@ function showCloudRecord({kind,item,body,canEdit,onEdit}){
 let centralDrive=null,attachmentUploadBusy=false;
 const completedAttachmentFiles=new WeakMap();
 function getCentralDrive(){return centralDrive||(centralDrive=centralDriveClient({endpoint:CRM_DRIVE_ENDPOINT,currentUser:()=>auth?.currentUser}))}
-function renderCentralAttachment(body,file){
+const previewFiles=new Map();
+function previewKey(sc,file){return JSON.stringify([uid,epoch,sc.mode,sc.groupId||'',file.id])}
+function rememberImage(key,blob){
+ if(!/^image\//.test(blob.type))return;
+ previewFiles.set(key,blob);
+ let bytes=0;for(const item of previewFiles.values())bytes+=item.size;
+ while(bytes>32*1024*1024||previewFiles.size>16){
+  const oldest=previewFiles.keys().next().value;bytes-=previewFiles.get(oldest).size;previewFiles.delete(oldest);
+ }
+}
+function renderCentralAttachment(body,file,noteId,uploadedFile){
  const figure=mk('figure');figure.className='drive-photo';
  const label=mk('strong',file.name),status=mk('small',Math.ceil(file.size/1024)+' KB · 存放於 CRM 資料夾');
  const button=mk('button','查看／下載');button.type='button';button.className='alt';figure.append(label,status,button);body.append(figure);
@@ -438,7 +448,17 @@ function renderCentralAttachment(body,file){
  async function load(){
   if(loading)return;loading=true;button.disabled=true;status.textContent='正在核對權限並載入附件……';
   try{
-   check(ss);const blob=await getCentralDrive().read(file,targetScope);check(ss);
+   check(ss);
+   const key=previewKey(targetScope,file);
+   let blob=uploadedFile||(preview&&noteId&&previewFiles.get(key));
+   if(blob&&!uploadedFile){
+    const path=targetScope.mode==='PRIVATE'?['users',ss.uid]:['groups',targetScope.groupId];
+    const note=await sdk.getDocFromServer(sdk.doc(db,...path,'notes',noteId));check(ss);
+    const data=note.data();
+    if(!data||data.deleted||!(data.content||'').split('\n').some(line=>attachmentLine(line)?.id===file.id))throw Error('FILE_ACCESS_DENIED');
+   }
+   if(!blob){blob=await getCentralDrive().read(file,targetScope);check(ss)}
+   if(preview)rememberImage(key,blob);
    if(!figure.isConnected)return;
    const url=URL.createObjectURL(blob);
    if(preview){
@@ -457,11 +477,11 @@ function renderCentralAttachment(body,file){
  };
  if(preview)Promise.resolve().then(()=>{if(figure.isConnected)void load()});
 }
-function renderNoteBody(body,content){
+function renderNoteBody(body,content,noteId){
  let paragraph=[];const flush=()=>{if(!paragraph.length)return;const p=mk('p',paragraph.join('\n'));p.className='note-content';body.append(p);paragraph=[]};
  for(const line of String(content||'').split('\n')){
   const attachment=attachmentLine(line);
-  if(attachment){flush();renderCentralAttachment(body,attachment);continue}
+  if(attachment){flush();renderCentralAttachment(body,attachment,noteId);continue}
   const photo=photoLine(line);
   if(!photo){paragraph.push(line);continue}
   flush();const figure=mk('figure');figure.className='drive-photo';
@@ -474,7 +494,7 @@ function renderNoteBody(body,content){
  flush();
 }
 function openNoteView(item){
- const body=mk('div');renderNoteBody(body,item.content||'');
+ const body=mk('div');renderNoteBody(body,item.content||'',item.id);
  for(const [label,value] of [['建立時間',item.createdAt],['更新時間',item.updatedAt]]){
   if(value?.toDate)body.append(mk('small',label+'：'+value.toDate().toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})));
  }
@@ -1470,7 +1490,8 @@ async function uploadSelectedAttachments(){
    const result=await getCentralDrive().upload(file,sc,verify);verify();
    $('noteContent').value=appendAttachment($('noteContent').value,result);completedAttachmentFiles.set(file,result);
    await drafts.save(context(),draftSnap());verify();
-   renderCentralAttachment($('noteAttachmentResults'),result);
+   rememberImage(previewKey(sc,result),file);
+   renderCentralAttachment($('noteAttachmentResults'),result,null,file);
   }
   $('noteAttachmentFiles').value='';status.textContent='已上傳至 CRM 資料夾並保存在本機草稿。請按「儲存」完成記事。';
  }catch(error){status.textContent=attachmentError(error);say(status.textContent)}
@@ -1683,7 +1704,7 @@ async function start(){
  authSdk.onAuthStateChanged(auth,async user=>{
   if(cloudNotifier){cloudNotifier.stop();cloudNotifier=null}
   clearOrders();membershipProof=null;
-  const generation=++epoch;uid='';authenticated=false;extensions=null;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
+  const generation=++epoch;previewFiles.clear();uid='';authenticated=false;extensions=null;ownerMembers=null;ownerGroups=[];ownerGroupId='';ownerLoadDone=false;sharedNickCache.clear();pendingTaskWrite=null;
   inviteGroups=[];inviteGroupId='';inviteLoaded=false;receivedLoaded=false;inviteSubmitting=false;
   $('inviteManagement').hidden=true;$('receivedInviteManagement').hidden=true;
   $('receivedInvites').replaceChildren();$('sentInvites').replaceChildren();

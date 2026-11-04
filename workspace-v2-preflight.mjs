@@ -278,7 +278,7 @@ assert.equal(taskCanComplete({status:'DONE',assignedUid:null},'uidA'),false);
 assert.equal(taskCanComplete({status:'OPEN',assignedUid:null},''),false);
 assert.match(page,/id="notePhotoPanel"/);
 assert.match(page,/firebase-drive-photo-links\.mjs\?v=20261103-v1/);
-assert.match(page,/renderNoteBody\(body,item\.content\|\|''\)/);
+assert.match(page,/renderNoteBody\(body,item\.content\|\|'',item\.id\)/);
 const sampleId='A12345678901234567890123456789012';
 const sampleUrl='https://drive.google.com/file/d/'+sampleId+'/view?usp=sharing';
 assert.equal(drivePhoto(sampleUrl).url,'https://drive.google.com/file/d/'+sampleId+'/view');
