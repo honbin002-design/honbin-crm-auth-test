@@ -703,20 +703,31 @@ async function loadGroups(){
 }
 function renderDefaultNotebook(){
  $('defaultNotebookPanel').hidden=!uid;
- const picker=$('defaultNotebook');picker.replaceChildren();
+ const picker=$('defaultNotebook'),sameAccount=picker.dataset.account===uid;
+ const choice=sameAccount?picker.value:readDefaultNotebook(localStorage,uid);
+ picker.replaceChildren();picker.dataset.account=uid;
  const empty=mk('option','不指定（開啟私人記事）');empty.value='';picker.append(empty);
  for(const group of groupItems){const option=mk('option',group.name);option.value=group.id;picker.append(option)}
+ picker.value=groupItems.some(group=>group.id===choice)?choice:'';
  const saved=readDefaultNotebook(localStorage,uid);
- picker.value=groupItems.some(group=>group.id===saved)?saved:'';
- $('defaultNotebookStatus').textContent=saved&&!groupItems.some(group=>group.id===saved)?
-  '原本預設的記事簿目前無法存取，請重新選擇。':'設定會依登入帳號保存在這台裝置。';
+ if(!sameAccount||saved&&!groupItems.some(group=>group.id===saved))
+  $('defaultNotebookStatus').textContent=saved&&!groupItems.some(group=>group.id===saved)?
+   '原本預設的記事簿目前無法存取，請重新選擇。':'設定會依登入帳號保存在這台裝置。';
 }
-$('saveDefaultNotebook').onclick=()=>run(async()=>{
- const s=session(),value=$('defaultNotebook').value;
- await loadGroups();check(s);
- saveDefaultNotebook(localStorage,s.uid,value,groupItems);
- renderDefaultNotebook();$('defaultNotebookStatus').textContent=value?'已儲存，下次開啟會自動進入這本共用記事簿。':'已取消預設，下次開啟私人記事。';
-});
+$('saveDefaultNotebook').onclick=async()=>{
+ const button=$('saveDefaultNotebook'),status=$('defaultNotebookStatus');
+ if(button.disabled)return;
+ button.disabled=true;status.textContent='正在儲存預設記事簿……';
+ try{
+  const s=session(),value=$('defaultNotebook').value;
+  const available=await groups.listGroups();check(s);
+  saveDefaultNotebook(localStorage,s.uid,value,available);
+  if(readDefaultNotebook(localStorage,s.uid)!==value)throw Error('裝置未能保留設定，請再試一次。');
+  status.textContent=value?'已儲存，下次開啟會自動進入這本共用記事簿。':'已取消預設，下次開啟私人記事。';
+ }catch(error){
+  status.textContent='儲存失敗：'+String(error?.message||error);
+ }finally{button.disabled=false}
+};
 function taipeiDateKey(){
  const parts=Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
  const get=type=>parts.find(p=>p.type===type)?.value||'';
