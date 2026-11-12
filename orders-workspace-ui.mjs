@@ -37,7 +37,7 @@ const markup=`<style>
  <label class="wide">備註<textarea name="note" rows="2" maxlength="2000"></textarea></label>
  </div><div class="actions"><button id="save" type="submit" class="primary">儲存</button><button id="cancel" type="button">取消</button></div></form></section>`;
 
-export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedGroups,onGroupReady}){
+export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedGroups,onGroupReady,defaultGroupId=''}){
  if(!container||!auth?.currentUser||!groups)throw Error('ORDER_AUTH_REQUIRED');
  const root=container.shadowRoot||container.attachShadow({mode:'open'});
  root.innerHTML=markup;
@@ -141,7 +141,8 @@ export function mountOrdersWorkspace({container,db,sdk,auth,groups,listVerifiedG
   if(disposed||auth.currentUser?.uid!==owner)throw Error('ACCOUNT_CHANGED');
   $('group').replaceChildren();
   for(const group of list){const option=document.createElement('option');option.value=group.id;option.textContent=group.name;$('group').append(option)}
-  groupId=list[0]?.id||'';
+  groupId=list.find(group=>group.id===defaultGroupId)?.id||list[0]?.id||'';
+  $('group').value=groupId;
   if(!groupId){showStatus('目前沒有已加入的群組。');onGroupReady?.();return}
   onGroupReady?.();await load(true);
  }

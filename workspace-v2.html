@@ -209,9 +209,13 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
  </section>
  <section id="settingsPanel">
   <div class="panel" id="defaultNotebookPanel" hidden>
-   <h2>預設共用記事簿</h2>
-   <label for="defaultNotebook">開啟時使用哪一本記事簿</label>
+   <h2>各頁面的預設記事簿</h2>
+   <label for="defaultNotebook">記事預設開啟哪一本記事簿</label>
    <select id="defaultNotebook"><option value="">不指定（開啟私人記事）</option></select>
+   <label for="defaultTaskNotebook">任務預設開啟哪一本記事簿</label>
+   <select id="defaultTaskNotebook"></select>
+   <label for="defaultOrderNotebook">訂貨管理預設開啟哪一本記事簿</label>
+   <select id="defaultOrderNotebook"></select>
    <button id="saveDefaultNotebook" type="button" style="margin-top:10px">儲存預設記事簿</button>
    <p id="defaultNotebookStatus" class="hint" role="status">設定會依登入帳號保存在這台裝置。</p>
   </div>
@@ -286,7 +290,7 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
 import {noteService} from './firebase-note-service.mjs?v=20261029-immutable-events-v1';
 import {addDrivePhoto,photoLine,plainNoteText} from './firebase-drive-photo-links.mjs?v=20261103-v1';
-import {readDefaultNotebook,saveDefaultNotebook} from './notebook-default.mjs?v=20261112';
+import {readDefaultNotebook,saveDefaultNotebook} from './notebook-default.mjs?v=20261113-sections';
 import {centralDriveClient,attachmentLine,appendAttachment,attachmentError} from './crm-drive-client.mjs?v=20261103-central-v1';
 import {CRM_DRIVE_ENDPOINT} from './crm-drive-config.mjs?v=20261103-central-v1';
 import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261022-server-verified-invite-v3';
@@ -351,7 +355,7 @@ function clearOrders(){
  $('ordersLoading').textContent='訂貨資料載入中……';$('ordersLoading').hidden=false;
 }
 function loadOrdersModule(){
- if(!ordersModulePromise)ordersModulePromise=import('./orders-workspace-ui.mjs?v=20261102-multi-v1')
+ if(!ordersModulePromise)ordersModulePromise=import('./orders-workspace-ui.mjs?v=20261113-default')
   .catch(error=>{ordersModulePromise=null;throw error});
  return ordersModulePromise;
 }
@@ -364,7 +368,7 @@ async function ensureOrders(){
   try{
    const module=await loadOrdersModule();
    if(generation!==ordersGeneration||!authenticated||!auth?.currentUser)return;
-   instance=module.mountOrdersWorkspace({container:$('ordersMount'),db,sdk,auth,groups,listVerifiedGroups:verifiedOrderGroups,
+   instance=module.mountOrdersWorkspace({container:$('ordersMount'),db,sdk,auth,groups,listVerifiedGroups:verifiedOrderGroups,defaultGroupId:readDefaultNotebook(localStorage,uid,'orders'),
      onGroupReady:()=>{if(generation===ordersGeneration)$('ordersLoading').hidden=true}});
    ordersUi=instance;await instance.ready;
    if(generation===ordersGeneration)$('ordersLoading').hidden=true;
@@ -693,7 +697,7 @@ async function loadGroups(){
  for(const g of all){const o=mk('option',g.name);o.value=g.id;select.append(o)}
  if(selected)select.value=selected.id;
  $('role').textContent=selected?'目前身分：'+notebookRoleLabel(selected.role):'尚未加入共用記事簿。';
- taskSelected=all.find(g=>g.id===taskSelected?.id)||all[0]||null;
+ taskSelected=all.find(g=>g.id===taskSelected?.id)||all.find(g=>g.id===readDefaultNotebook(localStorage,uid,'tasks'))||all[0]||null;
  const taskGroup=$('taskGroup');taskGroup.replaceChildren();
  for(const g of all){const opt=mk('option',g.name);opt.value=g.id;taskGroup.append(opt)}
  if(taskSelected)taskGroup.value=taskSelected.id;
@@ -701,29 +705,31 @@ async function loadGroups(){
  $('newNote').disabled=!mayWrite();
  $('retireNotebook').hidden=!selected||selected.ownerUid!==uid;
 }
+const defaultNotebookFields=[['defaultNotebook','notes'],['defaultTaskNotebook','tasks'],['defaultOrderNotebook','orders']];
 function renderDefaultNotebook(){
  $('defaultNotebookPanel').hidden=!uid;
- const picker=$('defaultNotebook'),sameAccount=picker.dataset.account===uid;
- const choice=sameAccount?picker.value:readDefaultNotebook(localStorage,uid);
- picker.replaceChildren();picker.dataset.account=uid;
- const empty=mk('option','不指定（開啟私人記事）');empty.value='';picker.append(empty);
- for(const group of groupItems){const option=mk('option',group.name);option.value=group.id;picker.append(option)}
- picker.value=groupItems.some(group=>group.id===choice)?choice:'';
- const saved=readDefaultNotebook(localStorage,uid);
- if(!sameAccount||saved&&!groupItems.some(group=>group.id===saved))
-  $('defaultNotebookStatus').textContent=saved&&!groupItems.some(group=>group.id===saved)?
-   '原本預設的記事簿目前無法存取，請重新選擇。':'設定會依登入帳號保存在這台裝置。';
+ for(const [id,section] of defaultNotebookFields){
+  const picker=$(id),sameAccount=picker.dataset.account===uid;
+  const choice=sameAccount?picker.value:readDefaultNotebook(localStorage,uid,section);
+  picker.replaceChildren();picker.dataset.account=uid;
+  const empty=mk('option',section==='notes'?'不指定（開啟私人記事）':'不指定（使用清單第一本）');empty.value='';picker.append(empty);
+  for(const group of groupItems){const option=mk('option',group.name);option.value=group.id;picker.append(option)}
+  picker.value=groupItems.some(group=>group.id===choice)?choice:'';
+ }
 }
 $('saveDefaultNotebook').onclick=async()=>{
  const button=$('saveDefaultNotebook'),status=$('defaultNotebookStatus');
  if(button.disabled)return;
  button.disabled=true;status.textContent='正在儲存預設記事簿……';
  try{
-  const s=session(),value=$('defaultNotebook').value;
+  const s=session(),choices=defaultNotebookFields.map(([id,section])=>({section,value:$(id).value}));
   const available=await groups.listGroups();check(s);
-  saveDefaultNotebook(localStorage,s.uid,value,available);
-  if(readDefaultNotebook(localStorage,s.uid)!==value)throw Error('裝置未能保留設定，請再試一次。');
-  status.textContent=value?'已儲存，下次開啟會自動進入這本共用記事簿。':'已取消預設，下次開啟私人記事。';
+  if(choices.some(choice=>choice.value&&!available.some(group=>group.id===choice.value)))throw Error('選取的記事簿目前無法使用，請重新選擇。');
+  for(const {section,value} of choices){
+   saveDefaultNotebook(localStorage,s.uid,value,available,section);
+   if(readDefaultNotebook(localStorage,s.uid,section)!==value)throw Error('裝置未能保留設定，請再試一次。');
+  }
+  status.textContent='已儲存，記事、任務與訂貨管理下次開啟會使用各自的預設記事簿。';
  }catch(error){
   status.textContent='儲存失敗：'+String(error?.message||error);
  }finally{button.disabled=false}
