@@ -208,6 +208,13 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
   </div>
  </section>
  <section id="settingsPanel">
+  <div class="panel" id="defaultNotebookPanel" hidden>
+   <h2>預設共用記事簿</h2>
+   <label for="defaultNotebook">開啟時使用哪一本記事簿</label>
+   <select id="defaultNotebook"><option value="">不指定（開啟私人記事）</option></select>
+   <button id="saveDefaultNotebook" type="button" style="margin-top:10px">儲存預設記事簿</button>
+   <p id="defaultNotebookStatus" class="hint" role="status">設定會依登入帳號保存在這台裝置。</p>
+  </div>
   <div class="panel" id="loginBox"><h2>Google 帳號</h2><p id="identity">正在檢查 Google 登入……</p><div class="row"><button id="login" disabled>Google 登入</button><button id="logout" class="alt" disabled>登出／切換帳號</button></div><details class="compact-help"><summary>使用說明</summary><p class="hint">登入後會在這台裝置保留狀態，關閉再開啟也可自動登入；按「登出／切換帳號」會清除登入狀態。Safari 與加入主畫面的網頁 App 可能需各登入一次；清除網站資料或撤銷帳號存取後仍須重新登入。</p></details></div>
   <div class="panel" id="ownerManagement" hidden>
    <h2>最高權限｜成員權限管理</h2>
@@ -279,6 +286,7 @@ body{padding-top:10px}.panel{padding:14px;margin:10px 0}.panel h2{margin-bottom:
 import {firebaseConfig,firestoreReadyForRealData} from './notes-preview-config.mjs';
 import {noteService} from './firebase-note-service.mjs?v=20261029-immutable-events-v1';
 import {addDrivePhoto,photoLine,plainNoteText} from './firebase-drive-photo-links.mjs?v=20261103-v1';
+import {readDefaultNotebook,saveDefaultNotebook} from './notebook-default.mjs?v=20261112';
 import {centralDriveClient,attachmentLine,appendAttachment,attachmentError} from './crm-drive-client.mjs?v=20261103-central-v1';
 import {CRM_DRIVE_ENDPOINT} from './crm-drive-config.mjs?v=20261103-central-v1';
 import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261022-server-verified-invite-v3';
@@ -389,6 +397,7 @@ function tab(name,{skipTaskLoad=false,fromNotification=false}={}){
  cloudNotifier?.onTabChange(name);
  if(name==='Tasks'&&authenticated&&!skipTaskLoad)void run(async()=>{await loadGroups();await loadTasks()});
  if(name==='Settings'&&authenticated){
+  void run(loadGroups);
   if(ownerMembers&&!ownerLoadDone)void run(loadOwnerManagement);
   if(!inviteLoaded)void loadInvitePanel().catch(e=>say('讀取邀請管理失敗：'+String(e?.code||e?.message||e)));
   if(!receivedLoaded)void loadReceivedInvitations().catch(e=>say('讀取收到的邀請失敗：'+String(e?.code||e?.message||e)));
@@ -678,7 +687,8 @@ async function openPushDeepLink(){
 }
 async function loadGroups(){
  const s=session(),all=await groups.listGroups();check(s);groupItems=all;
- selected=all.find(g=>g.id===selected?.id)||all[0]||null;
+ selected=all.find(g=>g.id===selected?.id)||all.find(g=>g.id===readDefaultNotebook(localStorage,uid))||all[0]||null;
+ renderDefaultNotebook();
  const select=$('group');select.replaceChildren();
  for(const g of all){const o=mk('option',g.name);o.value=g.id;select.append(o)}
  if(selected)select.value=selected.id;
@@ -691,6 +701,22 @@ async function loadGroups(){
  $('newNote').disabled=!mayWrite();
  $('retireNotebook').hidden=!selected||selected.ownerUid!==uid;
 }
+function renderDefaultNotebook(){
+ $('defaultNotebookPanel').hidden=!uid;
+ const picker=$('defaultNotebook');picker.replaceChildren();
+ const empty=mk('option','不指定（開啟私人記事）');empty.value='';picker.append(empty);
+ for(const group of groupItems){const option=mk('option',group.name);option.value=group.id;picker.append(option)}
+ const saved=readDefaultNotebook(localStorage,uid);
+ picker.value=groupItems.some(group=>group.id===saved)?saved:'';
+ $('defaultNotebookStatus').textContent=saved&&!groupItems.some(group=>group.id===saved)?
+  '原本預設的記事簿目前無法存取，請重新選擇。':'設定會依登入帳號保存在這台裝置。';
+}
+$('saveDefaultNotebook').onclick=()=>run(async()=>{
+ const s=session(),value=$('defaultNotebook').value;
+ await loadGroups();check(s);
+ saveDefaultNotebook(localStorage,s.uid,value,groupItems);
+ renderDefaultNotebook();$('defaultNotebookStatus').textContent=value?'已儲存，下次開啟會自動進入這本共用記事簿。':'已取消預設，下次開啟私人記事。';
+});
 function taipeiDateKey(){
  const parts=Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
  const get=type=>parts.find(p=>p.type===type)?.value||'';
@@ -1747,6 +1773,7 @@ async function start(){
   $('liveRulesReadOnly').hidden=true;$('liveDenialReadOnly').hidden=true;$('pushWriteProbe').hidden=true;
   closeCloudRecord(false);availableNoteDraft=null;$('resumeNoteDraft').hidden=true;
   $('notesList').replaceChildren();$('tasksList').replaceChildren();
+  $('defaultNotebookPanel').hidden=true;
   items=[];selected=null;taskSelected=null;groupItems=[];clearEditor();
   $('logout').disabled=!user;$('login').disabled=!!user;
   if(!user){
@@ -1769,6 +1796,16 @@ async function start(){
    // Verify server authorization before revealing any saved local identity or content.
    await loadNotes();if(generation!==epoch)return;
    await restoreDraft();if(generation!==epoch)return;
+   await loadGroups();if(generation!==epoch)return;
+   const defaultId=readDefaultNotebook(localStorage,uid);
+   const defaultGroup=groupItems.find(group=>group.id===defaultId);
+   if(defaultGroup){
+    selected=defaultGroup;$('group').value=defaultGroup.id;
+    $('mode').value='SHARED';$('groupWrap').hidden=false;
+    $('privateNotes').classList.remove('active');$('sharedNotes').classList.add('active');
+    await loadNotes();if(generation!==epoch)return;
+    await restoreDraft();if(generation!==epoch)return;
+   }
    authenticated=true;$('app').hidden=false;$('identity').textContent='Google 帳號：'+user.email;
     void loadOrdersModule().catch(()=>{});
    const rootIdentity={uid:user.uid,email:user.email,emailVerified:user.emailVerified,
