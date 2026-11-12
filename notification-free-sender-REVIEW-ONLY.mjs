@@ -1,7 +1,7 @@
 // Zero-fee, fail-closed CRM task/note background notification sender.
 // Enabled only by the owner-authorized GitHub scheduled workflow AND the
 // matching published CRM public sender switch. No credentials or private
-// customer content is ever stored in repo, URLs, or push payloads.
+// customer content is stored in repo or URLs. Push previews are permission-checked.
 import {createHash} from 'node:crypto';
 import {routeNotification} from './notification-recipient-router.mjs';
 import {notificationEventStillRelevant} from './notification-event-freshness.mjs';
@@ -114,8 +114,8 @@ async function main(){
       !await stillMember(event.payload.groupId,event.actorUid)||
       !await stillRelevant(event,uid))continue;
    const devices=await db.collection('pushSubscriptions').doc(uid)
-    .collection('devices').limit(4).get();
-   if(devices.size>3)throw Error('PUSH_DEVICE_LIMIT_STOP');
+    .collection('devices').limit(21).get();
+   if(devices.size>20)throw Error('PUSH_DEVICE_LIMIT_STOP');
    for(const device of devices.docs){
     // A live ACL probe is a synthetic, never-deliverable entry. Do not send to
     // it even if a network failure prevented the owner-only cleanup.
@@ -156,10 +156,21 @@ async function main(){
       await receipt.update({status:'SKIPPED',skippedAt:FieldValue.serverTimestamp()});
       continue;
      }
+     const payload={...event.payload};
+     const base=db.collection('groups').doc(payload.groupId);
+     const item=payload.orderId?base.collection('orders').doc(payload.orderId):
+      payload.noteId?base.collection('notes').doc(payload.noteId):base.collection('tasks').doc(payload.taskId);
+     const snapshot=await item.get(),record=snapshot.exists?snapshot.data():null;
+     if(!record||!notificationEventStillRelevant(event,record,uid)){
+      await receipt.update({status:'SKIPPED',skippedAt:FieldValue.serverTimestamp()});continue;
+     }
+     const summary=[record.title,record.content||record.description].filter(x=>typeof x==='string')
+      .join(' · ').split('\n').filter(line=>!line.startsWith('📎 CRM附件 ')&&!line.startsWith('📷')).join(' ');
+     payload.preview=summary.replace(/[\u0000-\u001f]/g,' ').slice(0,160);
      const response=await webpush.sendNotification({
       endpoint:subscription.endpoint,
       keys:{p256dh:subscription.p256dh,auth:subscription.auth}
-     },JSON.stringify(event.payload),{TTL:3600,urgency:'normal',timeout:12000});
+     },JSON.stringify(payload),{TTL:3600,urgency:'high',timeout:12000});
      if(response?.statusCode!==201&&response?.statusCode!==202)
       throw Object.assign(Error('APPLE_PUSH_NOT_ACCEPTED'),{statusCode:Number(response?.statusCode)||0});
      await receipt.update({status:'SENT',sentAt:FieldValue.serverTimestamp()});

@@ -14,7 +14,7 @@ const parse=data=>{
   const isNote=noteKinds.includes(kind),isOrder=orderKinds.includes(kind);
   const item=isNote?p.noteId:isOrder?p.orderId:p.taskId;
   if(!idOkay(item))return null;
-  // Keep business content and identities off the unlocked device screen.
+  // The owner enabled bounded content previews for authorized recipients.
   const params=new URLSearchParams({tab:isNote?'Notes':isOrder?'Orders':'Tasks',
      groupId:p.groupId});
   params.set(isNote?'noteId':isOrder?'orderId':'taskId',item);
@@ -29,7 +29,7 @@ const parse=data=>{
    kind==='TASK_COMPLETED'?'點擊查看完成紀錄':'點擊開啟鴻繽記事與任務';
   const tag=p.eventDocId&&idOkay(p.eventDocId)
    ?kind+':'+p.groupId+':'+p.eventDocId:kind+':'+p.groupId+':'+item;
-  return {title,body,url,tag};
+  return {title,body:typeof p.preview==='string'&&p.preview.trim()?p.preview.slice(0,160):body,url,tag};
  }catch{return null}
 };
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
