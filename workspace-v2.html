@@ -51,6 +51,7 @@ textarea{min-height:120px;resize:vertical}label{display:block;font-weight:600;ma
 .notice-row{border-top:1px solid #dce5ef;padding:12px 0;display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap}
 .notice-row>div{flex:1 1 160px;min-width:0}
 .notice-row button{min-width:100px;flex:0 0 auto}
+.notice-unread-dot{color:#c62828;margin-right:.45em;font-size:1.05em}
 .notice-row[data-unread="true"]{border-left:4px solid #2862a2;padding-left:9px;background:#f8fbff}
 .notification-page{width:100%;min-width:0}
 .notification-page>.panel{margin:12px 0;min-height:55vh}
@@ -299,7 +300,7 @@ import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
 import {taskExtensionService} from './firebase-task-extension-service.mjs';
 import {ownerMemberService,isRootOwnerIdentity,ROOT_OWNER_EMAIL} from './firebase-owner-member-service.mjs';
-import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261029-immutable-events-v1';
+import {cloudNotificationController} from './firebase-cloud-notification-ui.mjs?v=20261113-unread-red-dot';
 import {attachInstalledCRMPushBridge} from './firebase-installed-crm-push-bridge.mjs';
 import {verifyLiveReadDenials} from './firestore-live-denial-probes.mjs';
 import {verifyOwnerSubscriptionWrite} from './firestore-push-write-probe.mjs';

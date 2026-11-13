@@ -76,7 +76,12 @@ export function cloudNotificationController({uid,db,sdk,currentUid,getGroups,ref
    row.dataset.unread=String(!markers.isRead(item.id));
    const content=document.createElement('div');
    const name=document.createElement('strong');
-   name.textContent=(markers.isRead(item.id)?'':'● ')+notificationTitle(item.kind);
+   name.textContent=notificationTitle(item.kind);
+   name.setAttribute('aria-label',(markers.isRead(item.id)?'已讀：':'未讀：')+notificationTitle(item.kind));
+   if(!markers.isRead(item.id)){
+    const dot=document.createElement('span');dot.className='notice-unread-dot';
+    dot.textContent='●';dot.setAttribute('aria-hidden','true');name.prepend(dot);
+   }
    const meta=document.createElement('p');meta.textContent=safeText(item.groupName)+'｜'+
     new Date(item.at).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',
      month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
