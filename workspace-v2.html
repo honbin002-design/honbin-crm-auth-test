@@ -294,7 +294,7 @@ import {addDrivePhoto,photoLine,plainNoteText} from './firebase-drive-photo-link
 import {readDefaultNotebook,saveDefaultNotebook} from './notebook-default.mjs?v=20261113-sections';
 import {centralDriveClient,attachmentLine,appendAttachment,attachmentError} from './crm-drive-client.mjs?v=20261103-central-v1';
 import {CRM_DRIVE_ENDPOINT} from './crm-drive-config.mjs?v=20261103-central-v1';
-import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261022-server-verified-invite-v3';
+import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261116-invite-repair-20261022-server-verified-invite-v3';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
@@ -1262,21 +1262,21 @@ async function loadReceivedInvitations(){
   }
   const accept=mk('button',already?'確認加入／修復記事簿清單':'接受邀請');
   accept.type='button';accept.className='alt';
-  accept.onclick=()=>run(async()=>{
+  const acceptStatus=mk('p');acceptStatus.className='hint';acceptStatus.setAttribute('role','status');
+  accept.onclick=async()=>{
+   if(accept.disabled)return;
    const checkpoint=session();
    if(!already&&!confirm('確認接受這個共用記事簿邀請？'))return;
-   accept.disabled=true;
+   accept.disabled=true;acceptStatus.textContent='正在核對邀請與修復記事簿清單……';
    try{
     const result=await groups.acceptInvite(invitation);check(checkpoint);membershipProof=null;
     if(!result.indexed){
-     say('已接受邀請，但記事簿清單尚未完成，請按「確認加入／修復記事簿清單」重試。');
-     await loadReceivedInvitations();check(checkpoint);return;
+     acceptStatus.textContent='邀請已接受，但清單修復未完成：'+String(result.reason||'請稍後重試');return;
     }
     await loadGroups();check(checkpoint);
     const joined=groupItems.find(g=>g.id===result.groupId);
     if(!joined){
-     say('已接受邀請，但尚未從伺服器讀回記事簿，請按「重新讀取」。');
-     await loadReceivedInvitations();check(checkpoint);return;
+     acceptStatus.textContent='邀請已接受，但尚未從伺服器讀回記事簿，請按重新讀取。';return;
     }
     selected=joined;
     $('mode').value='SHARED';$('groupWrap').hidden=false;
@@ -1288,9 +1288,16 @@ async function loadReceivedInvitations(){
     say('已成功加入共用記事簿「'+joined.name+'」，可以查看記事與任務。');
     await loadReceivedInvitations();check(checkpoint);
     // loadReceivedInvitations already recalculated the remaining pending count.
+   }catch(error){
+    const code=String(error?.code||error?.message||error);
+    acceptStatus.textContent=/GROUP_NOT_AVAILABLE/.test(code)?
+     '這本記事簿已不存在或已停用，請管理員核對這筆舊邀請。':
+     /MEMBERSHIP_NOT_ACTIVE|permission-denied/.test(code)?
+     '這筆邀請已接受，但目前沒有有效的記事簿權限，請管理員核對成員資格。':
+     '加入未完成：'+code+'，請稍後重試。';
    }finally{accept.disabled=false}
-  });
-  entry.append(accept);root.append(entry);
+  };
+  entry.append(accept,acceptStatus);root.append(entry);
  }
  $('receivedInviteManagement').hidden=false;receivedLoaded=true;
  return pending.length;

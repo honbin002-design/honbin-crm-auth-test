@@ -159,3 +159,13 @@ function setup({failIndexOnce=false,status='PENDING',denyMembershipRead=false}={
  assert.deepEqual(roles,[],'stale index without ACTIVE member cannot establish membership');
 }
 console.log('INVITE_MEMBERSHIP_RECOVERY_SYNTHETIC_PASS');
+{
+ const e=setup({denyMembershipRead:true});
+ e.data.set(group,{ownerUid:UID,name:'擁有者記事簿',createdAt:1});
+ assert.equal(await e.api.ensureIndex(GID),true);
+ assert.equal(e.data.get(pointer).groupId,GID);
+ assert.equal(e.data.has(member),false,'owner recovery must not create or overwrite membership');
+ e.data.set(group,{ownerUid:UID,name:'停用記事簿',deleteState:'DELETING'});
+ await assert.rejects(e.api.ensureIndex(GID),/GROUP_NOT_AVAILABLE/);
+ console.log('OWNER_INDEX_RECOVERY_WITHOUT_MEMBER_AND_RETIRED_GROUP_REJECTION_PASS');
+}

@@ -217,11 +217,14 @@ export function groupService({db,sdk,identity}) {
    if(authorized.metadata?.fromCache||!authorized.exists()||
       authorized.data().deleteState==='DELETING')
     throw Error('GROUP_NOT_AVAILABLE');
-   const active=await serverGet(member(groupId));
-   if(active.metadata?.fromCache||!active.exists()||
-      active.data().uid!==uid||active.data().status!=='ACTIVE'||
-      !ROLES.includes(active.data().role))throw Error('MEMBERSHIP_NOT_ACTIVE');
-   const existing=await getDoc(pointer(groupId));
+   if(authorized.data().ownerUid!==uid){
+    const active=await serverGet(member(groupId));
+    if(active.metadata?.fromCache||!active.exists()||
+       active.data().uid!==uid||active.data().status!=='ACTIVE'||
+       !ROLES.includes(active.data().role))throw Error('MEMBERSHIP_NOT_ACTIVE');
+   }
+   const existing=await serverGet(pointer(groupId));
+   if(existing.metadata?.fromCache)throw Error('SERVER_VERIFICATION_REQUIRED');
    if(existing.exists())return true;
    await setDoc(pointer(groupId),indexBody(groupId));
    const readBack=await serverGet(pointer(groupId));
