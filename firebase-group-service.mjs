@@ -233,6 +233,16 @@ export function groupService({db,sdk,identity}) {
      throw Error('GROUP_INDEX_READBACK_REQUIRED');
    return true;
  }
+ async function invitationGroupAvailable(groupId){
+   if(typeof sdk.getDocFromServer!=='function')throw Error('SERVER_VERIFICATION_REQUIRED');
+   try{
+    const snapshot=await sdk.getDocFromServer(path(groupId));
+    return !snapshot.metadata?.fromCache&&snapshot.exists()&&!snapshot.data().deleteState;
+   }catch(error){
+    if(error?.code==='permission-denied'||error?.code==='not-found')return false;
+    throw error;
+   }
+ }
  async function acceptInvite(invitation) {
    if(!invitation||!safeId(invitation.id))throw Error('INVALID_INVITE');
    const ref=inbox(mail,invitation.id);
@@ -281,5 +291,5 @@ export function groupService({db,sdk,identity}) {
    else await updateDoc(member(groupId,memberUid),{role:change});
  }
  return Object.freeze({createGroup,listGroups,myRole,retireNotebook,sendInvite,listSentInvites,listInbox,
-   acceptInvite,revokeInvite,ensureIndex,listMembers,changeMember,currentMembershipRole,listGroupsFromServer});
+   acceptInvite,invitationGroupAvailable,revokeInvite,ensureIndex,listMembers,changeMember,currentMembershipRole,listGroupsFromServer});
 }

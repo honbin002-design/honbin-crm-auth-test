@@ -294,7 +294,7 @@ import {addDrivePhoto,photoLine,plainNoteText} from './firebase-drive-photo-link
 import {readDefaultNotebook,saveDefaultNotebook} from './notebook-default.mjs?v=20261113-sections';
 import {centralDriveClient,attachmentLine,appendAttachment,attachmentError} from './crm-drive-client.mjs?v=20261103-central-v1';
 import {CRM_DRIVE_ENDPOINT} from './crm-drive-config.mjs?v=20261103-central-v1';
-import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261116-invite-repair-20261022-server-verified-invite-v3';
+import {groupService,normalizedEmail} from './firebase-group-service.mjs?v=20261116-deleted-invites-20261022-server-verified-invite-v3';
 import {makeDraftStore} from './firebase-offline-drafts.mjs';
 import {notebookRoleLabel} from './firebase-notebook-scope.mjs';
 import {taskService,taskCanComplete} from './firebase-task-service.mjs?v=20261021-paging';
@@ -1197,7 +1197,15 @@ async function loadReceivedInvitations(){
  // Read the current role from the Firestore server before showing "Accept".
  const checked=[];
  for(const invitation of inbox){
-  if(invitation.status!=='PENDING'){checked.push(invitation);continue}
+  if(invitation.status!=='PENDING'){
+   if(invitation.status==='ACCEPTED'&&invitation.acceptedUid===uid&&!visibleIds.has(invitation.groupId)){
+    try{
+     const groupAvailable=await groups.invitationGroupAvailable(invitation.groupId);check(s);
+     if(groupAvailable)checked.push({...invitation,groupAvailable:true});
+    }catch(error){check(s)}
+   }
+   continue;
+  }
   try{
    const activeRole=liveRoles.get(invitation.groupId)||
     await groups.currentMembershipRole(invitation.groupId);check(s);
@@ -1215,7 +1223,7 @@ async function loadReceivedInvitations(){
  const stale=checked.filter(x=>x.status==='PENDING'&&x.activeRole);
  const blocked=checked.filter(x=>x.status==='PENDING'&&x.membershipCheckFailed);
  const actionable=checked.filter(x=>(x.status==='PENDING'&&!x.activeRole&&!x.membershipCheckFailed)||
-  (x.status==='ACCEPTED'&&x.acceptedUid===uid&&!visibleIds.has(x.groupId)));
+  (x.status==='ACCEPTED'&&x.acceptedUid===uid&&x.groupAvailable===true&&!visibleIds.has(x.groupId)));
  const pending=actionable.filter(x=>x.status==='PENDING');
  const notice=$('pendingInviteNotice');
  notice.hidden=actionable.length===0;

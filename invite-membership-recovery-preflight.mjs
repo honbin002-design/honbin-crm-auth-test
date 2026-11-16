@@ -169,3 +169,13 @@ console.log('INVITE_MEMBERSHIP_RECOVERY_SYNTHETIC_PASS');
  await assert.rejects(e.api.ensureIndex(GID),/GROUP_NOT_AVAILABLE/);
  console.log('OWNER_INDEX_RECOVERY_WITHOUT_MEMBER_AND_RETIRED_GROUP_REJECTION_PASS');
 }
+{
+ const e=setup();
+ assert.equal(await e.api.invitationGroupAvailable(GID),true);
+ e.data.set(group,{ownerUid:UID,deleteState:'DELETING'});
+ assert.equal(await e.api.invitationGroupAvailable(GID),false);
+ e.data.delete(group);
+ assert.equal(await e.api.invitationGroupAvailable(GID),false);
+ assert.equal(e.indexAttempts(),0,'availability checks must never recreate a notebook or index');
+ console.log('DELETED_NOTEBOOK_INVITATION_FILTER_PASS');
+}
